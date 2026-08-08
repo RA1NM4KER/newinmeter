@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FileDown } from "lucide-react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
 
@@ -16,9 +16,11 @@ export type ExportButtonProps = {
   tone?: ControlTone;
 };
 
+// Short labels so the menu fits a panel sized to the trigger (matches the
+// activities export).
 const formats = [
-  { value: "csv", label: "Download CSV" },
-  { value: "xlsx", label: "Download XLSX" }
+  { value: "csv", label: "CSV" },
+  { value: "xlsx", label: "XLSX" }
 ] as const;
 
 export function ExportButton({
@@ -33,6 +35,8 @@ export function ExportButton({
   tone = "light"
 }: ExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   function buildUrl(format: string) {
     const params = new URLSearchParams();
@@ -46,9 +50,32 @@ export function ExportButton({
     return `/api/export?${params.toString()}`;
   }
 
+  // Fixed positioning sized to the trigger width (same as the activities export
+  // and the range selector), so the menu matches the button and isn't clipped.
+  useEffect(() => {
+    if (!isOpen || !containerRef.current) {
+      return;
+    }
+    const update = () => {
+      if (!containerRef.current) {
+        return;
+      }
+      const rect = containerRef.current.getBoundingClientRect();
+      setPosition({ left: rect.left, top: rect.bottom + 8, width: rect.width });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isOpen]);
+
   return (
     <div
       className="relative"
+      ref={containerRef}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setIsOpen(false);
@@ -61,7 +88,7 @@ export function ExportButton({
       <button
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className={`inline-flex h-9 items-center gap-2 rounded-md border text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${triggerToneClass(tone)} ${
+        className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${triggerToneClass(tone)} ${
           iconOnly ? "px-2" : "px-3"
         } ${className ?? ""}`}
         onClick={() => setIsOpen((prev) => !prev)}
@@ -77,13 +104,14 @@ export function ExportButton({
 
       {isOpen ? (
         <div
-          className="absolute left-1/2 top-[calc(100%+0.5rem)] z-40 min-w-[9rem] -translate-x-1/2 rounded-md border border-line bg-paper p-1 shadow-soft"
+          className="fixed z-[80] rounded-md border border-line bg-paper p-1 shadow-soft"
           role="listbox"
           aria-label="Export format"
+          style={{ left: position.left, top: position.top, width: position.width }}
         >
           {formats.map(({ value, label }) => (
             <a
-              className="flex w-full items-center rounded px-2 py-2 text-left text-sm text-muted transition hover:bg-canvas hover:text-ink"
+              className="flex w-full items-center rounded px-3 py-2 text-left text-sm text-muted transition hover:bg-canvas hover:text-ink"
               download
               href={buildUrl(value)}
               key={value}
