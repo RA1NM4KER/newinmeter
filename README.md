@@ -181,7 +181,7 @@ The installed PWA badges its home-screen icon when a user's data goes stale
   not notification frequency. The service worker's `push` handler shows the
   notification (iOS requires every push be user-visible) and sets the badge
   from the worker -- this is what actually lights the iOS icon. The cron only
-  ever *sets* the badge; it's cleared when the user next opens the app and
+  ever _sets_ the badge; it's cleared when the user next opens the app and
   `DataSyncAction` sees fresh data.
 
 Two iOS-specific gotchas learned the hard way, both handled in the code:

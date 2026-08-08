@@ -13,10 +13,7 @@ export function TariffChart({ data }: TariffChartProps) {
   // which can pad the axis well past the real max in range -- scale tightly
   // to the actual filtered data instead, recomputed whenever the range
   // (and therefore `data`) changes.
-  const maxTariff = useMemo(
-    () => roundedCeiling(Math.max(0, ...data.map((point) => point.tariff)), 0.5),
-    [data]
-  );
+  const maxTariff = useMemo(() => roundedCeiling(Math.max(0, ...data.map((point) => point.tariff)), 0.5), [data]);
 
   return (
     <ChartShell title="Tariff bands" eyebrow="Daily average">

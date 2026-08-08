@@ -240,9 +240,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
 
       <div className="mt-5 flex items-start gap-2 rounded-xl bg-white/[0.02] px-3 py-2.5 text-xs leading-relaxed text-white/45">
         <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/35" />
-        <p>
-          Your password is used once, to connect. We never store it. Disconnect any time from the dashboard header.
-        </p>
+        <p>Your password is used once, to connect. We never store it. Disconnect any time from the dashboard header.</p>
       </div>
     </div>
   );

@@ -42,7 +42,9 @@ function RecentCell({ label, value, detail }: { label: string; value: string; de
   return (
     <div className="min-w-0 px-3 py-3.5 sm:px-5">
       <p className="truncate text-[0.7rem] font-semibold text-muted sm:text-xs">{label}</p>
-      <p className="mt-1.5 truncate text-lg font-bold tracking-tight tabular-nums text-ink sm:text-[1.375rem]">{value}</p>
+      <p className="mt-1.5 truncate text-lg font-bold tracking-tight tabular-nums text-ink sm:text-[1.375rem]">
+        {value}
+      </p>
       <p className="mt-1 text-[0.65rem] text-muted sm:text-[0.7rem]">{detail}</p>
     </div>
   );

@@ -20,10 +20,7 @@ export default async function AdminPage() {
         <p className="mt-1 text-sm text-muted">Manage user roles and permissions.</p>
       </div>
 
-      <AdminUsersTable
-        currentUserId={auth.session.userId}
-        initialData={{ rows, total: rows.length }}
-      />
+      <AdminUsersTable currentUserId={auth.session.userId} initialData={{ rows, total: rows.length }} />
     </div>
   );
 }

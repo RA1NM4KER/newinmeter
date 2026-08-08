@@ -25,9 +25,7 @@ const HERO_LOOKBACK = 8;
 // Contract of the live_meter_overview RPC. Validated on every read so a schema
 // drift surfaces as a clear error rather than a silent NaN downstream.
 const overviewRpcSchema = z.object({
-  device: z
-    .object({ id: z.string(), name: z.string(), pulses_per_kwh: z.number().int().positive() })
-    .nullable(),
+  device: z.object({ id: z.string(), name: z.string(), pulses_per_kwh: z.number().int().positive() }).nullable(),
   latest: z.array(z.object({ observed_at: z.string(), delta_ms: z.number().nullable() })),
   series: z.array(z.object({ observed_at: z.string(), delta_ms: z.number().nullable() })),
   count5m: z.number().int().nonnegative(),
@@ -56,7 +54,11 @@ function emptyOverview(window: LiveWindow, nowMs: number): LiveOverview {
 // Fetch device + pulses + counts for the caller's own device in ONE snapshot
 // (see the live_meter_overview migration). Scoped strictly by userId; the RPC
 // is service-role-only and resolves the device from the user's connections.
-async function fetchOverviewSnapshot(userId: string, windowStartIso: string, nowMs: number): Promise<OverviewRpcResult> {
+async function fetchOverviewSnapshot(
+  userId: string,
+  windowStartIso: string,
+  nowMs: number
+): Promise<OverviewRpcResult> {
   const raw = await adminSupabaseRequest<unknown>("POST", "/rpc/live_meter_overview", {
     p_user_id: userId,
     p_window_start: windowStartIso,

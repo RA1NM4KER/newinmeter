@@ -14,9 +14,9 @@ export interface LiveChannelLike {
 export interface LiveRealtimeClient {
   auth: {
     getSession(): Promise<{ data: { session: { access_token: string } | null } }>;
-    onAuthStateChange(
-      callback: (event: string, session: { access_token: string } | null) => void
-    ): { data: { subscription: { unsubscribe(): void } } };
+    onAuthStateChange(callback: (event: string, session: { access_token: string } | null) => void): {
+      data: { subscription: { unsubscribe(): void } };
+    };
   };
   realtime: { setAuth(token: string | null): unknown };
   channel(name: string, opts: { config: { private: boolean } }): LiveChannelLike;

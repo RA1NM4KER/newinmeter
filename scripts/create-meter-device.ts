@@ -71,7 +71,9 @@ async function main() {
   const pulsesPerKwhRaw = args.get("pulses-per-kwh");
 
   if (!email || !name) {
-    console.error('Usage: npm run create:meter-device -- --email <user-email> --name "Home meter" [--pulses-per-kwh 1000]');
+    console.error(
+      'Usage: npm run create:meter-device -- --email <user-email> --name "Home meter" [--pulses-per-kwh 1000]'
+    );
     process.exitCode = 1;
     return;
   }

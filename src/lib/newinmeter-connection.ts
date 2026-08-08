@@ -81,7 +81,9 @@ export async function getConnectionForUser(userId: string): Promise<LivemopayCon
   return row ? toConnection(row) : null;
 }
 
-export function getDecryptedRefreshToken(row: Pick<ConnectionRow, "refresh_token_ciphertext" | "refresh_token_iv" | "refresh_token_auth_tag">) {
+export function getDecryptedRefreshToken(
+  row: Pick<ConnectionRow, "refresh_token_ciphertext" | "refresh_token_iv" | "refresh_token_auth_tag">
+) {
   if (!row.refresh_token_ciphertext || !row.refresh_token_iv || !row.refresh_token_auth_tag) {
     throw new Error("Connection has no stored refresh token.");
   }

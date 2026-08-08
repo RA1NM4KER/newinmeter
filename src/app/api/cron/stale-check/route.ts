@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCronSecret } from "@/lib/env";
-import {
-  listConnectionsForStaleCheck,
-  markConnectionStaleNotified
-} from "@/lib/newinmeter-connection";
+import { listConnectionsForStaleCheck, markConnectionStaleNotified } from "@/lib/newinmeter-connection";
 import { sendPushToUser } from "@/lib/push-notify";
 import { isSyncStale } from "@/lib/sync-status";
 

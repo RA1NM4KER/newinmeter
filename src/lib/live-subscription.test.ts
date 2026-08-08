@@ -51,7 +51,15 @@ function makeFakeClient(sessionToken: string | null = "tok-1") {
       },
       onAuthStateChange(callback) {
         state.authCb = callback;
-        return { data: { subscription: { unsubscribe: () => { state.authUnsubscribes += 1; } } } };
+        return {
+          data: {
+            subscription: {
+              unsubscribe: () => {
+                state.authUnsubscribes += 1;
+              }
+            }
+          }
+        };
       }
     },
     realtime: {

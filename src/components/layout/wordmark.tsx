@@ -9,7 +9,11 @@ type WordmarkProps = {
 // brandGreen defaults below), and the authenticated app shell, which passes
 // theme-aware tokens instead (text-ink / text-accent) so it flips correctly
 // with light/dark mode.
-export function Wordmark({ className = "", textClassName = "text-white", accentClassName = "text-brandGreen" }: WordmarkProps) {
+export function Wordmark({
+  className = "",
+  textClassName = "text-white",
+  accentClassName = "text-brandGreen"
+}: WordmarkProps) {
   return (
     <span className={`font-semibold tracking-tight ${textClassName} ${className}`}>
       Newin<span className={accentClassName}>Meter</span>

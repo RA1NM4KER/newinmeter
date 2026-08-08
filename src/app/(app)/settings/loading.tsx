@@ -96,13 +96,7 @@ export default function SettingsLoading() {
       </SettingsGroup>
 
       <SettingsGroup label="Danger zone" tone="danger">
-        <RowSkeleton
-          first
-          leading={<IconTileSkeleton />}
-          titleWidth="w-32"
-          descWidth="w-72"
-          control={null}
-        />
+        <RowSkeleton first leading={<IconTileSkeleton />} titleWidth="w-32" descWidth="w-72" control={null} />
         <div className="border-t border-line px-4 py-4 sm:px-5">
           <Skeleton className="h-3 w-40" />
           <Skeleton className="mt-2 h-9 w-full max-w-xs rounded-md" />

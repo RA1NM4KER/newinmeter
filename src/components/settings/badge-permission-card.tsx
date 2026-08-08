@@ -108,7 +108,9 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
       return;
     }
     setPermission(Notification.permission as BadgeState);
-    hasActiveSubscription().then(setEnabled).catch(() => setEnabled(false));
+    hasActiveSubscription()
+      .then(setEnabled)
+      .catch(() => setEnabled(false));
   }, []);
 
   const applyBadgeNow = useCallback(async () => {

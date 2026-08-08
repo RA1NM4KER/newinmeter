@@ -118,11 +118,11 @@ reconnect. Acknowledged batches are removed from the buffer exactly once;
 pulses that arrive during an in-flight upload are never dropped by it.
 
 **The Arduino's uptime is the timing authority.** Each pulse carries the
-Arduino's monotonic `uptime_ms`, which fixes the *relative* spacing between
-pulses. The Mac only supplies the *absolute* UTC anchor: for each boot session
+Arduino's monotonic `uptime_ms`, which fixes the _relative_ spacing between
+pulses. The Mac only supplies the _absolute_ UTC anchor: for each boot session
 the bridge estimates `boot_epoch = min(host_receive_time − uptime)` and
 reconstructs `timestamp = boot_epoch + uptime`. Using the minimum means
-serial/OS queue delay (which can only make a pulse arrive *later*) never pushes
+serial/OS queue delay (which can only make a pulse arrive _later_) never pushes
 the anchor forward. The upshot: if several pulses are drained from the serial
 buffer in a burst after a block, their reconstructed wall-clock times **still
 preserve the spacing the Arduino measured** — they do not all collapse onto the

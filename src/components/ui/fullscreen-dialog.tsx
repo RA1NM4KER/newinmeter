@@ -88,9 +88,7 @@ export function FullscreenDialog({
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
-        {headerAction ? (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">{headerAction}</div>
-        ) : null}
+        {headerAction ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{headerAction}</div> : null}
       </div>
       <div className={bodyClassName}>
         <div className={`mx-auto flex h-full flex-col ${panelClassName}`.trim()}>

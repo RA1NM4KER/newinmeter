@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildGlobalDomains, buildIntervalPoints, buildStableAxisDomains, roundedCeiling, sumRows } from "@/lib/day-breakdown";
+import {
+  buildGlobalDomains,
+  buildIntervalPoints,
+  buildStableAxisDomains,
+  roundedCeiling,
+  sumRows
+} from "@/lib/day-breakdown";
 import type { IntervalRollupRow } from "@/lib/types";
 
 function row(overrides: Partial<IntervalRollupRow>): IntervalRollupRow {
@@ -48,10 +54,7 @@ describe("buildIntervalPoints", () => {
   });
 
   it("sums multiple rows landing in the same slot", () => {
-    const rows = [
-      row({ periodTime: "08:00", spend: 5, kwh: 2 }),
-      row({ periodTime: "08:00", spend: 3, kwh: 1 })
-    ];
+    const rows = [row({ periodTime: "08:00", spend: 5, kwh: 2 }), row({ periodTime: "08:00", spend: 3, kwh: 1 })];
     const points = buildIntervalPoints(rows, "2026-07-25");
     const slot = points.find((point) => point.time === "08:00");
     expect(slot).toEqual({ time: "08:00", spend: 8, kwh: 3, waterSpend: null, waterKl: null });
@@ -68,10 +71,7 @@ describe("buildIntervalPoints", () => {
   });
 
   it("rounds summed values to 2 decimal places", () => {
-    const rows = [
-      row({ periodTime: "08:00", spend: 0.1, kwh: 0 }),
-      row({ periodTime: "08:00", spend: 0.2, kwh: 0 })
-    ];
+    const rows = [row({ periodTime: "08:00", spend: 0.1, kwh: 0 }), row({ periodTime: "08:00", spend: 0.2, kwh: 0 })];
     const points = buildIntervalPoints(rows, "2026-07-25");
     const slot = points.find((point) => point.time === "08:00");
     // 0.1 + 0.2 === 0.30000000000000004 in floating point -- confirms the

@@ -24,10 +24,7 @@ export async function POST(request: Request) {
   const rateHeaders = rateLimitHeaders(rateLimit);
 
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { message: "Too many attempts. Try again later." },
-      { status: 429, headers: rateHeaders }
-    );
+    return NextResponse.json({ message: "Too many attempts. Try again later." }, { status: 429, headers: rateHeaders });
   }
 
   try {
@@ -72,10 +69,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(
-      { status: "connected", accountLabel: connection.accountLabel },
-      { headers: rateHeaders }
-    );
+    return NextResponse.json({ status: "connected", accountLabel: connection.accountLabel }, { headers: rateHeaders });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

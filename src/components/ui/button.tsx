@@ -41,7 +41,12 @@ type ButtonAsButton = CommonProps &
 type ButtonAsLink = CommonProps &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "className" | "children"> & { href: string };
 
-export function Button({ variant = "secondary", size = "md", className = "", ...props }: ButtonAsButton | ButtonAsLink) {
+export function Button({
+  variant = "secondary",
+  size = "md",
+  className = "",
+  ...props
+}: ButtonAsButton | ButtonAsLink) {
   if ("href" in props && props.href !== undefined) {
     const { children, ...anchorProps } = props;
     return (

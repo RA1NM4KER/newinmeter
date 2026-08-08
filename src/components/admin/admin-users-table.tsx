@@ -363,7 +363,12 @@ function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: ManageDr
   }
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={`Manage access for ${user.email ?? "user"}`}>
+    <div
+      className="fixed inset-0 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Manage access for ${user.email ?? "user"}`}
+    >
       <button
         type="button"
         aria-label="Close"
@@ -441,9 +446,7 @@ function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: ManageDr
                 </div>
               ))}
             </div>
-            {isSelf ? (
-              <p className="mt-3 text-xs text-muted">Editing your own feature access.</p>
-            ) : null}
+            {isSelf ? <p className="mt-3 text-xs text-muted">Editing your own feature access.</p> : null}
             {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           </section>
         </div>
@@ -514,7 +517,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
   }, [data?.rows, sortKey, sortDirection]);
   const total = data?.total ?? 0;
   const showTableSkeleton = isLoading || isManualRefreshing;
-  const selectedUser = selectedUserId ? users.find((user) => user.userId === selectedUserId) ?? null : null;
+  const selectedUser = selectedUserId ? (users.find((user) => user.userId === selectedUserId) ?? null) : null;
 
   const stats = useMemo(() => {
     const rows = data?.rows ?? [];

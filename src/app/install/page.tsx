@@ -38,8 +38,8 @@ export default function InstallPage() {
       <main className="mx-auto max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-semibold tracking-tight text-ink">Install NewinMeter</h1>
         <p className="mt-2 text-sm text-muted">
-          Add NewinMeter to your home screen for one-tap access, a full-screen app view, and offline access to your
-          last loaded data. No app store needed.
+          Add NewinMeter to your home screen for one-tap access, a full-screen app view, and offline access to your last
+          loaded data. No app store needed.
         </p>
 
         <div className="mt-8 flex flex-col gap-4">
@@ -74,9 +74,7 @@ export default function InstallPage() {
               Click the install icon at the right of the address bar (or open the browser menu and choose{" "}
               <span className="font-medium text-ink">Install NewinMeter</span>).
             </Step>
-            <Step icon={Download}>
-              Confirm to add it as a desktop app with its own window.
-            </Step>
+            <Step icon={Download}>Confirm to add it as a desktop app with its own window.</Step>
           </PlatformCard>
         </div>
 

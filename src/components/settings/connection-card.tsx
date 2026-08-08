@@ -43,7 +43,7 @@ export function ConnectionCard({ status, livemopayEmail, accountLabel, lastSynce
           </IconTile>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[0.9375rem] font-semibold text-ink">
-              {connected ? accountLabel ?? "LiveMopay account" : "No account connected"}
+              {connected ? (accountLabel ?? "LiveMopay account") : "No account connected"}
             </p>
             <p className="mt-0.5 inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
               {connected ? (

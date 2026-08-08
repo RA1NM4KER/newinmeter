@@ -34,7 +34,13 @@ export async function POST(request: Request) {
   // projection deliberately omits, so it's fetched again here.
   const connectionRow = await getConnectionRowForUser(session.userId);
 
-  if (!connectionRow || connectionRow.status !== "connected" || !connectionRow.account_id || !connectionRow.company_id || !connectionRow.property_id) {
+  if (
+    !connectionRow ||
+    connectionRow.status !== "connected" ||
+    !connectionRow.account_id ||
+    !connectionRow.company_id ||
+    !connectionRow.property_id
+  ) {
     return NextResponse.json({ message: "Connect a LiveMopay account first." }, { status: 409 });
   }
 

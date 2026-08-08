@@ -113,7 +113,9 @@ export function AssistantPanel({ from, to, compact = false }: AssistantPanelProp
           >
             <Sparkles className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-brandGreen`} />
           </div>
-          <span className={`min-w-0 flex-1 truncate ${compact ? "text-white/80" : "text-ink/80"} ${compact ? "pr-2 text-sm" : ""}`}>
+          <span
+            className={`min-w-0 flex-1 truncate ${compact ? "text-white/80" : "text-ink/80"} ${compact ? "pr-2 text-sm" : ""}`}
+          >
             {compact
               ? "Ask your energy assistant..."
               : conversation.length

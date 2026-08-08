@@ -245,7 +245,8 @@ export function niceWattsDomain(values: number[]): [number, number] {
   const max = Math.max(...values);
   const min = Math.min(...values);
   const target = Math.max(max, 200);
-  const step = NICE_WATT_STEPS.find((candidate) => target / candidate <= 6) ?? NICE_WATT_STEPS[NICE_WATT_STEPS.length - 1];
+  const step =
+    NICE_WATT_STEPS.find((candidate) => target / candidate <= 6) ?? NICE_WATT_STEPS[NICE_WATT_STEPS.length - 1];
 
   const high = (Math.floor(max / step) + 1) * step;
   const low = Math.max(0, Math.floor(min / step) * step);

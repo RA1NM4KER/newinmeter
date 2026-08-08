@@ -55,7 +55,9 @@ describe("loadLiveOverview", () => {
   });
 
   it("returns the empty overview when the user has no device", async () => {
-    mocks.adminSupabaseRequest.mockResolvedValue(snapshot({ device: null, latest: [], series: [], count5m: 0, count1h: 0 }));
+    mocks.adminSupabaseRequest.mockResolvedValue(
+      snapshot({ device: null, latest: [], series: [], count5m: 0, count1h: 0 })
+    );
     const overview = await loadLiveOverview("user-a", "30m");
     expect(overview.device).toBeNull();
     expect(overview.series).toEqual([]);

@@ -55,7 +55,9 @@ function toDevice(row: MeterDeviceRow): MeterDevice | null {
 // never leak which case occurred. The raw key is only ever hashed here; it is
 // never logged. Service-role read, filtered by the exact hash (unique column),
 // so it returns the one matching device or nothing.
-export async function authenticateDeviceKey(authorizationHeader: string | null | undefined): Promise<MeterDevice | null> {
+export async function authenticateDeviceKey(
+  authorizationHeader: string | null | undefined
+): Promise<MeterDevice | null> {
   const rawKey = parseBearerDeviceKey(authorizationHeader);
   if (!rawKey) {
     return null;

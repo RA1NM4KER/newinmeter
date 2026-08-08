@@ -19,8 +19,7 @@ import { buildDailySpendChartModel } from "./daily-spend-chart-model";
 import type { DailyChartProps } from "./types";
 
 export function DailySpendChart({ data }: DailyChartProps) {
-  const { projectedDay, completedDays, averageSpend, chartData, currentDaySegment } =
-    buildDailySpendChartModel(data);
+  const { projectedDay, completedDays, averageSpend, chartData, currentDaySegment } = buildDailySpendChartModel(data);
 
   return (
     <ChartShell

@@ -62,9 +62,7 @@ function getRedis(): Redis {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
     if (!url || !token) {
-      throw new Error(
-        "Missing Upstash Redis credentials (UPSTASH_REDIS_REST_URL/TOKEN or KV_REST_API_URL/TOKEN)."
-      );
+      throw new Error("Missing Upstash Redis credentials (UPSTASH_REDIS_REST_URL/TOKEN or KV_REST_API_URL/TOKEN).");
     }
 
     redis = new Redis({ url, token });

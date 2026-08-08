@@ -28,8 +28,7 @@ creating two production auth users, so verify manually:
    reaches `SUBSCRIBED`.
 2. In the console, try to subscribe to another user's topic:
    ```js
-   const ch = window.supabase /* if exposed */ ??
-     null; // otherwise use the app client
+   const ch = window.supabase /* if exposed */ ?? null; // otherwise use the app client
    ```
    Practically: attempt `supabase.channel('live-meter:<B-uid>', { config: { private: true } }).subscribe(cb)`
    — the callback must NOT reach `SUBSCRIBED` (authorization is denied); no

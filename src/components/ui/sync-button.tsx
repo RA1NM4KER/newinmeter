@@ -26,7 +26,13 @@ type PopoverPosition = {
 const popoverWidth = 256;
 const popoverMargin = 12;
 
-export function SyncButton({ iconOnly = false, className, tone = "light", onSuccess, showNudge = false }: SyncButtonProps) {
+export function SyncButton({
+  iconOnly = false,
+  className,
+  tone = "light",
+  onSuccess,
+  showNudge = false
+}: SyncButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

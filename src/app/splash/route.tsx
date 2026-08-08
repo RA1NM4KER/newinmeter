@@ -12,43 +12,41 @@ export async function GET(request: NextRequest) {
   const logoSize = Math.round(Math.min(width, height) * 0.32);
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        alignItems: "center",
+        background: "#f6f6f6",
+        display: "flex",
+        height: "100%",
+        justifyContent: "center",
+        width: "100%"
+      }}
+    >
       <div
         style={{
           alignItems: "center",
-          background: "#f6f6f6",
+          background: "#111111",
+          borderRadius: Math.round(logoSize * 0.19),
           display: "flex",
-          height: "100%",
+          height: logoSize,
           justifyContent: "center",
-          width: "100%"
+          width: logoSize
         }}
       >
         <div
           style={{
-            alignItems: "center",
-            background: "#111111",
-            borderRadius: Math.round(logoSize * 0.19),
+            color: "#ffffff",
             display: "flex",
-            height: logoSize,
-            justifyContent: "center",
-            width: logoSize
+            fontFamily: "sans-serif",
+            fontSize: Math.round(logoSize * 0.55),
+            fontWeight: 700,
+            letterSpacing: -8
           }}
         >
-          <div
-            style={{
-              color: "#ffffff",
-              display: "flex",
-              fontFamily: "sans-serif",
-              fontSize: Math.round(logoSize * 0.55),
-              fontWeight: 700,
-              letterSpacing: -8
-            }}
-          >
-            N<span style={{ color: "#00ff9b" }}>M</span>
-          </div>
+          N<span style={{ color: "#00ff9b" }}>M</span>
         </div>
       </div>
-    ),
+    </div>,
     { width, height }
   );
 }

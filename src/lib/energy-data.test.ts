@@ -21,7 +21,9 @@ describe("searchFilterOrClause", () => {
   });
 
   it("trims surrounding whitespace before building the clause", () => {
-    expect(searchFilterOrClause("  fee  ")).toBe("charge_label.ilike.*fee*,period_dt.ilike.*fee*,capture_dt.ilike.*fee*");
+    expect(searchFilterOrClause("  fee  ")).toBe(
+      "charge_label.ilike.*fee*,period_dt.ilike.*fee*,capture_dt.ilike.*fee*"
+    );
   });
 });
 

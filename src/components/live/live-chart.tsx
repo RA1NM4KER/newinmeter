@@ -60,8 +60,7 @@ function LiveChartImpl({ series, muted = false }: LiveChartProps) {
   const stroke = muted ? chartColors.average : chartColors.accent;
   // Unit on the tick labels themselves (matches the mockup), so no floating
   // corner label is needed.
-  const yTickFormatter = (value: number) =>
-    useKw ? `${(value / 1000).toFixed(1)} kW` : `${Math.round(value)} W`;
+  const yTickFormatter = (value: number) => (useKw ? `${(value / 1000).toFixed(1)} kW` : `${Math.round(value)} W`);
   const xTickFormatter = (value: number) => formatClockTime(new Date(value).toISOString());
 
   if (data.length === 0) {
