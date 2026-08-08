@@ -74,7 +74,7 @@ export function LiveHero({ estimatedWatts, estimateState, agoText, changeText, h
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted">
         <span className={`inline-flex items-center gap-2 font-medium ${fresh ? "text-ink" : "text-muted"}`}>
           <ActivityDot fresh={fresh} flash={flash} />
-          Last pulse {agoText ?? "—"}
+          Last pulse {agoText ?? "-"}
         </span>
         {fresh && changeText ? (
           <>

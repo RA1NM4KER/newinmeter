@@ -14,7 +14,7 @@ import {
 } from "@/lib/format";
 
 // en-ZA formats numbers with a comma decimal separator and a non-breaking
-// space thousands separator (e.g. "R 1 234,50"), not the
+// space thousands separator (e.g. "RÂ 1Â 234,50"), not the
 // period/comma US convention -- assertions below check the meaningful shape
 // (symbol, digits, sign) rather than pinning exact whitespace bytes, which
 // makes them robust to ICU data details while still catching real
@@ -56,7 +56,7 @@ describe("formatTariff / formatTariffPerKl", () => {
 
 describe("formatUsage", () => {
   it("returns a placeholder when unit is null", () => {
-    expect(formatUsage(10, null)).toBe("--");
+    expect(formatUsage(10, null)).toBe("-");
   });
 
   it("dispatches to kWh or kL formatting based on unit", () => {
@@ -67,7 +67,7 @@ describe("formatUsage", () => {
 
 describe("formatTariffForUnit", () => {
   it("returns a placeholder when unit is null", () => {
-    expect(formatTariffForUnit(2, null)).toBe("--");
+    expect(formatTariffForUnit(2, null)).toBe("-");
   });
 
   it("dispatches to the matching per-unit formatter", () => {

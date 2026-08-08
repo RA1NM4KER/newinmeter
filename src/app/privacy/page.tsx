@@ -24,10 +24,13 @@ export default function PrivacyPolicyPage() {
 
       <Section title="What we collect">
         <ul className="list-disc pl-5">
-          <li>Your email address, used to sign you in via a magic link. We never see or store a password.</li>
+          <li>
+            Your email address, used to sign you in. You can use a magic link or continue with Google. We never see or
+            store a password.
+          </li>
           <li>
             Your LiveMopay password, which you provide once to connect your account. It&apos;s used exactly once,
-            server-side, to establish that connection, and is never stored -- not even encrypted. What we do store is
+            server-side, to establish that connection, and is never stored, not even encrypted. What we do store is
             an encrypted (AES-256-GCM) refresh token, which lets us sync your data on your behalf without ever holding
             your password.
           </li>

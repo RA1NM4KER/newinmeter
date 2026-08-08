@@ -30,7 +30,7 @@ export function formatTariffPerKl(value: number) {
 
 export function formatUsage(value: number, unit: "kWh" | "kL" | null) {
   if (!unit) {
-    return "--";
+    return "-";
   }
 
   return unit === "kWh" ? formatKwh(value) : formatKl(value);
@@ -38,7 +38,7 @@ export function formatUsage(value: number, unit: "kWh" | "kL" | null) {
 
 export function formatTariffForUnit(value: number, unit: "kWh" | "kL" | null) {
   if (!unit) {
-    return "--";
+    return "-";
   }
 
   return unit === "kWh" ? formatTariff(value) : formatTariffPerKl(value);

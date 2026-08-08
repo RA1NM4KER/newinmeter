@@ -196,7 +196,7 @@ export function LivePageClient({ userId }: LivePageClientProps = {}) {
 
       {refetchFailing ? (
         <p role="status" className="mb-3 text-xs text-amber-700 dark:text-amber-400">
-          Live data temporarily unavailable — showing the last reading.
+          Live data temporarily unavailable. Showing the last reading.
         </p>
       ) : null}
 
@@ -229,7 +229,7 @@ export function LivePageClient({ userId }: LivePageClientProps = {}) {
       <div className="mt-4 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-paper/88">
         <RecentCell label="Last 5 minutes" value={formatLiveKwh(energy.last5MinutesKwh)} detail="Optical pulse total" />
         <RecentCell label="Last hour" value={formatLiveKwh(energy.lastHourKwh)} detail="Optical pulse total" />
-        <RecentCell label="Last pulse" value={agoText ?? "—"} detail="Not a device-online indicator" />
+        <RecentCell label="Last pulse" value={agoText ?? "-"} detail="Not a device-online indicator" />
       </div>
 
       <p className="mt-3.5 px-1 text-xs text-muted">

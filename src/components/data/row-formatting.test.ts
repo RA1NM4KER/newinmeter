@@ -46,7 +46,7 @@ describe("usageDisplayFor", () => {
   });
 
   it("shows a placeholder for a null unit (fixed/topup rows)", () => {
-    expect(usageDisplayFor(row({ usageAmount: 0, usageUnit: null }))).toBe("--");
+    expect(usageDisplayFor(row({ usageAmount: 0, usageUnit: null }))).toBe("-");
   });
 });
 
@@ -56,6 +56,6 @@ describe("tariffDisplayFor", () => {
   });
 
   it("shows a placeholder for a null unit", () => {
-    expect(tariffDisplayFor(row({ tariff: 0, usageUnit: null }))).toBe("--");
+    expect(tariffDisplayFor(row({ tariff: 0, usageUnit: null }))).toBe("-");
   });
 });

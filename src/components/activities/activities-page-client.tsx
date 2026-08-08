@@ -206,7 +206,7 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
                     <td className="whitespace-nowrap px-3 py-3">{formatCurrency(row.electricitySpend)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{formatKl(row.waterKl)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{formatCurrency(row.waterSpend)}</td>
-                    <td className="max-w-60 px-3 py-3 text-muted">{row.note ?? "—"}</td>
+                    <td className="max-w-60 px-3 py-3 text-muted">{row.note ?? "-"}</td>
                     <td className="px-3 py-3">
                       <div className="flex gap-2">
                         <button
