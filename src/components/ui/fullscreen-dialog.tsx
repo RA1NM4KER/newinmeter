@@ -8,6 +8,9 @@ type FullscreenDialogProps = {
   onClose(): void;
   eyebrow?: string;
   title: string;
+  // Compact annotation shown inline, right after the title text (e.g. a unit
+  // note like "incl. fixed"). For controls, use titleControls/headerAction.
+  titleAdornment?: ReactNode;
   // Compact controls (e.g. zoom) that sit on the title row, left of the close
   // button, so a chart with no other controls stays a one-line header.
   titleControls?: ReactNode;
@@ -33,6 +36,7 @@ export function FullscreenDialog({
   onClose,
   eyebrow,
   title,
+  titleAdornment,
   titleControls,
   headerAction,
   children,
@@ -75,9 +79,12 @@ export function FullscreenDialog({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {eyebrow ? <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{eyebrow}</p> : null}
-            <h2 className={`${eyebrow ? "mt-0.5" : ""} truncate text-base font-semibold text-ink sm:text-lg`}>
-              {title}
-            </h2>
+            <div className={`${eyebrow ? "mt-0.5" : ""} flex min-w-0 items-baseline gap-2`}>
+              <h2 className="truncate text-base font-semibold text-ink sm:text-lg">{title}</h2>
+              {titleAdornment ? (
+                <span className="shrink-0 text-xs font-normal text-muted">{titleAdornment}</span>
+              ) : null}
+            </div>
           </div>
           {/* titleControls (zoom) share the title row so a chart with no other
               controls stays one line. Heavier chart controls go to headerAction

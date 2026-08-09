@@ -90,10 +90,12 @@ function IconButton({ label, onClick, children, variant = "default" }: IconButto
 
 export function FullscreenChart({
   title,
+  titleAdornment,
   action,
   children
 }: {
   title: string;
+  titleAdornment?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }) {
@@ -130,7 +132,7 @@ export function FullscreenChart({
       closeIcon={X}
       closeLabel="Close chart"
       contentClassName="h-full"
-      eyebrow="Chart"
+      titleAdornment={titleAdornment}
       titleControls={
         <>
           <IconButton label="Zoom out" onClick={() => updateZoom(zoom - 0.25)}>
@@ -162,12 +164,15 @@ export function FullscreenChart({
   );
 }
 
-function ChartShellInner({ title, action, footer, fullScreenChildren, children }: ChartShellProps) {
+function ChartShellInner({ title, titleAdornment, action, footer, fullScreenChildren, children }: ChartShellProps) {
   return (
     <>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
-          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h2 className="text-base font-semibold text-ink">{title}</h2>
+            {titleAdornment ? <span className="shrink-0 text-xs font-normal text-muted">{titleAdornment}</span> : null}
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {action}
             <ExpandChartButton />
@@ -176,7 +181,7 @@ function ChartShellInner({ title, action, footer, fullScreenChildren, children }
         <div className="h-64 px-1 py-4 sm:h-72 sm:px-4">{children}</div>
         {footer ? <div className="border-t border-line px-4 py-3 sm:px-5">{footer}</div> : null}
       </Card>
-      <FullscreenChart title={title} action={action}>
+      <FullscreenChart title={title} titleAdornment={titleAdornment} action={action}>
         {fullScreenChildren ?? children}
       </FullscreenChart>
     </>

@@ -4,6 +4,7 @@ import type { DailyPoint, DailyRollupRow, HourlyPoint, TariffPoint, UsageActivit
 
 export type ChartShellProps = {
   title: string;
+  titleAdornment?: ReactNode;
   action?: ReactNode;
   footer?: ReactNode;
   fullScreenChildren?: ReactNode;
