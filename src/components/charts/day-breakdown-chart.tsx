@@ -311,13 +311,16 @@ export function DayBreakdownChart({
   return (
     <ExpandProvider>
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
-          <h2 className="text-base font-semibold text-ink">Day detail</h2>
-          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="mr-auto text-base font-semibold text-ink">Day detail</h2>
+          {/* On mobile the date/add controls drop to a full-width row of their
+              own (order-last) so the expand button stays on the title line; on
+              sm+ everything sits inline on one row. */}
+          <div className="order-last flex w-full flex-wrap items-center justify-end gap-2 sm:order-none sm:w-auto">
             {dateControl}
             {activitiesEnabled ? addButton : null}
-            <ExpandChartButton />
           </div>
+          <ExpandChartButton />
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_22rem]">
           <div className="h-72 sm:h-80">{renderChart(isCompactAxis ? 7 : 3)}</div>
