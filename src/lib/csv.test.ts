@@ -43,6 +43,14 @@ describe("toEnergyRow", () => {
     expect(row.usageAmount).toBe(0);
   });
 
+  it("classifies a refund row without any usage and keeps its negative cost", () => {
+    const row = toEnergyRow(record({ charge_label: "Incorrect Tariff Refund", kwh: "0", cost: "-273.79" }));
+    expect(row.chargeKind).toBe("refund");
+    expect(row.usageUnit).toBeNull();
+    expect(row.usageAmount).toBe(0);
+    expect(row.cost).toBe(-273.79);
+  });
+
   it("parses period date/time into separate fields", () => {
     const row = toEnergyRow(record({ period_dt: "2026-07-25 14:30" }));
     expect(row.periodDate).toBe("2026-07-25");
@@ -60,6 +68,11 @@ describe("toEnergyRow", () => {
     const row = toEnergyRow(record({ charge_label: "Top Up" }));
     expect(row.ledgerTimestamp).toBe(row.periodTimestamp);
     expect(row.ledgerTimestamp).not.toBe(row.captureTimestamp);
+  });
+
+  it("uses period time for the ledger timestamp on refund rows too", () => {
+    const row = toEnergyRow(record({ charge_label: "Incorrect Tariff Refund" }));
+    expect(row.ledgerTimestamp).toBe(row.periodTimestamp);
   });
 
   it("coerces numeric-looking strings to numbers", () => {

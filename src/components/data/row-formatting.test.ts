@@ -30,6 +30,10 @@ describe("amountClassFor", () => {
     expect(amountClassFor(row({ chargeKind: "topup" }))).toContain("text-success");
   });
 
+  it("uses a success color for refunds", () => {
+    expect(amountClassFor(row({ chargeKind: "refund" }))).toContain("text-success");
+  });
+
   it("uses a fixed-charge color for fixed rows", () => {
     expect(amountClassFor(row({ chargeKind: "fixed" }))).toContain("text-fixed");
   });

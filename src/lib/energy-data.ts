@@ -105,10 +105,13 @@ export function queryPathForPage({ from, to, chargeType, search, sortKey, sortDi
     params.set("charge_label", "like.Water:*");
   } else if (chargeType === "topup") {
     params.set("charge_label", "eq.Top Up");
+  } else if (chargeType === "refund") {
+    params.set("charge_label", "ilike.*refund*");
   } else if (chargeType === "fixed") {
     params.append("charge_label", "not.like.Energy Charge:*");
     params.append("charge_label", "not.like.Water:*");
     params.append("charge_label", "neq.Top Up");
+    params.append("charge_label", "not.ilike.*refund*");
   }
 
   const searchClause = searchFilterOrClause(search ?? "");

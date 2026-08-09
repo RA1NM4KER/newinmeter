@@ -18,7 +18,7 @@ export const dataTableQueryParamKeys = {
 export const sortKeyOptions = ["period", "type", "band", "kwh", "tariff", "amount", "balance", "captured"] as const;
 export const pageSizeOptions = [25, 50, 100] as const;
 
-const chargeTypeSchema = z.enum(["all", "energy", "water", "fixed", "topup"]);
+const chargeTypeSchema = z.enum(["all", "energy", "water", "fixed", "topup", "refund"]);
 const sortKeySchema = z.enum(sortKeyOptions);
 const sortDirectionSchema = z.enum(["asc", "desc"]);
 

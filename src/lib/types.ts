@@ -1,5 +1,5 @@
 export type EnergyRow = {
-  chargeKind: "energy" | "water" | "fixed" | "topup";
+  chargeKind: "energy" | "water" | "fixed" | "topup" | "refund";
   captureTimestamp: number;
   captureDateTime: string;
   ledgerTimestamp: number;

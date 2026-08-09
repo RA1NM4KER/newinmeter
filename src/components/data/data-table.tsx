@@ -25,7 +25,8 @@ const chargeTypeLabelMap: Record<EnergyRow["chargeKind"], string> = {
   energy: "Energy",
   water: "Water",
   fixed: "Fixed",
-  topup: "Top up"
+  topup: "Top up",
+  refund: "Refund"
 };
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -267,7 +268,8 @@ export function DataTable() {
       { label: chargeTypeLabelMap.energy, value: "energy" },
       { label: chargeTypeLabelMap.water, value: "water" },
       { label: chargeTypeLabelMap.fixed, value: "fixed" },
-      { label: chargeTypeLabelMap.topup, value: "topup" }
+      { label: chargeTypeLabelMap.topup, value: "topup" },
+      { label: chargeTypeLabelMap.refund, value: "refund" }
     ];
   }, []);
 

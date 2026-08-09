@@ -39,7 +39,9 @@ export function toEnergyRow(row: EnergyRecordInput): EnergyRow {
       ? "water"
       : row.charge_label === "Top Up"
         ? "topup"
-        : "fixed";
+        : /refund/i.test(row.charge_label)
+          ? "refund"
+          : "fixed";
   const waterKl = toNumber(row.water_kl ?? 0);
   const usageAmount = chargeKind === "water" ? waterKl : chargeKind === "energy" ? toNumber(row.kwh) : 0;
   const usageUnit = chargeKind === "water" ? "kL" : chargeKind === "energy" ? "kWh" : null;
@@ -48,7 +50,7 @@ export function toEnergyRow(row: EnergyRecordInput): EnergyRow {
     chargeKind,
     captureTimestamp: captureDt.getTime(),
     captureDateTime: row.capture_dt,
-    ledgerTimestamp: chargeKind === "topup" ? periodDt.getTime() : captureDt.getTime(),
+    ledgerTimestamp: chargeKind === "topup" || chargeKind === "refund" ? periodDt.getTime() : captureDt.getTime(),
     chargeLabel: row.charge_label,
     periodTimestamp: periodDt.getTime(),
     periodDateTime,

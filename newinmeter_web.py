@@ -28,6 +28,9 @@ WATER_LABEL_RE = re.compile(
     r"^(?P<label>Water:.+?) \((?P<period_dt>\d{4}-\d{2}-\d{2} \d{2}:\d{2}) to \d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$"
 )
 FIXED_LABEL_RE = re.compile(r"^(?P<label>Daily .+?) - (?P<period_date>\d{4}-\d{2}-\d{2})$")
+# Credits describing a refund (e.g. "Incorrect Tariff Refund") reverse an
+# earlier overcharge rather than being a wallet top-up. Matched generically.
+REFUND_LABEL_RE = re.compile(r"refund", re.IGNORECASE)
 ENERGY_UNITS_RE = re.compile(r"(?P<kwh>-?[\d.]+)\s*kWh\s*@\s*R(?P<tariff>-?[\d.]+)")
 WATER_UNITS_RE = re.compile(r"(?P<water_kl>-?[\d.]+)\s*kL\s*@\s*R(?P<tariff>-?[\d.]+)")
 FIXED_UNITS_RE = re.compile(r"(?P<quantity>-?[\d.]+)\s*@\s*R(?P<tariff>-?[\d.]+)")
@@ -269,6 +272,14 @@ def parse_money(value: str) -> str:
     return value or "0"
 
 
+def negate_money(value: str) -> str:
+    # Flips the sign of an already-parsed money string so refunds reduce net
+    # spend downstream.
+    if value in ("", "0"):
+        return "0"
+    return value[1:] if value.startswith("-") else f"-{value}"
+
+
 def parse_local_capture_dt(value: str) -> str:
     source = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return source.astimezone(LOCAL_TZ).strftime("%d/%m/%Y %H:%M")
@@ -337,6 +348,24 @@ def normalize_ledger_row(item: dict) -> dict | None:
             "water_kl": "0",
             "tariff": units_match.group("tariff"),
             "cost": parse_money(item.get("debitIncl") or item.get("debit")),
+            "balance": balance,
+        }
+
+    # A refund is a credit, but unlike a top-up it reverses an earlier
+    # overcharge, so it must reduce net spend rather than land in the top-up
+    # bucket. Keep the original description as the label (distinct type, no
+    # usage) and store the amount as a negative cost.
+    if REFUND_LABEL_RE.search(description):
+        refund = parse_money(item.get("creditIncl") or item.get("credit"))
+        return {
+            "capture_dt": capture_dt,
+            "source_ts": item["date"],
+            "charge_label": description,
+            "period_dt": capture_dt_to_period_dt(capture_dt),
+            "kwh": "0",
+            "water_kl": "0",
+            "tariff": "0",
+            "cost": negate_money(refund),
             "balance": balance,
         }
 

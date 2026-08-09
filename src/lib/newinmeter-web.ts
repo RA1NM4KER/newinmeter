@@ -11,6 +11,16 @@ import {
 const ENERGY_LABEL_RE = /^(.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)$/;
 const WATER_LABEL_RE = /^(Water:.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: to \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\)$/;
 const FIXED_LABEL_RE = /^(Daily .+?) - (\d{4}-\d{2}-\d{2})$/;
+// Credits whose description mentions a refund (e.g. "Incorrect Tariff Refund")
+// reverse an earlier overcharge rather than being a wallet top-up. Matched
+// generically on the word so any "<something> Refund" is recognised.
+const REFUND_LABEL_RE = /refund/i;
+
+// Shared so the sync-time cleanup classifies a stored charge_label exactly the
+// same way the parser does when it assigns one.
+export function isRefundLabel(label: string) {
+  return REFUND_LABEL_RE.test(label);
+}
 const ENERGY_UNITS_RE = /(-?[\d.]+)\s*kWh\s*@\s*R(-?[\d.]+)/;
 const WATER_UNITS_RE = /(-?[\d.]+)\s*kL\s*@\s*R(-?[\d.]+)/;
 const FIXED_UNITS_RE = /(-?[\d.]+)\s*@\s*R(-?[\d.]+)/;
@@ -118,6 +128,15 @@ function captureDateToPeriodDate(value: string) {
 
 function parseMoney(value: string | null | undefined) {
   return (value || "").trim().replaceAll("R", "").replaceAll(",", "") || "0";
+}
+
+// Flips the sign of an already-parsed money string. Used to store refunds as a
+// negative spend so they reduce net spend in the downstream rollups.
+function negateMoney(value: string) {
+  if (value === "0" || value === "") {
+    return "0";
+  }
+  return value.startsWith("-") ? value.slice(1) : `-${value}`;
 }
 
 function normalizeNumericString(value: string, scale: number) {
@@ -366,7 +385,7 @@ export async function discoverLiveMopayAccounts(idToken: string): Promise<LiveMo
   return candidates;
 }
 
-function normalizeLedgerRow(item: LedgerApiRow): NewinmeterCsvRow | null {
+export function normalizeLedgerRow(item: LedgerApiRow): NewinmeterCsvRow | null {
   const description = (item.description || "").trim();
   const captureDt = formatLocalCaptureDate(item.date);
   const balance = parseMoney(item.balanceIncl || item.balance);
@@ -440,6 +459,25 @@ function normalizeLedgerRow(item: LedgerApiRow): NewinmeterCsvRow | null {
       water_kl: "0",
       tariff: unitsMatch[2],
       cost: parseMoney(item.debitIncl || item.debit),
+      balance
+    };
+  }
+
+  // A refund is a credit, but unlike a top-up it reverses an earlier overcharge,
+  // so it must reduce net spend rather than land in the top-up bucket. Keep the
+  // original description as the label (distinct type, no usage) and store the
+  // amount as a negative cost.
+  if (isRefundLabel(description)) {
+    const refund = parseMoney(item.creditIncl || item.credit);
+    return {
+      capture_dt: captureDt,
+      source_ts: item.date,
+      charge_label: description,
+      period_dt: captureDateToPeriodDate(captureDt),
+      kwh: "0",
+      water_kl: "0",
+      tariff: "0",
+      cost: negateMoney(refund),
       balance
     };
   }

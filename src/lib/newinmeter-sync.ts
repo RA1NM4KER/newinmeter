@@ -5,6 +5,7 @@ import {
   currentNewinmeterLocalYear,
   dedupeNewinmeterRows,
   fetchLiveMopayLedger,
+  isRefundLabel,
   newinmeterLedgerKey,
   refreshLiveMopaySession,
   type NewinmeterCsvRow
@@ -90,6 +91,110 @@ async function finishCaptureRun(
   );
 }
 
+// A fingerprint of what the OLD parser would have written for a ledger entry
+// that LiveMopay now reports as a refund. Every field is reconstructed from the
+// current authoritative fetch and is identical between the two parsers for the
+// same entry:
+//   - source_ts: the ledger entry's own timestamp, copied verbatim by both.
+//   - cost: the old "Top Up" stored the positive credit; the new refund stores
+//     its negative, so the old value is abs(new cost).
+//   - balance / period_dt: both parsers derive these the same way (balanceIncl,
+//     and captureDateToPeriodDate(capture_dt) for a credit row).
+// Matching on all four -- not source_ts alone -- means a timestamp collision
+// with a genuine wallet top-up (different amount/balance) can never match.
+export type RefundTopupMatcher = {
+  sourceTs: string;
+  cost: string;
+  balance: string;
+  periodDt: string;
+};
+
+function absMoney(value: string) {
+  return value.startsWith("-") ? value.slice(1) : value;
+}
+
+export function refundTopupMatchers(rows: NewinmeterCsvRow[]): RefundTopupMatcher[] {
+  const seen = new Set<string>();
+  const matchers: RefundTopupMatcher[] = [];
+
+  for (const row of rows) {
+    if (!isRefundLabel(row.charge_label)) {
+      continue;
+    }
+
+    const sourceTs = row.source_ts.trim();
+    // Rows with no source_ts (legacy captures) can't be positively linked to an
+    // API entry, so they are never eligible for cleanup.
+    if (!sourceTs) {
+      continue;
+    }
+
+    const matcher: RefundTopupMatcher = {
+      sourceTs,
+      cost: absMoney(row.cost.trim()),
+      balance: row.balance.trim(),
+      periodDt: row.period_dt.trim()
+    };
+
+    const key = `${matcher.sourceTs}|${matcher.cost}|${matcher.balance}|${matcher.periodDt}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    matchers.push(matcher);
+  }
+
+  return matchers;
+}
+
+// Builds the PostgREST DELETE path that removes ONLY rows the old parser
+// mislabelled "Top Up" which LiveMopay now reports as a refund. Each refund
+// contributes an and(...) group pinning source_ts AND cost AND balance AND
+// period_dt together, so a row is deleted only when it matches a confirmed
+// refund on every one of those values -- a shared source_ts alone is never
+// enough. Returns null when there is nothing to do, so the caller skips the
+// request entirely (never issues an unfiltered delete). The path always targets
+// /energy_rows -- never usage_activities or any other user-owned table.
+export function buildRefundTopupDeletePath(connectionId: string, matchers: RefundTopupMatcher[]) {
+  if (!matchers.length) {
+    return null;
+  }
+
+  const orValue =
+    "(" +
+    matchers
+      .map(
+        (m) =>
+          `and(source_ts.eq."${m.sourceTs}",cost.eq.${m.cost},balance.eq.${m.balance},period_dt.eq."${m.periodDt}")`
+      )
+      .join(",") +
+    ")";
+
+  return (
+    `/energy_rows?connection_id=eq.${encodeURIComponent(connectionId)}` +
+    `&charge_label=eq.${encodeURIComponent("Top Up")}` +
+    `&or=${encodeURIComponent(orValue)}` +
+    `&select=id`
+  );
+}
+
+// Removes the stale "Top Up" twins of refunds that the current sync re-parsed
+// correctly. Conservative by construction: no loose heuristics -- a row is
+// deleted only when it matches a confirmed refund from the authoritative fetch
+// on source_ts, cost, balance and period_dt together. Returns the number of
+// rows removed.
+async function deleteMisparsedRefundTopups(connectionId: string, matchers: RefundTopupMatcher[]) {
+  const path = buildRefundTopupDeletePath(connectionId, matchers);
+  if (!path) {
+    return 0;
+  }
+
+  const removed = await adminSupabaseRequest<Array<{ id: string }>>("DELETE", path, undefined, "return=representation");
+
+  return removed.length;
+}
+
 async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string) {
   const syncedAt = nowIso();
   const onConflict = encodeURIComponent("connection_id,charge_label,period_dt,cost,balance");
@@ -171,12 +276,20 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       startDate
     });
 
+    // Remove any stale "Top Up" rows that the old parser mislabelled but
+    // LiveMopay now reports as refunds, before inserting the corrected refund
+    // rows. Only touches energy_rows; user-owned Activities are untouched.
+    const removedStaleRefunds = await deleteMisparsedRefundTopups(params.connectionId, refundTopupMatchers(rows));
+
     const synced = await upsertRows(params.connectionId, rows, runId);
     await finishCaptureRun(runId, "success", { rowsSynced: synced });
 
+    const cleanupNote =
+      removedStaleRefunds > 0 ? ` Removed ${removedStaleRefunds} stale mis-parsed refund row(s).` : "";
+
     return {
       mode: params.mode,
-      output: `Fetched ${rows.length} rows from LiveMopay. Synced ${synced} rows to Supabase.`,
+      output: `Fetched ${rows.length} rows from LiveMopay. Synced ${synced} rows to Supabase.${cleanupNote}`,
       rowsSynced: synced
     };
   } catch (error) {

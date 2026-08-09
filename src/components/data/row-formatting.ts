@@ -2,7 +2,7 @@ import { formatTariffForUnit, formatUsage } from "@/lib/format";
 import type { EnergyRow } from "@/lib/types";
 
 export function amountClassFor(row: EnergyRow) {
-  if (row.chargeKind === "topup") {
+  if (row.chargeKind === "topup" || row.chargeKind === "refund") {
     return "font-medium text-success";
   }
 
