@@ -162,18 +162,15 @@ export function FullscreenChart({
   );
 }
 
-function ChartShellInner({ title, eyebrow, action, footer, fullScreenChildren, children }: ChartShellProps) {
+function ChartShellInner({ title, action, footer, fullScreenChildren, children }: ChartShellProps) {
   return (
     <>
       <Card>
-        <div className="border-b border-line px-4 py-4 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted">{eyebrow}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {action}
             <ExpandChartButton />
-          </div>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-ink">{title}</h2>
-            {action ? <div className="flex flex-wrap items-center justify-end gap-2">{action}</div> : null}
           </div>
         </div>
         <div className="h-64 px-1 py-4 sm:h-72 sm:px-4">{children}</div>
