@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { amountClassFor, tariffDisplayFor, usageDisplayFor } from "@/components/data/row-formatting";
+import { amountClassFor, amountDisplayFor, tariffDisplayFor, usageDisplayFor } from "@/components/data/row-formatting";
+import { formatCurrency } from "@/lib/format";
 import type { EnergyRow } from "@/lib/types";
 
 function row(overrides: Partial<EnergyRow>): EnergyRow {
@@ -41,6 +42,22 @@ describe("amountClassFor", () => {
   it("uses the default ink color for energy and water rows", () => {
     expect(amountClassFor(row({ chargeKind: "energy" }))).toBe("text-ink");
     expect(amountClassFor(row({ chargeKind: "water" }))).toBe("text-ink");
+  });
+});
+
+describe("amountDisplayFor", () => {
+  it("shows a refund as a positive credit even though its cost is stored negative", () => {
+    const display = amountDisplayFor(row({ chargeKind: "refund", cost: -273.79 }));
+    expect(display).toBe(formatCurrency(273.79));
+    expect(display).not.toContain("-");
+  });
+
+  it("shows a top-up as a positive credit", () => {
+    expect(amountDisplayFor(row({ chargeKind: "topup", cost: 500 }))).toBe(formatCurrency(500));
+  });
+
+  it("shows charge amounts unchanged", () => {
+    expect(amountDisplayFor(row({ chargeKind: "energy", cost: 0.15 }))).toBe(formatCurrency(0.15));
   });
 });
 

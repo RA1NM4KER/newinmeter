@@ -18,7 +18,7 @@ import { useDataTableUrlState } from "@/lib/use-data-table-url-state";
 import { formatCurrency } from "@/lib/format";
 import { buildEnergyRowsUrl } from "@/lib/endpoints";
 import type { EnergyRow, SyncMetadata } from "@/lib/types";
-import { amountClassFor, tariffDisplayFor, usageDisplayFor } from "./row-formatting";
+import { amountClassFor, amountDisplayFor, tariffDisplayFor, usageDisplayFor } from "./row-formatting";
 import type { SortDirection, SortKey } from "./types";
 
 const chargeTypeLabelMap: Record<EnergyRow["chargeKind"], string> = {
@@ -223,7 +223,7 @@ export function DataTable() {
         id: "amount",
         accessorFn: (row) => row.cost,
         header: dataTableColumnLabel.amount,
-        cell: ({ row }) => <span className={amountClassFor(row.original)}>{formatCurrency(row.original.cost)}</span>
+        cell: ({ row }) => <span className={amountClassFor(row.original)}>{amountDisplayFor(row.original)}</span>
       },
       {
         id: "balance",
