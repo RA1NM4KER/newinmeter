@@ -8,6 +8,7 @@ type FullscreenDialogProps = {
   onClose(): void;
   eyebrow?: string;
   title: string;
+  titleAdornment?: ReactNode;
   headerAction?: ReactNode;
   children: ReactNode;
   bodyClassName?: string;
@@ -30,6 +31,7 @@ export function FullscreenDialog({
   onClose,
   eyebrow,
   title,
+  titleAdornment,
   headerAction,
   children,
   bodyClassName = "min-h-0 flex-1 overflow-auto p-3 sm:p-5",
@@ -71,9 +73,10 @@ export function FullscreenDialog({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {eyebrow ? <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{eyebrow}</p> : null}
-            <h2 className={`${eyebrow ? "mt-0.5" : ""} truncate text-base font-semibold text-ink sm:text-lg`}>
-              {title}
-            </h2>
+            <div className={`${eyebrow ? "mt-0.5" : ""} flex min-w-0 items-baseline gap-2`}>
+              <h2 className="truncate text-base font-semibold text-ink sm:text-lg">{title}</h2>
+              {titleAdornment ? <div className="flex shrink-0 items-center gap-2">{titleAdornment}</div> : null}
+            </div>
           </div>
           {/* Close button lives on its own row with the title, not grouped
               with headerAction -- headerAction can be several controls wide

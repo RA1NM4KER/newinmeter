@@ -24,7 +24,8 @@ export type HourlyChartProps = {
 };
 
 export type TariffChartProps = {
-  data: TariffPoint[];
+  electricity: TariffPoint[];
+  water: TariffPoint[];
 };
 
 export type DayBreakdownChartProps = {

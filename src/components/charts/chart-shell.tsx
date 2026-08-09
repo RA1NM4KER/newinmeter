@@ -131,9 +131,9 @@ export function FullscreenChart({
       closeLabel="Close chart"
       contentClassName="h-full"
       eyebrow="Chart"
+      titleAdornment={action}
       headerAction={
         <>
-          {action}
           <IconButton label="Zoom out" onClick={() => updateZoom(zoom - 0.25)}>
             <ZoomOut className="h-4 w-4" />
           </IconButton>

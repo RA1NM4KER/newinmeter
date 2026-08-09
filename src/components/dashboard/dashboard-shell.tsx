@@ -157,7 +157,7 @@ export function DashboardShell({
           ref={tariffCumulativeRailRef}
           className="snap-rail touch-pan-x touch-pan-y -mx-3 flex snap-x gap-5 overflow-x-auto px-3 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:px-0 lg:pb-0 [&>section]:min-w-[88vw] [&>section]:snap-center sm:[&>section]:min-w-[24rem] lg:[&>section]:min-w-0"
         >
-          <TariffChart data={analytics.tariffTimeline} />
+          <TariffChart electricity={analytics.tariffTimeline} water={analytics.waterTariffTimeline} />
           <CumulativeSpendChart data={analytics.daily} />
         </section>
         <ScrollHint containerRef={tariffCumulativeRailRef} />

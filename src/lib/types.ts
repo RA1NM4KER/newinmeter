@@ -161,6 +161,7 @@ export type Analytics = {
   daily: DailyPoint[];
   hourly: HourlyPoint[];
   tariffTimeline: TariffPoint[];
+  waterTariffTimeline: TariffPoint[];
   metrics: {
     totalSpend: number;
     totalEnergySpend: number;

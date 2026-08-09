@@ -329,6 +329,18 @@ function buildDailyTariffTimeline(rows: DailyRollupRow[]): TariffPoint[] {
     }));
 }
 
+function buildDailyWaterTariffTimeline(rows: DailyRollupRow[]): TariffPoint[] {
+  return buildDaily(rows)
+    .filter((day) => day.waterKl > 0)
+    .map((day) => ({
+      periodDateTime: `${day.date}T00:00`,
+      dateLabel: day.date,
+      tariff: round(day.waterSpend / day.waterKl),
+      chargeLabel: "Daily weighted average",
+      spend: day.waterSpend
+    }));
+}
+
 function previousTrend(daily: DailyPoint[]) {
   const midpoint = Math.floor(daily.length / 2);
   const previous = daily.slice(0, midpoint);
@@ -441,6 +453,7 @@ export function createAnalytics(
   const daily = buildDaily(filteredDailyRows, filteredHourlyRows, dailyRows, hourlyRows);
   const hourly = buildHourly(filteredHourlyRows);
   const tariffTimeline = buildDailyTariffTimeline(filteredDailyRows);
+  const waterTariffTimeline = buildDailyWaterTariffTimeline(filteredDailyRows);
   const totalSpend = round(sum(filteredDailyRows.map((row) => row.totalSpend)));
   const totalEnergySpend = round(sum(filteredDailyRows.map((row) => row.energySpend)));
   const totalWaterSpend = round(sum(filteredDailyRows.map((row) => row.waterSpend)));
@@ -460,6 +473,7 @@ export function createAnalytics(
     daily,
     hourly,
     tariffTimeline,
+    waterTariffTimeline,
     metrics: {
       totalSpend,
       totalEnergySpend,

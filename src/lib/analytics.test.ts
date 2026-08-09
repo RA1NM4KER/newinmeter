@@ -145,6 +145,33 @@ describe("createAnalytics totals", () => {
   });
 });
 
+describe("createAnalytics tariff timelines", () => {
+  it("builds the electricity timeline from days with energy usage, using the weighted tariff", () => {
+    const { tariffTimeline } = createAnalytics(
+      [
+        dailyRow({ periodDate: "2026-07-01", energyKwh: 20, weightedTariff: 2.54 }),
+        dailyRow({ periodDate: "2026-07-02", energyKwh: 0, weightedTariff: 0 }) // no energy -> excluded
+      ],
+      []
+    );
+    expect(tariffTimeline.map((point) => point.dateLabel)).toEqual(["2026-07-01"]);
+    expect(tariffTimeline[0].tariff).toBe(2.54);
+  });
+
+  it("builds the water timeline from days with water usage, deriving tariff as spend / kL", () => {
+    const { waterTariffTimeline } = createAnalytics(
+      [
+        dailyRow({ periodDate: "2026-07-01", waterSpend: 5, waterKl: 1 }), // 5 / 1 = 5
+        dailyRow({ periodDate: "2026-07-02", waterSpend: 0, waterKl: 0 }), // no water -> excluded
+        dailyRow({ periodDate: "2026-07-03", waterSpend: 2, waterKl: 0.4 }) // 2 / 0.4 = 5
+      ],
+      []
+    );
+    expect(waterTariffTimeline.map((point) => point.dateLabel)).toEqual(["2026-07-01", "2026-07-03"]);
+    expect(waterTariffTimeline.map((point) => point.tariff)).toEqual([5, 5]);
+  });
+});
+
 describe("createAnalytics peaks", () => {
   it("identifies the highest spend day", () => {
     const { metrics } = createAnalytics(dailyRows, hourlyRows);
