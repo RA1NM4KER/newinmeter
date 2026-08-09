@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { loadLiveOverview } from "@/lib/live-meter";
 import type { LiveOverview } from "@/lib/live-meter-types";
@@ -13,12 +14,22 @@ import type { LiveOverview } from "@/lib/live-meter-types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  // timingSafeEqual requires equal-length buffers; the length check itself is
+  // not the secret, and a non-matching length can never be the right token.
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 function authorized(request: Request): boolean {
   const expected = process.env.NEWINMETER_BEACON_TOKEN;
   if (!expected) return false;
   const header = request.headers.get("authorization") ?? "";
   const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return provided.length === expected.length && provided === expected;
+  if (!provided) return false;
+  return safeEqual(provided, expected);
 }
 
 type AppSummary = {
