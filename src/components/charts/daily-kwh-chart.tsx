@@ -29,7 +29,7 @@ export function DailyKwhChart({ data, activities = [], onSelectDate }: DailyChar
   );
 
   return (
-    <ChartShell title="Daily usage" eyebrow="kWh">
+    <ChartShell title="Daily usage">
       <ResponsiveContainer height="100%" width="100%">
         <BarChart data={chartData} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />

@@ -8,7 +8,7 @@ import type { DailyChartProps } from "./types";
 
 export function CumulativeSpendChart({ data }: DailyChartProps) {
   return (
-    <ChartShell title="Cumulative spend" eyebrow="Run rate">
+    <ChartShell title="Cumulative spend">
       <ResponsiveContainer height="100%" width="100%">
         <LineChart data={data} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />

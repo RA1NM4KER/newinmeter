@@ -34,7 +34,6 @@ export function TariffChart({ electricity, water }: TariffChartProps) {
   return (
     <ChartShell
       title="Tariff bands"
-      eyebrow="Daily average"
       action={
         <DropdownSelect
           ariaLabel="Tariff utility"

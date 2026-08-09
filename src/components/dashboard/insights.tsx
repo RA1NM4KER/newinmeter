@@ -14,7 +14,7 @@ export function Insights({ insights }: InsightsProps) {
 
   return (
     <Card>
-      <CardHeader title="Signals" eyebrow="Insights" />
+      <CardHeader title="Signals" />
       <div className="relative">
         <div
           ref={railRef}

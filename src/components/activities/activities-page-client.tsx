@@ -114,7 +114,6 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
 
       <ChartShell
         title="Tagged usage"
-        eyebrow={activityMetricOptions.find((option) => option.value === metric)?.label}
         action={
           <DropdownSelect
             ariaLabel="Activity metric"

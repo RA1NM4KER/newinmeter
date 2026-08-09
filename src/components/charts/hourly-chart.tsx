@@ -8,7 +8,7 @@ import type { HourlyChartProps } from "./types";
 
 export function HourlyChart({ data, metric, title }: HourlyChartProps) {
   return (
-    <ChartShell title={title} eyebrow="Hour of day">
+    <ChartShell title={title}>
       <ResponsiveContainer height="100%" width="100%">
         <BarChart data={data} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />

@@ -7,7 +7,6 @@ export type CardProps = {
 
 export type CardHeaderProps = {
   title: string;
-  eyebrow?: string;
   action?: ReactNode;
 };
 

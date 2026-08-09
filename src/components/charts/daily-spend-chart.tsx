@@ -22,11 +22,7 @@ export function DailySpendChart({ data }: DailyChartProps) {
   const { projectedDay, completedDays, averageSpend, chartData, currentDaySegment } = buildDailySpendChartModel(data);
 
   return (
-    <ChartShell
-      title="Daily spend"
-      eyebrow="Cost"
-      action={<span className="pt-1 text-xs font-normal text-muted">incl. fixed</span>}
-    >
+    <ChartShell title="Daily spend" action={<span className="pt-1 text-xs font-normal text-muted">incl. fixed</span>}>
       <ResponsiveContainer height="100%" width="100%">
         <ComposedChart data={chartData} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />

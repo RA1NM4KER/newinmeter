@@ -94,7 +94,6 @@ export function DayBreakdownChart({
   const utilityConfig =
     utility === "water"
       ? {
-          eyebrow: "30 minute water intervals",
           spendKey: "waterSpend" as const,
           usageKey: "waterKl" as const,
           usageAxisId: "water" as const,
@@ -106,7 +105,6 @@ export function DayBreakdownChart({
           spendLabel: "Water spend"
         }
       : {
-          eyebrow: "30 minute electricity intervals",
           spendKey: "spend" as const,
           usageKey: "kwh" as const,
           usageAxisId: "kwh" as const,
@@ -313,17 +311,12 @@ export function DayBreakdownChart({
   return (
     <ExpandProvider>
       <Card>
-        <div className="border-b border-line px-4 py-4 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted">{utilityConfig.eyebrow}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-base font-semibold text-ink">Day detail</h2>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+            {dateControl}
+            {activitiesEnabled ? addButton : null}
             <ExpandChartButton />
-          </div>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-ink">Day detail</h2>
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-              {dateControl}
-              {activitiesEnabled ? addButton : null}
-            </div>
           </div>
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_22rem]">
