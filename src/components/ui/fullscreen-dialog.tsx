@@ -8,6 +8,9 @@ type FullscreenDialogProps = {
   onClose(): void;
   eyebrow?: string;
   title: string;
+  // Compact controls (e.g. zoom) that sit on the title row, left of the close
+  // button, so a chart with no other controls stays a one-line header.
+  titleControls?: ReactNode;
   headerAction?: ReactNode;
   children: ReactNode;
   bodyClassName?: string;
@@ -30,6 +33,7 @@ export function FullscreenDialog({
   onClose,
   eyebrow,
   title,
+  titleControls,
   headerAction,
   children,
   bodyClassName = "min-h-0 flex-1 overflow-auto p-3 sm:p-5",
@@ -75,18 +79,21 @@ export function FullscreenDialog({
               {title}
             </h2>
           </div>
-          {/* Close button lives on its own row with the title, not grouped
-              with headerAction -- headerAction can be several controls wide
-              (chart filters + zoom buttons) and on narrow viewports would
-              otherwise push close past the edge of the screen. */}
-          <button
-            aria-label={closeLabel}
-            className={`shrink-0 ${closeButtonClassName(closeButtonVariant)}`}
-            onClick={onClose}
-            type="button"
-          >
-            <CloseIcon className="h-4 w-4" />
-          </button>
+          {/* titleControls (zoom) share the title row so a chart with no other
+              controls stays one line. Heavier chart controls go to headerAction
+              below, keeping the close button from being pushed off narrow
+              viewports. */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {titleControls}
+            <button
+              aria-label={closeLabel}
+              className={closeButtonClassName(closeButtonVariant)}
+              onClick={onClose}
+              type="button"
+            >
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {headerAction ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{headerAction}</div> : null}
       </div>
