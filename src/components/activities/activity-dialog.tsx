@@ -10,16 +10,23 @@ import { activityFieldErrors, fetchActivityTags, saveActivity } from "@/lib/acti
 import { ACTIVITY_MAX_TAGS, validateActivityInput, type ActivityInput } from "@/lib/activity-utils";
 import type { UsageActivity } from "@/lib/types";
 import { ActivityTagChip } from "./tag-chip";
-import { activityTagSuggestions, activityToday, halfHourTimes, resolveAddTag } from "./activity-dialog-model";
+import {
+  activityTagSuggestions,
+  activityToday,
+  defaultActivityEndTime,
+  halfHourTimes,
+  resolveAddTag
+} from "./activity-dialog-model";
 
 type ActivityDialogProps = {
   isOpen: boolean;
   onClose(): void;
   activity?: UsageActivity;
   defaultDate?: string;
+  defaultStartTime?: string;
 };
 
-function initialForm(activity?: UsageActivity, defaultDate?: string): ActivityInput {
+function initialForm(activity?: UsageActivity, defaultDate?: string, defaultStartTime?: string): ActivityInput {
   return activity
     ? {
         date: activity.startsAt.slice(0, 10),
@@ -29,12 +36,19 @@ function initialForm(activity?: UsageActivity, defaultDate?: string): ActivityIn
         tags: activity.tags,
         note: activity.note ?? ""
       }
-    : { date: defaultDate ?? activityToday(), allDay: false, startTime: "18:00", endTime: "20:30", tags: [], note: "" };
+    : {
+        date: defaultDate ?? activityToday(),
+        allDay: false,
+        startTime: defaultStartTime ?? "18:00",
+        endTime: defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30",
+        tags: [],
+        note: ""
+      };
 }
 
-export function ActivityDialog({ isOpen, onClose, activity, defaultDate }: ActivityDialogProps) {
+export function ActivityDialog({ isOpen, onClose, activity, defaultDate, defaultStartTime }: ActivityDialogProps) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ActivityInput>(() => initialForm(activity, defaultDate));
+  const [form, setForm] = useState<ActivityInput>(() => initialForm(activity, defaultDate, defaultStartTime));
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tagNotice, setTagNotice] = useState<string | null>(null);
@@ -59,12 +73,12 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate }: Activ
 
   useEffect(() => {
     if (isOpen) {
-      setForm(initialForm(activity, defaultDate));
+      setForm(initialForm(activity, defaultDate, defaultStartTime));
       setTagInput("");
       setErrors({});
       setTagNotice(null);
     }
-  }, [activity, defaultDate, isOpen]);
+  }, [activity, defaultDate, defaultStartTime, isOpen]);
 
   function addTag(value: string) {
     const outcome = resolveAddTag(form.tags, value, ACTIVITY_MAX_TAGS);

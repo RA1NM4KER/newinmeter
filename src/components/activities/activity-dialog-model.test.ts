@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { activityTagSuggestions, activityToday, halfHourTimes, resolveAddTag } from "./activity-dialog-model";
+import {
+  activityTagSuggestions,
+  activityToday,
+  defaultActivityEndTime,
+  halfHourTimes,
+  resolveAddTag
+} from "./activity-dialog-model";
 
 describe("activity dialog model", () => {
   it("provides all 48 start slots in half-hour steps", () => {
@@ -14,6 +20,12 @@ describe("activity dialog model", () => {
 
   it("uses today's Johannesburg date for a new activity", () => {
     expect(activityToday(new Date("2026-08-03T22:30:00Z"))).toBe("2026-08-04");
+  });
+
+  it("defaults a focused activity to two hours and caps it at midnight", () => {
+    expect(defaultActivityEndTime("17:30")).toBe("19:30");
+    expect(defaultActivityEndTime("22:00")).toBe("00:00");
+    expect(defaultActivityEndTime("23:30")).toBe("00:00");
   });
 });
 

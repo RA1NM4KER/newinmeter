@@ -14,7 +14,7 @@ import {
   YAxis
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { ActivityDialog } from "@/components/activities/activity-dialog";
 import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -48,7 +48,15 @@ type ActivityCardAnchor = {
   top: number;
 };
 
-function ActivityHoverCard({ activity, anchor }: { activity: ActivityReportRow; anchor: ActivityCardAnchor }) {
+function ActivityHoverCard({
+  activity,
+  anchor,
+  onEdit
+}: {
+  activity: ActivityReportRow;
+  anchor: ActivityCardAnchor;
+  onEdit: () => void;
+}) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number }>();
 
@@ -73,6 +81,7 @@ function ActivityHoverCard({ activity, anchor }: { activity: ActivityReportRow; 
   return (
     <div
       ref={cardRef}
+      data-activity-card
       className="pointer-events-none fixed z-50 w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:max-w-[min(18rem,calc(100vw-1rem))] sm:p-3 sm:text-xs"
       style={{
         left: position?.left ?? anchor.x,
@@ -80,7 +89,22 @@ function ActivityHoverCard({ activity, anchor }: { activity: ActivityReportRow; 
         visibility: position ? "visible" : "hidden"
       }}
     >
-      <p className="font-medium text-ink">{activityTimeLabel(activity)}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-medium text-ink">{activityTimeLabel(activity)}</p>
+        <button
+          aria-label="Edit activity"
+          className="pointer-events-auto -mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-canvas hover:text-ink"
+          onClick={onEdit}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onEdit();
+          }}
+          type="button"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </div>
       <p className="mt-0.5 text-muted sm:mt-1">{activity.tags.map(displayActivityTag).join(", ")}</p>
       {activity.note ? <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activity.note}</p> : null}
       <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted sm:mt-2 sm:gap-y-1">
@@ -123,6 +147,7 @@ export function DayBreakdownChart({
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
   const [activeActivityId, setActiveActivityId] = useState<string>();
   const [activityCardAnchor, setActivityCardAnchor] = useState<ActivityCardAnchor>();
+  const [focusedTime, setFocusedTime] = useState<string>();
   const searchParams = useSearchParams();
   const activitiesHref = queryHref("/activities", new URLSearchParams(searchParams.toString()));
   const selectableDates = useMemo(() => new Set(dateOptions), [dateOptions]);
@@ -182,6 +207,12 @@ export function DayBreakdownChart({
     return () => query.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    setFocusedTime(undefined);
+    setActiveActivityId(undefined);
+    setActivityCardAnchor(undefined);
+  }, [selectedDate]);
+
   // Hover is driven by the chart's own mouse-tracking (activeLabel is the
   // nearest x-axis time under the cursor, computed from raw coordinates)
   // rather than per-ReferenceArea mouseenter/leave. Bar segments and the
@@ -206,6 +237,7 @@ export function DayBreakdownChart({
           onMouseMove={(state, event) => {
             const activity = findActivityAtTime(state.activeLabel);
             setActiveActivityId(activity?.id);
+            if (state.activeLabel !== undefined) setFocusedTime(String(state.activeLabel));
 
             if (activity) {
               const chartX = state.chartX ?? 0;
@@ -217,7 +249,9 @@ export function DayBreakdownChart({
               });
             }
           }}
-          onMouseLeave={() => {
+          onMouseLeave={(_, event) => {
+            const nextTarget = event.relatedTarget;
+            if (nextTarget instanceof Element && nextTarget.closest("[data-activity-card]")) return;
             setActiveActivityId(undefined);
             setActivityCardAnchor(undefined);
           }}
@@ -327,7 +361,11 @@ export function DayBreakdownChart({
         </ComposedChart>
       </ResponsiveContainer>
       {activeActivity && activityCardAnchor?.surface === surface ? (
-        <ActivityHoverCard activity={activeActivity} anchor={activityCardAnchor} />
+        <ActivityHoverCard
+          activity={activeActivity}
+          anchor={activityCardAnchor}
+          onEdit={() => setDialogActivity(activeActivity)}
+        />
       ) : null}
     </div>
   );
@@ -422,6 +460,7 @@ export function DayBreakdownChart({
         <ActivityDialog
           activity={dialogActivity ?? undefined}
           defaultDate={selectedDate}
+          defaultStartTime={dialogActivity === null ? focusedTime : undefined}
           isOpen={dialogActivity !== undefined}
           onClose={() => setDialogActivity(undefined)}
         />

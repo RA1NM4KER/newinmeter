@@ -6,6 +6,13 @@ export const halfHourTimes = Array.from({ length: 48 }, (_, index) => {
   return `${hour}:${minute}`;
 });
 
+export function defaultActivityEndTime(startTime: string) {
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const endMinutes = hours * 60 + minutes + 2 * 60;
+  if (endMinutes >= 24 * 60) return "00:00";
+  return `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+}
+
 export function activityToday(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-ZA", {
     timeZone: "Africa/Johannesburg",
