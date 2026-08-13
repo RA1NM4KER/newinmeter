@@ -28,7 +28,7 @@ import { formatCurrency, formatKl, formatKwh } from "@/lib/format";
 import { queryHref } from "@/lib/url-query";
 import type { ActivityReportRow, UsageActivity } from "@/lib/types";
 import { ExpandChartButton, ExpandProvider, FullscreenChart } from "./chart-shell";
-import { chartColors, chartMargin, chartTooltipStyle } from "./chart-config";
+import { chartColors, chartMargin } from "./chart-config";
 import { DaySummaryCard } from "./day-summary-card";
 import type { DayBreakdownChartProps } from "./types";
 
@@ -122,7 +122,21 @@ function ActivityHoverCard({
       </div>
       <p className="mt-0.5 text-muted sm:mt-1">{activity.tags.map(displayActivityTag).join(", ")}</p>
       {activity.note ? <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activity.note}</p> : null}
-      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted sm:mt-2 sm:gap-y-1">
+      <div className="mt-1.5 space-y-0.5 text-muted sm:hidden">
+        <div className="flex items-baseline justify-between gap-4">
+          <span>Electricity</span>
+          <span className="whitespace-nowrap text-right">
+            {formatKwh(activity.electricityKwh)} · {formatCurrency(activity.electricitySpend)}
+          </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-4">
+          <span>Water</span>
+          <span className="whitespace-nowrap text-right">
+            {formatKl(activity.waterKl)} · {formatCurrency(activity.waterSpend)}
+          </span>
+        </div>
+      </div>
+      <div className="mt-2 hidden grid-cols-2 gap-x-3 gap-y-1 text-muted sm:grid">
         <span>Electricity</span>
         <span className="text-right">{formatKwh(activity.electricityKwh)}</span>
         <span>Electricity spend</span>
@@ -299,13 +313,45 @@ export function DayBreakdownChart({
             width={42}
           />
           <Tooltip
-            contentStyle={chartTooltipStyle}
-            formatter={(value, name) => [
-              name === utilityConfig.spendKey
-                ? formatCurrency(Number(value))
-                : utilityConfig.usageFormatter(Number(value)),
-              name === utilityConfig.spendKey ? utilityConfig.spendLabel : utilityConfig.usageLabel
-            ]}
+            content={({ active, label, payload }) => {
+              if (!active || !payload?.length) return null;
+              const spendEntry = payload.find((entry) => entry.dataKey === utilityConfig.spendKey);
+              const usageEntry = payload.find((entry) => entry.dataKey === utilityConfig.usageKey);
+
+              return (
+                <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-[0.7rem] shadow-soft">
+                  <p className="leading-none text-muted">{label}</p>
+                  <div className="mt-1 flex items-center gap-3 whitespace-nowrap font-medium text-ink">
+                    {spendEntry?.value !== undefined ? (
+                      <span
+                        aria-label={`${utilityConfig.spendLabel}: ${formatCurrency(Number(spendEntry.value))}`}
+                        className="flex items-center gap-1"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: chartColors.spend }}
+                        />
+                        {formatCurrency(Number(spendEntry.value))}
+                      </span>
+                    ) : null}
+                    {usageEntry?.value !== undefined ? (
+                      <span
+                        aria-label={`${utilityConfig.usageLabel}: ${utilityConfig.usageFormatter(Number(usageEntry.value))}`}
+                        className="flex items-center gap-1"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: chartColors.usage }}
+                        />
+                        {utilityConfig.usageFormatter(Number(usageEntry.value))}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            }}
           />
           {dayActivities.map((activity, index) => {
             const range = activityOverlayRange(activity, selectedDate);
