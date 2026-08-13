@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import {
   Bar,
@@ -67,18 +68,32 @@ function ActivityHoverCard({
     const placeCard = () => {
       const edgeGap = 8;
       const { width, height } = card.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const viewportLeft = viewport?.offsetLeft ?? 0;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
+      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
       setPosition({
-        left: Math.min(Math.max(anchor.x - width / 2, edgeGap), window.innerWidth - width - edgeGap),
-        top: Math.min(Math.max(anchor.top + edgeGap, edgeGap), window.innerHeight - height - edgeGap)
+        left: Math.max(
+          viewportLeft + edgeGap,
+          Math.min(anchor.x - width / 2, viewportRight - width - edgeGap)
+        ),
+        top: Math.max(viewportTop + edgeGap, Math.min(anchor.top + edgeGap, viewportBottom - height - edgeGap))
       });
     };
 
     placeCard();
     window.addEventListener("resize", placeCard);
-    return () => window.removeEventListener("resize", placeCard);
+    window.visualViewport?.addEventListener("resize", placeCard);
+    window.visualViewport?.addEventListener("scroll", placeCard);
+    return () => {
+      window.removeEventListener("resize", placeCard);
+      window.visualViewport?.removeEventListener("resize", placeCard);
+      window.visualViewport?.removeEventListener("scroll", placeCard);
+    };
   }, [anchor]);
 
-  return (
+  return createPortal(
     <div
       ref={cardRef}
       data-activity-card
@@ -117,7 +132,8 @@ function ActivityHoverCard({
         <span>Water spend</span>
         <span className="text-right">{formatCurrency(activity.waterSpend)}</span>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
