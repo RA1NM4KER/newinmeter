@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Bar,
@@ -25,7 +25,7 @@ import { activityOverlayRange, activityTimeLabel, displayActivityTag } from "@/l
 import { buildDayIntervalsUrl } from "@/lib/endpoints";
 import { formatCurrency, formatKl, formatKwh } from "@/lib/format";
 import { queryHref } from "@/lib/url-query";
-import type { UsageActivity } from "@/lib/types";
+import type { ActivityReportRow, UsageActivity } from "@/lib/types";
 import { ExpandChartButton, ExpandProvider, FullscreenChart } from "./chart-shell";
 import { chartColors, chartMargin, chartTooltipStyle } from "./chart-config";
 import { DaySummaryCard } from "./day-summary-card";
@@ -41,6 +41,61 @@ type IntervalApiResponse = {
     waterKl: number;
   }>;
 };
+
+type ActivityCardAnchor = {
+  surface: "inline" | "fullscreen";
+  x: number;
+  top: number;
+};
+
+function ActivityHoverCard({ activity, anchor }: { activity: ActivityReportRow; anchor: ActivityCardAnchor }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number }>();
+
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const placeCard = () => {
+      const edgeGap = 8;
+      const { width, height } = card.getBoundingClientRect();
+      setPosition({
+        left: Math.min(Math.max(anchor.x - width / 2, edgeGap), window.innerWidth - width - edgeGap),
+        top: Math.min(Math.max(anchor.top + edgeGap, edgeGap), window.innerHeight - height - edgeGap)
+      });
+    };
+
+    placeCard();
+    window.addEventListener("resize", placeCard);
+    return () => window.removeEventListener("resize", placeCard);
+  }, [anchor]);
+
+  return (
+    <div
+      ref={cardRef}
+      className="pointer-events-none fixed z-50 w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:max-w-[min(18rem,calc(100vw-1rem))] sm:p-3 sm:text-xs"
+      style={{
+        left: position?.left ?? anchor.x,
+        top: position?.top ?? anchor.top,
+        visibility: position ? "visible" : "hidden"
+      }}
+    >
+      <p className="font-medium text-ink">{activityTimeLabel(activity)}</p>
+      <p className="mt-0.5 text-muted sm:mt-1">{activity.tags.map(displayActivityTag).join(", ")}</p>
+      {activity.note ? <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activity.note}</p> : null}
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted sm:mt-2 sm:gap-y-1">
+        <span>Electricity</span>
+        <span className="text-right">{formatKwh(activity.electricityKwh)}</span>
+        <span>Electricity spend</span>
+        <span className="text-right">{formatCurrency(activity.electricitySpend)}</span>
+        <span>Water</span>
+        <span className="text-right">{formatKl(activity.waterKl)}</span>
+        <span>Water spend</span>
+        <span className="text-right">{formatCurrency(activity.waterSpend)}</span>
+      </div>
+    </div>
+  );
+}
 
 async function fetchIntervals(periodDate: string) {
   const response = await fetch(buildDayIntervalsUrl(periodDate), {
@@ -67,6 +122,7 @@ export function DayBreakdownChart({
   const [utility, setUtility] = useState<"electricity" | "water">("electricity");
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
   const [activeActivityId, setActiveActivityId] = useState<string>();
+  const [activityCardAnchor, setActivityCardAnchor] = useState<ActivityCardAnchor>();
   const searchParams = useSearchParams();
   const activitiesHref = queryHref("/activities", new URLSearchParams(searchParams.toString()));
   const selectableDates = useMemo(() => new Set(dateOptions), [dateOptions]);
@@ -141,14 +197,30 @@ export function DayBreakdownChart({
     });
   };
 
-  const renderChart = (axisInterval: number) => (
+  const renderChart = (axisInterval: number, surface: ActivityCardAnchor["surface"]) => (
     <div className="relative h-full">
       <ResponsiveContainer height="100%" width="100%">
         <ComposedChart
           data={intervalData}
           margin={chartMargin}
-          onMouseMove={(state) => setActiveActivityId(findActivityAtTime(state.activeLabel)?.id)}
-          onMouseLeave={() => setActiveActivityId(undefined)}
+          onMouseMove={(state, event) => {
+            const activity = findActivityAtTime(state.activeLabel);
+            setActiveActivityId(activity?.id);
+
+            if (activity) {
+              const chartX = state.chartX ?? 0;
+              const focusX = state.activeCoordinate?.x ?? chartX;
+              setActivityCardAnchor({
+                surface,
+                x: event.clientX - chartX + focusX,
+                top: event.clientY - (state.chartY ?? 0)
+              });
+            }
+          }}
+          onMouseLeave={() => {
+            setActiveActivityId(undefined);
+            setActivityCardAnchor(undefined);
+          }}
         >
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis
@@ -209,7 +281,14 @@ export function DayBreakdownChart({
                       }
                     : undefined
                 }
-                onClick={() => setActiveActivityId(activity.id)}
+                onClick={(event) => {
+                  setActiveActivityId(activity.id);
+                  setActivityCardAnchor({
+                    surface,
+                    x: event.clientX,
+                    top: event.currentTarget.ownerSVGElement?.getBoundingClientRect().top ?? event.clientY
+                  });
+                }}
                 stroke={chartColors.projection}
                 strokeOpacity={0.35}
                 x1={range.startTime}
@@ -247,24 +326,8 @@ export function DayBreakdownChart({
           />
         </ComposedChart>
       </ResponsiveContainer>
-      {activeActivity ? (
-        <div className="absolute left-2 top-2 z-[2] max-w-[min(16rem,calc(100%-1rem))] rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:left-3 sm:top-3 sm:max-w-[min(18rem,calc(100%-1.5rem))] sm:p-3 sm:text-xs">
-          <p className="font-medium text-ink">{activityTimeLabel(activeActivity)}</p>
-          <p className="mt-0.5 text-muted sm:mt-1">{activeActivity.tags.map(displayActivityTag).join(", ")}</p>
-          {activeActivity.note ? (
-            <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activeActivity.note}</p>
-          ) : null}
-          <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted sm:mt-2 sm:gap-y-1">
-            <span>Electricity</span>
-            <span className="text-right">{formatKwh(activeActivity.electricityKwh)}</span>
-            <span>Electricity spend</span>
-            <span className="text-right">{formatCurrency(activeActivity.electricitySpend)}</span>
-            <span>Water</span>
-            <span className="text-right">{formatKl(activeActivity.waterKl)}</span>
-            <span>Water spend</span>
-            <span className="text-right">{formatCurrency(activeActivity.waterSpend)}</span>
-          </div>
-        </div>
+      {activeActivity && activityCardAnchor?.surface === surface ? (
+        <ActivityHoverCard activity={activeActivity} anchor={activityCardAnchor} />
       ) : null}
     </div>
   );
@@ -323,7 +386,7 @@ export function DayBreakdownChart({
           <ExpandChartButton />
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_22rem]">
-          <div className="h-72 sm:h-80">{renderChart(isCompactAxis ? 7 : 3)}</div>
+          <div className="h-72 sm:h-80">{renderChart(isCompactAxis ? 7 : 3, "inline")}</div>
           <aside className="space-y-4">
             <div className="grid content-start grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-2">
               <DaySummaryCard label="Energy spend" value={formatCurrency(energySpend)} />
@@ -353,7 +416,7 @@ export function DayBreakdownChart({
           </>
         }
       >
-        {renderChart(3)}
+        {renderChart(3, "fullscreen")}
       </FullscreenChart>
       {activitiesEnabled ? (
         <ActivityDialog
