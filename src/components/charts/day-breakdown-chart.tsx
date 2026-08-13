@@ -49,6 +49,8 @@ type ActivityCardAnchor = {
   top: number;
 };
 
+const formatUsageAxisTick = (value: number) => String(value);
+
 function ActivityHoverCard({
   activity,
   anchor,
@@ -110,11 +112,6 @@ function ActivityHoverCard({
           aria-label="Edit activity"
           className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-canvas hover:text-ink"
           onClick={onEdit}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onEdit();
-          }}
           type="button"
         >
           <Pencil className="h-3.5 w-3.5" />
@@ -122,29 +119,23 @@ function ActivityHoverCard({
       </div>
       <p className="mt-0.5 text-muted sm:mt-1">{activity.tags.map(displayActivityTag).join(", ")}</p>
       {activity.note ? <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activity.note}</p> : null}
-      <div className="mt-1.5 space-y-0.5 text-muted sm:hidden">
+      <div className="mt-1.5 space-y-0.5 text-muted sm:mt-2 sm:space-y-1">
         <div className="flex items-baseline justify-between gap-4">
           <span>Electricity</span>
-          <span className="whitespace-nowrap text-right">
-            {formatKwh(activity.electricityKwh)} · {formatCurrency(activity.electricitySpend)}
+          <span className="flex items-baseline gap-1 whitespace-nowrap text-right">
+            <span style={{ color: chartColors.usage }}>{formatKwh(activity.electricityKwh)}</span>
+            <span aria-hidden="true">·</span>
+            <span style={{ color: chartColors.spend }}>{formatCurrency(activity.electricitySpend)}</span>
           </span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <span>Water</span>
-          <span className="whitespace-nowrap text-right">
-            {formatKl(activity.waterKl)} · {formatCurrency(activity.waterSpend)}
+          <span className="flex items-baseline gap-1 whitespace-nowrap text-right">
+            <span style={{ color: chartColors.usage }}>{formatKl(activity.waterKl)}</span>
+            <span aria-hidden="true">·</span>
+            <span style={{ color: chartColors.spend }}>{formatCurrency(activity.waterSpend)}</span>
           </span>
         </div>
-      </div>
-      <div className="mt-2 hidden grid-cols-2 gap-x-3 gap-y-1 text-muted sm:grid">
-        <span>Electricity</span>
-        <span className="text-right">{formatKwh(activity.electricityKwh)}</span>
-        <span>Electricity spend</span>
-        <span className="text-right">{formatCurrency(activity.electricitySpend)}</span>
-        <span>Water</span>
-        <span className="text-right">{formatKl(activity.waterKl)}</span>
-        <span>Water spend</span>
-        <span className="text-right">{formatCurrency(activity.waterSpend)}</span>
       </div>
     </div>,
     document.body
@@ -210,7 +201,7 @@ export function DayBreakdownChart({
           usageAxisId: "water" as const,
           spendDomain: axisDomains.waterSpend,
           usageDomain: axisDomains.waterKl,
-          usageTickFormatter: (value: number) => `${value}`,
+          usageTickFormatter: formatUsageAxisTick,
           usageFormatter: formatKl,
           usageLabel: "Water usage",
           spendLabel: "Water spend"
@@ -221,7 +212,7 @@ export function DayBreakdownChart({
           usageAxisId: "kwh" as const,
           spendDomain: axisDomains.spend,
           usageDomain: axisDomains.kwh,
-          usageTickFormatter: (value: number) => `${value}`,
+          usageTickFormatter: formatUsageAxisTick,
           usageFormatter: formatKwh,
           usageLabel: "Energy usage",
           spendLabel: "Energy spend"
@@ -317,14 +308,20 @@ export function DayBreakdownChart({
               if (!active || !payload?.length) return null;
               const spendEntry = payload.find((entry) => entry.dataKey === utilityConfig.spendKey);
               const usageEntry = payload.find((entry) => entry.dataKey === utilityConfig.usageKey);
+              const spendValue =
+                spendEntry?.value === undefined ? undefined : formatCurrency(Number(spendEntry.value));
+              const usageValue =
+                usageEntry?.value === undefined
+                  ? undefined
+                  : utilityConfig.usageFormatter(Number(usageEntry.value));
 
               return (
                 <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-[0.7rem] shadow-soft">
                   <p className="leading-none text-muted">{label}</p>
                   <div className="mt-1 flex items-center gap-3 whitespace-nowrap font-medium text-ink">
-                    {spendEntry?.value !== undefined ? (
+                    {spendValue !== undefined ? (
                       <span
-                        aria-label={`${utilityConfig.spendLabel}: ${formatCurrency(Number(spendEntry.value))}`}
+                        aria-label={`${utilityConfig.spendLabel}: ${spendValue}`}
                         className="flex items-center gap-1"
                       >
                         <span
@@ -332,12 +329,12 @@ export function DayBreakdownChart({
                           className="h-2 w-2 rounded-full"
                           style={{ backgroundColor: chartColors.spend }}
                         />
-                        {formatCurrency(Number(spendEntry.value))}
+                        {spendValue}
                       </span>
                     ) : null}
-                    {usageEntry?.value !== undefined ? (
+                    {usageValue !== undefined ? (
                       <span
-                        aria-label={`${utilityConfig.usageLabel}: ${utilityConfig.usageFormatter(Number(usageEntry.value))}`}
+                        aria-label={`${utilityConfig.usageLabel}: ${usageValue}`}
                         className="flex items-center gap-1"
                       >
                         <span
@@ -345,7 +342,7 @@ export function DayBreakdownChart({
                           className="h-2 w-2 rounded-full"
                           style={{ backgroundColor: chartColors.usage }}
                         />
-                        {utilityConfig.usageFormatter(Number(usageEntry.value))}
+                        {usageValue}
                       </span>
                     ) : null}
                   </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { roundedCeiling } from "@/lib/day-breakdown";
-import { formatTariff } from "@/lib/format";
+import { formatTariffForUnit } from "@/lib/format";
 import { DropdownSelect, type DropdownOption } from "@/components/ui/dropdown-select";
 import { chartColors, chartMargin, chartTooltipStyle } from "./chart-config";
 import { ChartShell } from "./chart-shell";
@@ -16,9 +16,9 @@ const utilityOptions: DropdownOption[] = [
   { label: "Water", value: "water" }
 ];
 
-const utilityLabel: Record<TariffUtility, string> = {
-  electricity: "Tariff (R/kWh)",
-  water: "Tariff (R/kL)"
+const utilityUnit: Record<TariffUtility, "kWh" | "kL"> = {
+  electricity: "kWh",
+  water: "kL"
 };
 
 export function TariffChart({ electricity, water }: TariffChartProps) {
@@ -57,7 +57,7 @@ export function TariffChart({ electricity, water }: TariffChartProps) {
           />
           <Tooltip
             contentStyle={chartTooltipStyle}
-            formatter={(value) => [formatTariff(Number(value)), utilityLabel[utility]]}
+            formatter={(value) => [formatTariffForUnit(Number(value), utilityUnit[utility]), "Tariff"]}
           />
           <Area
             type="monotone"
