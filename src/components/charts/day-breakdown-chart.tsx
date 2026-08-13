@@ -97,7 +97,7 @@ function ActivityHoverCard({
     <div
       ref={cardRef}
       data-activity-card
-      className="pointer-events-none fixed z-50 w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:max-w-[min(18rem,calc(100vw-1rem))] sm:p-3 sm:text-xs"
+      className="fixed z-50 w-max max-w-[min(16rem,calc(100vw-1rem))] rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:max-w-[min(18rem,calc(100vw-1rem))] sm:p-3 sm:text-xs"
       style={{
         left: position?.left ?? anchor.x,
         top: position?.top ?? anchor.top,
@@ -108,7 +108,7 @@ function ActivityHoverCard({
         <p className="font-medium text-ink">{activityTimeLabel(activity)}</p>
         <button
           aria-label="Edit activity"
-          className="pointer-events-auto -mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-canvas hover:text-ink"
+          className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-canvas hover:text-ink"
           onClick={onEdit}
           onPointerDown={(event) => {
             event.preventDefault();
