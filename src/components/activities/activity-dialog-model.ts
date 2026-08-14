@@ -63,3 +63,13 @@ export function resolveAddTag(currentTags: string[], rawValue: string, maxTags: 
 
   return { status: "added", tags: [...currentTags, tag] };
 }
+
+export function activityColorAfterAddingTag(
+  currentTags: string[],
+  nextTags: string[],
+  currentColor: string | undefined,
+  recentTagColors: Record<string, string>
+) {
+  if (currentTags.length || !nextTags.length) return currentColor;
+  return recentTagColors[normalizeActivityTag(nextTags[0])] ?? currentColor;
+}

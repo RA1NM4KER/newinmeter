@@ -12,6 +12,11 @@ export function formatCurrency(value: number) {
   return zarFormatter.format(value);
 }
 
+export function formatCurrencyAxisTick(value: number) {
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  return `R${Object.is(rounded, -0) ? 0 : rounded}`;
+}
+
 export function formatKwh(value: number) {
   return `${numberFormatter.format(value)} kWh`;
 }

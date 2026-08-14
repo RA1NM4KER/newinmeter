@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  activityColorAfterAddingTag,
   activityTagSuggestions,
   activityToday,
   defaultActivityEndTime,
   halfHourTimes,
   resolveAddTag
 } from "./activity-dialog-model";
+
+describe("activity colour suggestions", () => {
+  it("uses the recent colour when the first tag is added", () => {
+    expect(activityColorAfterAddingTag([], ["geyser"], "#0f766e", { geyser: "#2563eb" })).toBe("#2563eb");
+  });
+
+  it("does not replace a chosen colour when another tag is added", () => {
+    expect(activityColorAfterAddingTag(["geyser"], ["geyser", "winter"], "#db2777", { winter: "#65a30d" })).toBe(
+      "#db2777"
+    );
+  });
+});
 
 describe("activity dialog model", () => {
   it("provides all 48 start slots in half-hour steps", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildActivitiesPath, mapActivityRow } from "./activity-data";
+import { buildActivitiesPath, buildActivityTagMetadata, mapActivityRow } from "./activity-data";
 
 describe("activity data queries", () => {
   it("builds connection-safe overlap and case-normalized tag filters", () => {
@@ -19,6 +19,7 @@ describe("activity data queries", () => {
         ends_at: "2026-08-05T00:00:00",
         all_day: true,
         tags: ["guests"],
+        color: "#2563eb",
         note: null,
         created_at: "created",
         updated_at: "updated"
@@ -29,9 +30,22 @@ describe("activity data queries", () => {
       endsAt: "2026-08-05T00:00:00",
       allDay: true,
       tags: ["guests"],
+      color: "#2563eb",
       note: undefined,
       createdAt: "created",
       updatedAt: "updated"
+    });
+  });
+
+  it("uses the most recently updated matching tag colour as the activity default", () => {
+    expect(
+      buildActivityTagMetadata([
+        { tags: ["Geyser", "winter"], color: "#2563eb" },
+        { tags: ["geyser"], color: "#0f766e" }
+      ])
+    ).toEqual({
+      tags: ["geyser", "winter"],
+      colors: { geyser: "#2563eb", winter: "#2563eb" }
     });
   });
 });

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { roundedCeiling } from "@/lib/day-breakdown";
-import { formatTariffForUnit } from "@/lib/format";
+import { formatCurrencyAxisTick, formatTariffForUnit } from "@/lib/format";
 import { DropdownSelect, type DropdownOption } from "@/components/ui/dropdown-select";
 import { chartColors, chartMargin, chartTooltipStyle } from "./chart-config";
 import { ChartShell } from "./chart-shell";
@@ -50,7 +50,7 @@ export function TariffChart({ electricity, water }: TariffChartProps) {
           <XAxis dataKey="dateLabel" tickLine={false} axisLine={false} />
           <YAxis
             domain={[0, maxTariff]}
-            tickFormatter={(value) => `R${value}`}
+            tickFormatter={formatCurrencyAxisTick}
             tickLine={false}
             axisLine={false}
             width={52}

@@ -191,10 +191,17 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
                     <td className="whitespace-nowrap px-3 py-3 font-medium text-ink">{chartDate(row.date)}</td>
                     <td className="whitespace-nowrap px-3 py-3 text-muted">{activityTimeLabel(row)}</td>
                     <td className="px-3 py-3">
-                      <div className="flex max-w-52 flex-wrap gap-1">
-                        {row.tags.map((tag) => (
-                          <ActivityTagChip key={tag} tag={tag} />
-                        ))}
+                      <div className="flex items-start gap-2">
+                        <span
+                          aria-label={`Activity colour ${row.color}`}
+                          className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: row.color }}
+                        />
+                        <div className="flex max-w-52 flex-wrap gap-1">
+                          {row.tags.map((tag) => (
+                            <ActivityTagChip key={tag} tag={tag} />
+                          ))}
+                        </div>
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-muted">

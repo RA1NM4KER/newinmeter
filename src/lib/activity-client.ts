@@ -21,7 +21,9 @@ export async function fetchActivities(filters: { from?: string; to?: string; dat
 }
 
 export async function fetchActivityTags() {
-  return responseJson<{ tags: string[] }>(await fetch(`${apiEndpoints.activities}?mode=tags`, { cache: "no-store" }));
+  return responseJson<{ tags: string[]; colors: Record<string, string> }>(
+    await fetch(`${apiEndpoints.activities}?mode=tags`, { cache: "no-store" })
+  );
 }
 
 export async function fetchActivityReport(filters: {

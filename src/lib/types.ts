@@ -115,6 +115,7 @@ export type UsageActivity = {
   endsAt: string;
   allDay: boolean;
   tags: string[];
+  color: string;
   note?: string;
   createdAt: string;
   updatedAt: string;

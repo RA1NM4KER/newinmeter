@@ -26,6 +26,7 @@ function activityRow(overrides: Partial<ActivityReportRow> = {}): ActivityReport
     endsAt: "2026-08-05T19:00:00",
     allDay: false,
     tags: ["heater"],
+    color: "#0f766e",
     note: undefined,
     createdAt: "2026-08-05T10:00:00Z",
     updatedAt: "2026-08-05T10:00:00Z",

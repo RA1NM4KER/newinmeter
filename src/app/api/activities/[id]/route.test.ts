@@ -48,11 +48,15 @@ describe("activity item API", () => {
     const response = await PATCH(
       new Request("http://localhost/api/activities/owned", {
         method: "PATCH",
-        body: JSON.stringify({ tags: ["heater"] })
+        body: JSON.stringify({ tags: ["heater"], color: "#7c3aed" })
       }),
       { params: { id: "owned" } }
     );
     expect(response.status).toBe(200);
+    expect(mocks.updateActivity).toHaveBeenCalledWith("token", "connection-a", "owned", {
+      tags: ["heater"],
+      color: "#7c3aed"
+    });
   });
 
   it("deletes an owned activity and returns 404 for an inaccessible one", async () => {

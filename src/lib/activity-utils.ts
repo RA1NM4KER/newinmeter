@@ -3,9 +3,19 @@ import type { ActivityReportRow, UsageActivity } from "./types";
 export const ACTIVITY_MAX_TAGS = 10;
 export const ACTIVITY_MAX_TAG_LENGTH = 30;
 export const ACTIVITY_MAX_NOTE_LENGTH = 500;
+export const DEFAULT_ACTIVITY_COLOR = "#0f766e";
+export const ACTIVITY_COLOR_OPTIONS = [
+  DEFAULT_ACTIVITY_COLOR,
+  "#2563eb",
+  "#c2410c",
+  "#7c3aed",
+  "#db2777",
+  "#65a30d"
+] as const;
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const timePattern = /^(?:[01]\d|2[0-3]):(?:00|30)$/;
+const activityColorPattern = /^#[0-9a-f]{6}$/i;
 
 export type ActivityInput = {
   date: string;
@@ -13,8 +23,14 @@ export type ActivityInput = {
   startTime?: string;
   endTime?: string;
   tags: string[];
+  color?: string;
   note?: string | null;
 };
+
+export function normalizeActivityColor(value?: string | null) {
+  const color = value?.trim().toLowerCase();
+  return color && activityColorPattern.test(color) ? color : DEFAULT_ACTIVITY_COLOR;
+}
 
 export function normalizeActivityTag(value: string) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-ZA");
@@ -125,6 +141,7 @@ export function aggregateActivityReportRow(
 export function validateActivityInput(input: ActivityInput) {
   const errors: Record<string, string> = {};
   const tags = normalizeActivityTags(Array.isArray(input.tags) ? input.tags : []);
+  const color = input.color?.trim().toLowerCase() ?? DEFAULT_ACTIVITY_COLOR;
   const note = input.note?.trim() || undefined;
 
   if (!isIsoDate(input.date)) errors.date = "Choose a valid date.";
@@ -139,6 +156,7 @@ export function validateActivityInput(input: ActivityInput) {
   if (tags.some((tag) => tag.length > ACTIVITY_MAX_TAG_LENGTH)) {
     errors.tags = `Tags must be ${ACTIVITY_MAX_TAG_LENGTH} characters or fewer.`;
   }
+  if (!activityColorPattern.test(color)) errors.color = "Choose a valid activity colour.";
   if (note && note.length > ACTIVITY_MAX_NOTE_LENGTH) {
     errors.note = `Notes must be ${ACTIVITY_MAX_NOTE_LENGTH} characters or fewer.`;
   }
@@ -152,7 +170,7 @@ export function validateActivityInput(input: ActivityInput) {
 
   return Object.keys(errors).length
     ? { success: false as const, errors }
-    : { success: true as const, value: { ...input, tags, note } };
+    : { success: true as const, value: { ...input, tags, color, note } };
 }
 
 export function activityDate(activity: Pick<UsageActivity, "startsAt">) {

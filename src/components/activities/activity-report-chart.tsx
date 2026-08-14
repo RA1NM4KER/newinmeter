@@ -1,8 +1,8 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { activityTimeLabel, displayActivityTag } from "@/lib/activity-utils";
-import { chartDate } from "@/lib/format";
+import { chartDate, formatCurrencyAxisTick } from "@/lib/format";
 import type { ActivityMetric, ActivityReportRow } from "@/lib/types";
 import { chartColors, chartMargin } from "@/components/charts/chart-config";
 import { formatActivityMetric } from "./activity-report-model";
@@ -22,7 +22,7 @@ export function ActivityReportChart({ rows, metric }: { rows: ActivityReportRow[
         <CartesianGrid stroke={chartColors.line} vertical={false} />
         <XAxis dataKey="date" tickFormatter={chartDate} tickLine={false} axisLine={false} />
         <YAxis
-          tickFormatter={(value) => (metric.includes("Spend") ? `R${value}` : `${value}`)}
+          tickFormatter={(value) => (metric.includes("Spend") ? formatCurrencyAxisTick(Number(value)) : `${value}`)}
           tickLine={false}
           axisLine={false}
           width={46}
@@ -43,7 +43,11 @@ export function ActivityReportChart({ rows, metric }: { rows: ActivityReportRow[
             );
           }}
         />
-        <Bar dataKey={metric} fill={chartColors.usage} radius={[4, 4, 0, 0]} />
+        <Bar dataKey={metric} radius={[4, 4, 0, 0]}>
+          {rows.map((row) => (
+            <Cell fill={row.color} key={row.id} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

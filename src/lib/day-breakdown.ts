@@ -18,6 +18,19 @@ export type DayBreakdownDomains = {
   waterKl: number;
 };
 
+export function assignIntervalLanes<T extends { startTime: string; endTime: string }>(items: T[]) {
+  const laneEnds: string[] = [];
+
+  return [...items]
+    .sort((left, right) => left.startTime.localeCompare(right.startTime) || left.endTime.localeCompare(right.endTime))
+    .map((item) => {
+      let lane = laneEnds.findIndex((endTime) => endTime <= item.startTime);
+      if (lane === -1) lane = laneEnds.length;
+      laneEnds[lane] = item.endTime;
+      return { ...item, lane };
+    });
+}
+
 export function buildIntervalPoints(rows: IntervalRollupRow[], selectedDate: string) {
   const dayRows = rows.filter((row) => row.periodDate === selectedDate);
   const byTime = new Map<string, IntervalRollupRow[]>();

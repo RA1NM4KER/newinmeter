@@ -2,15 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog } from "@/components/ui/dialog";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
-import { activityFieldErrors, fetchActivityTags, saveActivity } from "@/lib/activity-client";
-import { ACTIVITY_MAX_TAGS, validateActivityInput, type ActivityInput } from "@/lib/activity-utils";
+import { activityFieldErrors, fetchActivityTags, removeActivity, saveActivity } from "@/lib/activity-client";
+import {
+  ACTIVITY_COLOR_OPTIONS,
+  ACTIVITY_MAX_TAGS,
+  DEFAULT_ACTIVITY_COLOR,
+  activityTimeLabel,
+  displayActivityTag,
+  validateActivityInput,
+  type ActivityInput
+} from "@/lib/activity-utils";
 import type { UsageActivity } from "@/lib/types";
 import { ActivityTagChip } from "./tag-chip";
 import {
+  activityColorAfterAddingTag,
   activityTagSuggestions,
   activityToday,
   defaultActivityEndTime,
@@ -34,6 +43,7 @@ function initialForm(activity?: UsageActivity, defaultDate?: string, defaultStar
         startTime: activity.startsAt.slice(11, 16),
         endTime: activity.endsAt.slice(11, 16),
         tags: activity.tags,
+        color: activity.color,
         note: activity.note ?? ""
       }
     : {
@@ -42,6 +52,7 @@ function initialForm(activity?: UsageActivity, defaultDate?: string, defaultStar
         startTime: defaultStartTime ?? "18:00",
         endTime: defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30",
         tags: [],
+        color: DEFAULT_ACTIVITY_COLOR,
         note: ""
       };
 }
@@ -52,23 +63,29 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tagNotice, setTagNotice] = useState<string | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const atTagLimit = form.tags.length >= ACTIVITY_MAX_TAGS;
   const { data: tagsData } = useQuery({ queryKey: ["activity-tags"], queryFn: fetchActivityTags, enabled: isOpen });
   const suggestions = useMemo(
     () => activityTagSuggestions(tagsData?.tags ?? [], form.tags, tagInput),
     [form.tags, tagInput, tagsData?.tags]
   );
-  const mutation = useMutation({
+  const finishMutation = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["activities"] }),
+      queryClient.invalidateQueries({ queryKey: ["activity-report"] }),
+      queryClient.invalidateQueries({ queryKey: ["activity-tags"] })
+    ]);
+    onClose();
+  };
+  const saveMutation = useMutation({
     mutationFn: (input: ActivityInput) => saveActivity(input, activity?.id),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["activities"] }),
-        queryClient.invalidateQueries({ queryKey: ["activity-report"] }),
-        queryClient.invalidateQueries({ queryKey: ["activity-tags"] })
-      ]);
-      onClose();
-    },
+    onSuccess: finishMutation,
     onError: (error) => setErrors(activityFieldErrors(error) ?? { form: error.message })
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => removeActivity(id),
+    onSuccess: finishMutation
   });
 
   useEffect(() => {
@@ -77,6 +94,7 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
       setTagInput("");
       setErrors({});
       setTagNotice(null);
+      setIsConfirmingDelete(false);
     }
   }, [activity, defaultDate, defaultStartTime, isOpen]);
 
@@ -99,21 +117,42 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
       return;
     }
 
-    setForm((current) => ({ ...current, tags: outcome.tags }));
+    setForm((current) => ({
+      ...current,
+      tags: outcome.tags,
+      color: activityColorAfterAddingTag(current.tags, outcome.tags, current.color, tagsData?.colors ?? {})
+    }));
     setTagNotice(null);
     setErrors((current) => ({ ...current, tags: "" }));
   }
 
   function submit() {
     const pendingOutcome = resolveAddTag(form.tags, tagInput, ACTIVITY_MAX_TAGS);
-    const submittedForm = pendingOutcome.status === "added" ? { ...form, tags: pendingOutcome.tags } : form;
+    const submittedForm =
+      pendingOutcome.status === "added"
+        ? {
+            ...form,
+            tags: pendingOutcome.tags,
+            color: activityColorAfterAddingTag(form.tags, pendingOutcome.tags, form.color, tagsData?.colors ?? {})
+          }
+        : form;
     const validation = validateActivityInput(submittedForm);
     if (!validation.success) {
       setErrors(validation.errors);
       return;
     }
     setErrors({});
-    mutation.mutate(validation.value);
+    saveMutation.mutate(validation.value);
+  }
+
+  function showDeleteConfirmation() {
+    deleteMutation.reset();
+    setIsConfirmingDelete(true);
+  }
+
+  function hideDeleteConfirmation() {
+    deleteMutation.reset();
+    setIsConfirmingDelete(false);
   }
 
   const endOptions = [...halfHourTimes.slice(1), "00:00"].map((value) => ({
@@ -122,15 +161,76 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
     disabled: value !== "00:00" && value <= (form.startTime ?? "")
   }));
 
+  const dialogFooter =
+    isConfirmingDelete && activity ? (
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          className="h-11 rounded-md border border-line px-4 text-sm font-medium text-muted transition hover:bg-canvas hover:text-ink"
+          disabled={deleteMutation.isPending}
+          onClick={hideDeleteConfirmation}
+          type="button"
+        >
+          Keep activity
+        </button>
+        <button
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={deleteMutation.isPending}
+          onClick={() => deleteMutation.mutate(activity.id)}
+          type="button"
+        >
+          <Trash2 className="h-4 w-4" />
+          {deleteMutation.isPending ? "Deleting..." : "Delete activity"}
+        </button>
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="h-10 w-full rounded-md border border-line px-4 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+            disabled={saveMutation.isPending}
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="h-10 w-full rounded-md bg-brandTeal px-5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saveMutation.isPending}
+            form="activity-form"
+            type="submit"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save activity"}
+          </button>
+        </div>
+        {activity ? (
+          <button
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-red-200 text-sm font-medium text-red-600 transition hover:border-red-300 hover:bg-red-50 dark:border-red-900/60 dark:hover:bg-red-950/30"
+            disabled={saveMutation.isPending}
+            onClick={showDeleteConfirmation}
+            type="button"
+          >
+            <Trash2 className="h-4 w-4" /> Delete activity
+          </button>
+        ) : null}
+      </div>
+    );
+
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title={activity ? "Edit activity" : "Add activity"}
-      description={activity ? "Update the context attached to this period." : "Add context to a day or time range."}
+      title={isConfirmingDelete ? "Delete activity?" : activity ? "Edit activity" : "Add activity"}
+      description={
+        isConfirmingDelete
+          ? "This permanently removes the activity and cannot be undone."
+          : activity
+            ? "Update the context attached to this period."
+            : "Add context to a day or time range."
+      }
+      footer={dialogFooter}
     >
       <form
-        className="space-y-5"
+        className={`${isConfirmingDelete ? "hidden " : ""}space-y-5`}
         id="activity-form"
         onSubmit={(event) => {
           event.preventDefault();
@@ -273,6 +373,32 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
           {errors.tags ? <p className="text-xs text-red-600">{errors.tags}</p> : null}
         </div>
 
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-ink">Activity colour</legend>
+          <div className="flex flex-wrap items-center gap-2">
+            {ACTIVITY_COLOR_OPTIONS.map((color) => {
+              const isSelected = form.color === color;
+              return (
+                <button
+                  aria-label={`Use activity colour ${color}`}
+                  aria-pressed={isSelected}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-paper"
+                  key={color}
+                  onClick={() => setForm((current) => ({ ...current, color }))}
+                  style={{
+                    backgroundColor: color,
+                    borderColor: isSelected ? "rgb(var(--color-ink))" : "transparent"
+                  }}
+                  type="button"
+                >
+                  {isSelected ? <Check className="h-4 w-4 text-white drop-shadow" strokeWidth={3} /> : null}
+                </button>
+              );
+            })}
+          </div>
+          {errors.color ? <p className="text-xs text-red-600">{errors.color}</p> : null}
+        </fieldset>
+
         <label className="block space-y-1.5 text-sm">
           <span className="font-medium text-ink">
             Note <span className="font-normal text-muted">(optional)</span>
@@ -291,24 +417,16 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
         </label>
 
         {errors.form ? <p className="text-sm text-red-600">{errors.form}</p> : null}
-        <div className="flex gap-2 border-t border-line pt-4 sm:justify-end">
-          <button
-            className="h-10 flex-1 rounded-md border border-line px-4 text-sm text-muted transition hover:bg-canvas hover:text-ink sm:flex-none"
-            disabled={mutation.isPending}
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className="h-10 flex-1 rounded-md bg-brandTeal px-5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
-            disabled={mutation.isPending}
-            type="submit"
-          >
-            {mutation.isPending ? "Saving..." : "Save activity"}
-          </button>
-        </div>
       </form>
+      {isConfirmingDelete && activity ? (
+        <div className="space-y-5">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+            <p className="font-medium text-ink">{activity.tags.map(displayActivityTag).join(", ")}</p>
+            <p className="mt-1 text-sm text-muted">{activityTimeLabel(activity)}</p>
+          </div>
+          {deleteMutation.error ? <p className="text-sm text-red-600">{deleteMutation.error.message}</p> : null}
+        </div>
+      ) : null}
     </Dialog>
   );
 }

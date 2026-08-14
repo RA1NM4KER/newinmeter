@@ -57,6 +57,16 @@ describe("activity ranges and validation", () => {
       validateActivityInput({ date: "2026-08-04", allDay: true, tags: ["home"], note: "x".repeat(501) }).success
     ).toBe(false);
   });
+
+  it("defaults and validates persisted activity colours", () => {
+    const defaulted = validateActivityInput({ date: "2026-08-04", allDay: true, tags: ["home"] });
+    expect(defaulted.success && defaulted.value.color).toBe("#0f766e");
+    expect(
+      validateActivityInput({ date: "2026-08-04", allDay: true, tags: ["home"], color: "not-a-colour" }).success
+    ).toBe(false);
+    const normalized = validateActivityInput({ date: "2026-08-04", allDay: true, tags: ["home"], color: "#2563EB" });
+    expect(normalized.success && normalized.value.color).toBe("#2563eb");
+  });
 });
 
 describe("activity usage calculations", () => {
@@ -96,6 +106,7 @@ describe("activity usage calculations", () => {
       endsAt: "2026-08-04T19:00:00",
       allDay: false,
       tags: ["geyser"],
+      color: "#0f766e",
       createdAt: "",
       updatedAt: ""
     };
@@ -118,7 +129,7 @@ describe("activity usage calculations", () => {
   });
 
   it("deduplicates overlapping slots in aggregate summaries", () => {
-    const base = { allDay: false, tags: ["heater"], createdAt: "", updatedAt: "" };
+    const base = { allDay: false, tags: ["heater"], color: "#0f766e", createdAt: "", updatedAt: "" };
     const activities: UsageActivity[] = [
       { ...base, id: "a", startsAt: "2026-08-04T18:00:00", endsAt: "2026-08-04T19:00:00" },
       { ...base, id: "b", startsAt: "2026-08-04T18:30:00", endsAt: "2026-08-04T19:30:00" }

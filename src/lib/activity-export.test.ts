@@ -10,6 +10,7 @@ const reportRow: ActivityReportRow = {
   endsAt: "2026-08-04T20:30:00",
   allDay: false,
   tags: ["geyser", "heater"],
+  color: "#0f766e",
   note: "Cold, rainy",
   createdAt: "",
   updatedAt: "",

@@ -1,7 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { chartDate, formatCurrency } from "@/lib/format";
+import { chartDate, formatCurrency, formatCurrencyAxisTick } from "@/lib/format";
 import { chartColors, chartMargin, chartTooltipStyle } from "./chart-config";
 import { ChartShell } from "./chart-shell";
 import type { DailyChartProps } from "./types";
@@ -13,7 +13,7 @@ export function CumulativeSpendChart({ data }: DailyChartProps) {
         <LineChart data={data} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis dataKey="date" tickFormatter={chartDate} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(value) => `R${value}`} tickLine={false} axisLine={false} width={56} />
+          <YAxis tickFormatter={formatCurrencyAxisTick} tickLine={false} axisLine={false} width={56} />
           <Tooltip
             contentStyle={chartTooltipStyle}
             formatter={(value) => [formatCurrency(Number(value)), "Cumulative"]}

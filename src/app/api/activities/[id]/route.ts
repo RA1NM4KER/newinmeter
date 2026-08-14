@@ -41,6 +41,7 @@ function parseUpdates(body: Record<string, unknown>): Partial<ActivityInput> {
   if (typeof body.startTime === "string") updates.startTime = body.startTime;
   if (typeof body.endTime === "string") updates.endTime = body.endTime;
   if (Array.isArray(body.tags)) updates.tags = body.tags.filter((tag): tag is string => typeof tag === "string");
+  if (typeof body.color === "string") updates.color = body.color;
   if (typeof body.note === "string" || body.note === null) updates.note = body.note;
   return updates;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
@@ -47,6 +47,8 @@ export function DropdownSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition>({ left: 0, width: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const activeOptionRef = useRef<HTMLButtonElement>(null);
   const activeOption = options.find((option) => option.value === value);
   const activeLabel = activeOption?.label ?? fallbackLabel ?? value;
   const activeIcon = activeOption?.icon;
@@ -84,6 +86,14 @@ export function DropdownSelect({
       window.removeEventListener("scroll", updatePosition, true);
     };
   }, [isOpen, menuPlacement]);
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const active = activeOptionRef.current;
+    if (!isOpen || !menu || !active) return;
+
+    menu.scrollTop = Math.max(0, active.offsetTop - (menu.clientHeight - active.offsetHeight) / 2);
+  }, [isOpen, value]);
 
   return (
     <div
@@ -126,6 +136,7 @@ export function DropdownSelect({
           className="fixed z-[80] max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto rounded-md border border-line bg-paper p-1 shadow-soft"
           role="listbox"
           aria-label={ariaLabel}
+          ref={menuRef}
           style={{ left: position.left, width: position.width, top: position.top, bottom: position.bottom }}
         >
           {options.map((option) => {
@@ -152,6 +163,7 @@ export function DropdownSelect({
                   setIsOpen(false);
                 }}
                 role="option"
+                ref={isActive ? activeOptionRef : undefined}
                 type="button"
               >
                 {option.icon ? <span className="shrink-0">{option.icon}</span> : null}

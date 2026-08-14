@@ -31,6 +31,7 @@ describe("activities API", () => {
     mocks.requireActivitiesSession.mockResolvedValue({ ok: true, session });
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
     mocks.loadActivities.mockResolvedValue([]);
+    mocks.loadActivityTags.mockResolvedValue({ tags: [], colors: {} });
   });
 
   it("rejects unauthenticated access", async () => {
@@ -51,20 +52,32 @@ describe("activities API", () => {
     );
   });
 
+  it("returns recent colours alongside tag suggestions", async () => {
+    mocks.loadActivityTags.mockResolvedValue({ tags: ["geyser"], colors: { geyser: "#2563eb" } });
+    const response = await GET(new Request("http://localhost/api/activities?mode=tags"));
+    await expect(response.json()).resolves.toEqual({ tags: ["geyser"], colors: { geyser: "#2563eb" } });
+  });
+
   it("resolves connection ownership server-side and ignores a browser connection id", async () => {
     mocks.createActivity.mockResolvedValue({ id: "activity-a" });
     const response = await POST(
       new Request("http://localhost/api/activities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connection_id: "connection-b", date: "2026-08-04", allDay: true, tags: ["Guests"] })
+        body: JSON.stringify({
+          connection_id: "connection-b",
+          date: "2026-08-04",
+          allDay: true,
+          tags: ["Guests"],
+          color: "#2563eb"
+        })
       })
     );
     expect(response.status).toBe(201);
     expect(mocks.createActivity).toHaveBeenCalledWith(
       "token",
       "connection-a",
-      expect.objectContaining({ tags: ["Guests"] })
+      expect.objectContaining({ tags: ["Guests"], color: "#2563eb" })
     );
   });
 

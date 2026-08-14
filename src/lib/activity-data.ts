@@ -17,6 +17,7 @@ type ActivityRow = {
   ends_at: string;
   all_day: boolean;
   tags: string[];
+  color: string;
   note: string | null;
   created_at: string;
   updated_at: string;
@@ -41,7 +42,7 @@ type ActivitySummaryDbRow = {
   water_spend: number | string;
 };
 
-const activitySelect = "id,connection_id,starts_at,ends_at,all_day,tags,note,created_at,updated_at";
+const activitySelect = "id,connection_id,starts_at,ends_at,all_day,tags,color,note,created_at,updated_at";
 
 function numberValue(value: unknown) {
   const parsed = Number(value ?? 0);
@@ -55,6 +56,7 @@ export function mapActivityRow(row: ActivityRow): UsageActivity {
     endsAt: row.ends_at,
     allDay: row.all_day,
     tags: row.tags,
+    color: row.color,
     note: row.note ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -96,12 +98,20 @@ export async function loadActivities(
   return rows.map(mapActivityRow);
 }
 
+export function buildActivityTagMetadata(rows: Array<{ tags: string[]; color: string }>) {
+  const colors: Record<string, string> = {};
+  for (const row of rows) {
+    for (const tag of normalizeActivityTags(row.tags)) colors[tag] ??= row.color;
+  }
+  return { tags: Object.keys(colors).sort(), colors };
+}
+
 export async function loadActivityTags(accessToken: string) {
-  const rows = await authenticatedSupabaseFetchAllPages<{ tags: string[] }>(
-    "/usage_activities?select=tags&order=created_at.desc",
+  const rows = await authenticatedSupabaseFetchAllPages<{ tags: string[]; color: string }>(
+    "/usage_activities?select=tags,color&order=updated_at.desc",
     accessToken
   );
-  return normalizeActivityTags(rows.flatMap((row) => row.tags)).sort();
+  return buildActivityTagMetadata(rows);
 }
 
 function validatedPayload(input: ActivityInput, connectionId: string) {
@@ -118,6 +128,7 @@ function validatedPayload(input: ActivityInput, connectionId: string) {
     ends_at: range.endsAt,
     all_day: validation.value.allDay,
     tags: validation.value.tags,
+    color: validation.value.color,
     note: validation.value.note ?? null
   };
 }
@@ -138,6 +149,7 @@ function activityToInput(activity: UsageActivity): ActivityInput {
     startTime: activity.startsAt.slice(11, 16),
     endTime: activity.endsAt.slice(11, 16),
     tags: activity.tags,
+    color: activity.color,
     note: activity.note
   };
 }

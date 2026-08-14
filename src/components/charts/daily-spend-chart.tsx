@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { chartDate, formatCurrency } from "@/lib/format";
+import { chartDate, formatCurrency, formatCurrencyAxisTick } from "@/lib/format";
 import { chartColors, chartMargin } from "./chart-config";
 import { ChartShell } from "./chart-shell";
 import { buildDailySpendChartModel } from "./daily-spend-chart-model";
@@ -27,7 +27,7 @@ export function DailySpendChart({ data }: DailyChartProps) {
         <ComposedChart data={chartData} margin={chartMargin}>
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis dataKey="date" tickFormatter={chartDate} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(value) => `R${value}`} tickLine={false} axisLine={false} width={48} />
+          <YAxis tickFormatter={formatCurrencyAxisTick} tickLine={false} axisLine={false} width={48} />
           <Tooltip
             content={({ active, label }) => {
               if (!active || !label) {

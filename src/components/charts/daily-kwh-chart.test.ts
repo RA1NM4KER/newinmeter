@@ -55,6 +55,7 @@ describe("daily usage activity markers", () => {
       endsAt: "2026-08-04T20:30:00",
       allDay: false,
       tags: ["geyser"],
+      color: "#0f766e",
       createdAt: "",
       updatedAt: ""
     } satisfies UsageActivity;

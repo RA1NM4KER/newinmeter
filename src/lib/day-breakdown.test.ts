@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assignIntervalLanes,
   buildGlobalDomains,
   buildIntervalPoints,
   buildStableAxisDomains,
@@ -88,6 +89,36 @@ describe("sumRows", () => {
 
   it("returns 0 for an empty list", () => {
     expect(sumRows([], "kwh")).toBe(0);
+  });
+});
+
+describe("assignIntervalLanes", () => {
+  it("stacks overlapping activities and reuses lanes once a range ends", () => {
+    const activities = assignIntervalLanes([
+      { id: "geyser-off", startTime: "17:30", endTime: "20:00" },
+      { id: "cooking", startTime: "18:00", endTime: "19:30" },
+      { id: "guests", startTime: "18:30", endTime: "21:00" },
+      { id: "laundry", startTime: "20:00", endTime: "22:00" }
+    ]);
+
+    expect(activities.map(({ id, lane }) => ({ id, lane }))).toEqual([
+      { id: "geyser-off", lane: 0 },
+      { id: "cooking", lane: 1 },
+      { id: "guests", lane: 2 },
+      { id: "laundry", lane: 0 }
+    ]);
+  });
+
+  it("sorts ranges before assigning lanes", () => {
+    const activities = assignIntervalLanes([
+      { id: "later", startTime: "18:00", endTime: "19:00" },
+      { id: "earlier", startTime: "16:00", endTime: "17:00" }
+    ]);
+
+    expect(activities.map(({ id, lane }) => ({ id, lane }))).toEqual([
+      { id: "earlier", lane: 0 },
+      { id: "later", lane: 0 }
+    ]);
   });
 });
 

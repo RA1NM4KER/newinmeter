@@ -41,10 +41,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     if (searchParams.get("mode") === "tags") {
-      return NextResponse.json(
-        { tags: await loadActivityTags(access.session.accessToken) },
-        { headers: access.headers }
-      );
+      return NextResponse.json(await loadActivityTags(access.session.accessToken), { headers: access.headers });
     }
     const filters = parseActivityQuery(searchParams);
     if ((filters.from && !isIsoDate(filters.from)) || (filters.to && !isIsoDate(filters.to))) {
@@ -71,6 +68,7 @@ export async function POST(request: Request) {
       startTime: typeof body.startTime === "string" ? body.startTime : undefined,
       endTime: typeof body.endTime === "string" ? body.endTime : undefined,
       tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === "string") : [],
+      color: typeof body.color === "string" ? body.color : undefined,
       note: typeof body.note === "string" || body.note === null ? body.note : undefined
     };
     const activity = await createActivity(access.session.accessToken, access.session.connection.id, input);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chartDate,
   formatCurrency,
+  formatCurrencyAxisTick,
   formatKl,
   formatKwh,
   formatPercent,
@@ -37,6 +38,13 @@ describe("formatCurrency", () => {
   it("rounds to 2 decimal places", () => {
     expect(formatCurrency(10.001)).toMatch(/^R\s*10,00$/);
     expect(formatCurrency(10.099)).toMatch(/^R\s*10,10$/);
+  });
+});
+
+describe("formatCurrencyAxisTick", () => {
+  it("removes floating-point noise from compact chart labels", () => {
+    expect(formatCurrencyAxisTick(3.6000000000000004)).toBe("R3.6");
+    expect(formatCurrencyAxisTick(0)).toBe("R0");
   });
 });
 
