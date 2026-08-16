@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Loader2, Sparkles, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { FullscreenDialog } from "@/components/ui/fullscreen-dialog";
 import type { AssistantConversationMessage, AssistantResponse } from "@/lib/assistant/types";
@@ -188,8 +188,8 @@ export function AssistantPanel({ from, to, compact = false }: AssistantPanelProp
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <label className="flex-1">
+            <div className="flex items-center gap-2">
+              <label className="min-w-0 flex-1">
                 <span className="sr-only">Ask the NewinMeter assistant</span>
                 <input
                   className="h-11 w-full rounded-md border border-line bg-paper px-4 text-sm text-ink outline-none transition focus:border-accent"
@@ -209,13 +209,14 @@ export function AssistantPanel({ from, to, compact = false }: AssistantPanelProp
                 />
               </label>
               <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-ink px-4 text-sm font-medium text-paper transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Ask"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-paper transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isPending || !dialogQuestion.trim()}
                 onClick={() => submitQuestion(dialogQuestion)}
+                title="Ask"
                 type="button"
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                Ask
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
               </button>
             </div>
           </div>
