@@ -7,6 +7,16 @@ describe("parseDateRangeQuery", () => {
     expect(parseDateRangeQuery(params)).toEqual({ from: "2026-01-01", to: "2026-02-01" });
   });
 
+  it("rejects a range whose To date is before its From date", () => {
+    const params = new URLSearchParams("from=2026-02-01&to=2026-01-31");
+    expect(parseDateRangeQuery(params)).toEqual({ from: "", to: "" });
+  });
+
+  it("accepts an equal From and To date", () => {
+    const params = new URLSearchParams("from=2026-02-01&to=2026-02-01");
+    expect(parseDateRangeQuery(params)).toEqual({ from: "2026-02-01", to: "2026-02-01" });
+  });
+
   it("defaults to empty strings when params are missing", () => {
     expect(parseDateRangeQuery(new URLSearchParams(""))).toEqual({ from: "", to: "" });
   });

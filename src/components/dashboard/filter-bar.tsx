@@ -12,8 +12,16 @@ function IsoDateInput({
   onChange,
   buttonClassName,
   loading,
-  fullWidth
-}: IsoDateInputProps & { buttonClassName?: string; loading?: boolean; fullWidth?: boolean }) {
+  fullWidth,
+  max,
+  min
+}: IsoDateInputProps & {
+  buttonClassName?: string;
+  loading?: boolean;
+  fullWidth?: boolean;
+  max?: string;
+  min?: string;
+}) {
   return (
     <label className={`relative flex min-w-0 ${fullWidth ? "w-full" : ""}`}>
       <span className="pointer-events-none absolute left-3 top-0 z-10 -translate-y-1/2 bg-brandTeal px-1 text-[0.6rem] font-medium uppercase tracking-[0.18em] text-white/80">
@@ -22,6 +30,8 @@ function IsoDateInput({
       <DatePicker
         label={label}
         loading={loading}
+        max={max}
+        min={min}
         onChange={onChange}
         value={value}
         buttonClassName={buttonClassName}
@@ -102,7 +112,7 @@ function FilterBarContent({
             <IsoDateInput
               label="From"
               value={from}
-              onChange={(value) => onDateChange(value, to)}
+              onChange={(value) => onDateChange(value, to && value > to ? value : to)}
               buttonClassName="h-8 px-2 gap-1.5 text-xs"
               loading={loading}
               fullWidth
@@ -113,6 +123,7 @@ function FilterBarContent({
               label="To"
               value={to}
               onChange={(value) => onDateChange(from, value)}
+              min={from}
               buttonClassName="h-8 px-2 gap-1.5 text-xs"
               loading={loading}
               fullWidth
@@ -149,7 +160,7 @@ function FilterBarContent({
           <IsoDateInput
             label="From"
             value={from}
-            onChange={(value) => onDateChange(value, to)}
+            onChange={(value) => onDateChange(value, to && value > to ? value : to)}
             buttonClassName="min-w-[8.25rem]"
             loading={loading}
           />
@@ -157,6 +168,7 @@ function FilterBarContent({
             label="To"
             value={to}
             onChange={(value) => onDateChange(from, value)}
+            min={from}
             buttonClassName="min-w-[8.25rem]"
             loading={loading}
           />

@@ -192,6 +192,9 @@ export function DatePicker({
             defaultMonth={selectedDate}
             disabled={(date) => {
               const isoDate = formatIsoDate(date);
+              if ((min && isoDate < min) || (max && isoDate > max)) {
+                return true;
+              }
               return selectableDates ? !selectableDates.has(isoDate) : false;
             }}
             endMonth={maxDate}

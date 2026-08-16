@@ -51,8 +51,10 @@ export function dateRangeQueryUpdates(from: string, to: string) {
 }
 
 export function parseDateRangeQuery(searchParams: URLSearchParams): DateRangeQueryParams {
-  return dateRangeQuerySchema.parse({
+  const range = dateRangeQuerySchema.parse({
     from: searchParams.get(filterQueryParamKeys.from) ?? undefined,
     to: searchParams.get(filterQueryParamKeys.to) ?? undefined
   });
+
+  return range.from && range.to && range.from > range.to ? { from: "", to: "" } : range;
 }
