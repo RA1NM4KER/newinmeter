@@ -43,3 +43,11 @@ export function buildActivitySearchParams(filters: {
   if (filters.utility && filters.utility !== "all") params.set("utility", filters.utility);
   return params;
 }
+
+export function replaceActivityTagParams(searchParams: URLSearchParams, tags: string[]) {
+  const next = new URLSearchParams(searchParams.toString());
+  next.delete("tag");
+  next.delete("tags");
+  for (const tag of normalizeActivityTags(tags)) next.append("tag", tag);
+  return next;
+}

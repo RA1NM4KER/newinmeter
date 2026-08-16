@@ -56,7 +56,7 @@ type ActivityCardAnchor = {
   top: number;
 };
 
-const formatUsageAxisTick = (value: number) => String(value);
+const formatUsageAxisTick = (value: number, unit: "kWh" | "kL") => `${value} ${unit}`;
 
 function StaggeredActivityBorder({
   height = 0,
@@ -336,9 +336,8 @@ export function DayBreakdownChart({
           usageAxisId: "water" as const,
           spendDomain: axisDomains.waterSpend,
           usageDomain: axisDomains.waterKl,
-          usageTickFormatter: formatUsageAxisTick,
+          usageTickFormatter: (value: number) => formatUsageAxisTick(value, "kL"),
           usageFormatter: formatKl,
-          usageUnit: "kL",
           usageLabel: "Water usage",
           spendLabel: "Water spend"
         }
@@ -348,9 +347,8 @@ export function DayBreakdownChart({
           usageAxisId: "kwh" as const,
           spendDomain: axisDomains.spend,
           usageDomain: axisDomains.kwh,
-          usageTickFormatter: formatUsageAxisTick,
+          usageTickFormatter: (value: number) => formatUsageAxisTick(value, "kWh"),
           usageFormatter: formatKwh,
-          usageUnit: "kWh",
           usageLabel: "Energy usage",
           spendLabel: "Energy spend"
         };
@@ -391,33 +389,37 @@ export function DayBreakdownChart({
     if (activities.length) setActivityCardAnchor(anchor);
   };
 
-  const dayChartMargin = isCompactAxis ? { left: -4, right: -4, top: 8, bottom: 0 } : chartMargin;
-  const spendAxisWidth = isCompactAxis ? 38 : 48;
+  // The wrapper supplies a contained gutter for the outward-facing usage
+  // labels, so the chart itself does not widen the page.
+  const dayChartMargin = isCompactAxis ? { left: -8, right: 0, top: 8, bottom: 0 } : { ...chartMargin, right: 0 };
+  const spendAxisWidth = isCompactAxis ? 34 : 48;
   const usageAxisWidth = isCompactAxis ? 38 : 42;
 
   const renderChart = (axisInterval: number, surface: ActivityCardAnchor["surface"]) => (
     <div className="relative flex h-full flex-col">
-      {isCompactAxis && activityOverlays.length ? (
-        <div className="pointer-events-none sticky left-0 z-[1] w-screen max-w-full shrink-0 px-6 pb-1 pt-2">
-          <div className="flex flex-nowrap justify-center gap-x-2 whitespace-nowrap text-[0.6rem] leading-none text-muted">
-            {activityOverlays.map(({ activity }, activityIndex) => (
-              <span className="flex min-w-0 items-center gap-1" key={activity.id}>
-                <span
-                  className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full font-semibold"
-                  style={{
-                    backgroundColor: `${activity.color ?? DEFAULT_ACTIVITY_COLOR}1f`,
-                    color: activity.color ?? DEFAULT_ACTIVITY_COLOR
-                  }}
-                >
-                  {activityIndex + 1}
+      {isCompactAxis ? (
+        <div className="pointer-events-none z-[1] flex h-7 w-full shrink-0 items-center px-3">
+          {activityOverlays.length ? (
+            <div className="flex min-w-0 flex-1 flex-nowrap justify-center gap-x-2 overflow-hidden whitespace-nowrap text-[0.6rem] leading-none text-muted">
+              {activityOverlays.map(({ activity }, activityIndex) => (
+                <span className="flex min-w-0 items-center gap-1" key={activity.id}>
+                  <span
+                    className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full font-semibold"
+                    style={{
+                      backgroundColor: `${activity.color ?? DEFAULT_ACTIVITY_COLOR}1f`,
+                      color: activity.color ?? DEFAULT_ACTIVITY_COLOR
+                    }}
+                  >
+                    {activityIndex + 1}
+                  </span>
+                  <span className="max-w-28 truncate">{displayActivityTag(activity.tags[0])}</span>
                 </span>
-                <span className="max-w-28 truncate">{displayActivityTag(activity.tags[0])}</span>
-              </span>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 w-full flex-1 overflow-hidden">
         <ResponsiveContainer height="100%" width="100%">
           <ComposedChart
             data={intervalData}
@@ -468,13 +470,6 @@ export function DayBreakdownChart({
               yAxisId={utilityConfig.usageAxisId}
               domain={[0, utilityConfig.usageDomain]}
               orientation="right"
-              label={{
-                value: utilityConfig.usageUnit,
-                position: "insideTopRight",
-                offset: -2,
-                fill: chartColors.average,
-                fontSize: 10
-              }}
               tickFormatter={utilityConfig.usageTickFormatter}
               tickLine={false}
               axisLine={false}

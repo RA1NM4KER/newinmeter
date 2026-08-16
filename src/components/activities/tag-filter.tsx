@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { displayActivityTag } from "@/lib/activity-utils";
 
 export function TagFilter({
@@ -80,18 +80,24 @@ export function TagFilter({
             tags.map((tag) => {
               const checked = selected.includes(tag);
               return (
-                <label
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-muted hover:bg-canvas hover:text-ink"
+                <button
+                  aria-selected={checked}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-2 text-left text-sm text-muted transition hover:bg-canvas hover:text-ink"
                   key={tag}
+                  onClick={() => onChange(checked ? selected.filter((item) => item !== tag) : [...selected, tag])}
+                  role="option"
+                  type="button"
                 >
-                  <input
-                    checked={checked}
-                    className="shrink-0 accent-[rgb(var(--color-accent))]"
-                    onChange={() => onChange(checked ? selected.filter((item) => item !== tag) : [...selected, tag])}
-                    type="checkbox"
-                  />
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                      checked ? "border-accent bg-accent text-white" : "border-line bg-paper"
+                    }`}
+                  >
+                    {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+                  </span>
                   <span className="min-w-0 break-words">{displayActivityTag(tag)}</span>
-                </label>
+                </button>
               );
             })
           )}

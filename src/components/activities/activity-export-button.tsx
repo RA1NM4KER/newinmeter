@@ -59,12 +59,14 @@ export function ActivityExportButton({ params }: { params: URLSearchParams }) {
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition hover:bg-white/15"
+        className="inline-flex h-9 items-center justify-between gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition hover:bg-white/15"
         onClick={() => setIsOpen((current) => !current)}
         type="button"
       >
-        <FileDown aria-hidden="true" className="h-4 w-4 shrink-0 text-white/70" />
-        <span className="shrink-0">Export</span>
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <FileDown aria-hidden="true" className="h-4 w-4 shrink-0 text-white/70" />
+          <span className="shrink-0">Export</span>
+        </span>
         <ChevronDown
           aria-hidden="true"
           className={`h-4 w-4 shrink-0 text-white/70 transition ${isOpen ? "rotate-180" : ""}`}

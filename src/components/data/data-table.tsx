@@ -222,7 +222,12 @@ export function DataTable() {
       {
         id: "amount",
         accessorFn: (row) => row.cost,
-        header: dataTableColumnLabel.amount,
+        header: () => (
+          <>
+            <span className="sm:hidden">Amount</span>
+            <span className="hidden sm:inline">{dataTableColumnLabel.amount}</span>
+          </>
+        ),
         cell: ({ row }) => <span className={amountClassFor(row.original)}>{amountDisplayFor(row.original)}</span>
       },
       {

@@ -88,14 +88,16 @@ export function ExportButton({
       <button
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${triggerToneClass(tone)} ${
+        className={`inline-flex h-9 items-center justify-between gap-2 rounded-md border text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${triggerToneClass(tone)} ${
           iconOnly ? "px-2" : "px-3"
         } ${className ?? ""}`}
         onClick={() => setIsOpen((prev) => !prev)}
         type="button"
       >
-        <FileDown aria-hidden="true" className={`h-4 w-4 shrink-0 ${triggerIconToneClass(tone)}`} />
-        {iconOnly ? <span className="sr-only">Export</span> : <span className="shrink-0">Export</span>}
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <FileDown aria-hidden="true" className={`h-4 w-4 shrink-0 ${triggerIconToneClass(tone)}`} />
+          {iconOnly ? <span className="sr-only">Export</span> : <span className="shrink-0">Export</span>}
+        </span>
         <ChevronDown
           aria-hidden="true"
           className={`h-4 w-4 shrink-0 transition ${triggerIconToneClass(tone)} ${isOpen ? "rotate-180" : ""}`}

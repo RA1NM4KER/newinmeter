@@ -8,8 +8,9 @@ export function DaySummaryCard({ label, value, href, detail, onClick }: DaySumma
       <p className="text-xs leading-tight text-muted sm:text-sm">{label}</p>
       <p className="mt-2 text-lg font-semibold leading-tight text-ink sm:text-xl">{value}</p>
       {detail ? (
-        <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-brandTeal sm:text-xs">
-          {detail} <ArrowRight aria-hidden="true" className="h-3 w-3 transition group-hover:translate-x-0.5" />
+        <p className="mt-2 flex min-w-0 max-w-full items-center gap-1 text-[11px] font-medium text-brandTeal sm:text-xs">
+          <span className="min-w-0 break-words">{detail}</span>
+          <ArrowRight aria-hidden="true" className="h-3 w-3 shrink-0 transition group-hover:translate-x-0.5" />
         </p>
       ) : null}
     </>

@@ -2,6 +2,7 @@
 
 import { ChevronDown, FileDown, Info, Maximize2 } from "lucide-react";
 import { activityMetricOptions } from "@/components/activities/activity-report-chart";
+import { TaggedUsageChartSkeleton } from "@/components/activities/tagged-usage-chart-skeleton";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { Card } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
@@ -42,12 +43,14 @@ export default function ActivitiesLoading() {
         }
         rightControls={
           <button
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white opacity-70"
+            className="inline-flex h-9 items-center justify-between gap-2 rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white opacity-70"
             disabled
             type="button"
           >
-            <FileDown aria-hidden="true" className="h-4 w-4 text-white/70" />
-            Export
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <FileDown aria-hidden="true" className="h-4 w-4 shrink-0 text-white/70" />
+              <span className="shrink-0">Export</span>
+            </span>
             <ChevronDown aria-hidden="true" className="h-4 w-4 text-white/70" />
           </button>
         }
@@ -79,9 +82,17 @@ export default function ActivitiesLoading() {
       </div>
 
       <Card>
-        <div className="border-b border-line px-4 py-4 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted">Electricity usage, kWh</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-base font-semibold text-ink">Tagged usage</h2>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <DropdownSelect
+              ariaLabel="Activity metric"
+              className="w-48"
+              loading
+              onChange={() => undefined}
+              options={activityMetricOptions}
+              value="electricityKwh"
+            />
             <button
               aria-label="Maximize chart"
               className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-ink opacity-70"
@@ -91,22 +102,9 @@ export default function ActivitiesLoading() {
               <Maximize2 className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-ink">Tagged usage</h2>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <DropdownSelect
-                ariaLabel="Activity metric"
-                className="w-48"
-                loading
-                onChange={() => undefined}
-                options={activityMetricOptions}
-                value="electricityKwh"
-              />
-            </div>
-          </div>
         </div>
         <div className="h-64 px-1 py-4 sm:h-72 sm:px-4">
-          <Skeleton className="h-full w-full" />
+          <TaggedUsageChartSkeleton />
         </div>
       </Card>
     </div>

@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { ActivityExportButton } from "./activity-export-button";
 import { ActivityDialog } from "./activity-dialog";
 import { ActivityReportChart, activityMetricOptions } from "./activity-report-chart";
 import { formatActivityMetric } from "./activity-report-model";
+import { TaggedUsageChartSkeleton } from "./tagged-usage-chart-skeleton";
 import { ActivityTagChip } from "./tag-chip";
 import { TagFilter } from "./tag-filter";
 import { ChartShell } from "@/components/charts/chart-shell";
@@ -15,16 +17,24 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
-import { buildActivitySearchParams } from "@/lib/activity-query-params";
+import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "@/lib/activity-query-params";
 import { fetchActivityReport, fetchActivityTags, removeActivity } from "@/lib/activity-client";
 import { activityTimeLabel, formatActivityDuration } from "@/lib/activity-utils";
 import { chartDate, formatCurrency, formatKl, formatKwh } from "@/lib/format";
 import { useFilterUrlState } from "@/lib/use-filter-url-state";
+import { queryHref } from "@/lib/url-query";
 import type { ActivityMetric, UsageActivity } from "@/lib/types";
 
 export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?: string } }) {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState(bounds);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [, startTagTransition] = useTransition();
+  const selectedTags = useMemo(
+    () => parseActivityQuery(new URLSearchParams(searchParams.toString())).tags,
+    [searchParams]
+  );
   const [metric, setMetric] = useState<ActivityMetric>("electricityKwh");
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -56,6 +66,13 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
   // just don't match anything".
   const hasNoActivitiesEver = tagsData !== undefined && tagsData.tags.length === 0;
 
+  const updateSelectedTags = (tags: string[]) => {
+    const next = replaceActivityTagParams(new URLSearchParams(searchParams.toString()), tags);
+    startTagTransition(() => {
+      router.replace(queryHref(pathname, next), { scroll: false });
+    });
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-5 py-6">
       <FilterBar
@@ -74,7 +91,7 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
             + Add activity
           </button>
         }
-        extraControls={<TagFilter tags={tagsData?.tags ?? []} selected={selectedTags} onChange={setSelectedTags} />}
+        extraControls={<TagFilter tags={tagsData?.tags ?? []} selected={selectedTags} onChange={updateSelectedTags} />}
         rightControls={<ActivityExportButton params={exportParams} />}
         splitMobileRow
         fullBleed
@@ -125,7 +142,7 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
         }
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted">Loading activity report...</div>
+          <TaggedUsageChartSkeleton />
         ) : rows.length ? (
           <ActivityReportChart rows={rows} metric={metric} />
         ) : hasNoActivitiesEver ? (

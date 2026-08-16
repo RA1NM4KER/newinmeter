@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildActivitySearchParams, parseActivityQuery } from "./activity-query-params";
+import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "./activity-query-params";
 
 describe("activity query parameters", () => {
   it("parses date, tags, metric, and utility safely", () => {
@@ -24,5 +24,14 @@ describe("activity query parameters", () => {
     expect(
       buildActivitySearchParams({ from: "2026-08-01", to: "2026-08-04", tags: ["Geyser", "geyser"] }).toString()
     ).toBe("from=2026-08-01&to=2026-08-04&tag=geyser");
+  });
+
+  it("replaces selected tags without losing other URL filters", () => {
+    const current = new URLSearchParams("from=2026-08-01&to=2026-08-04&tag=old&tags=legacy,values&metric=averageKw");
+
+    expect(replaceActivityTagParams(current, [" Geyser ", "geyser", "Heater"]).toString()).toBe(
+      "from=2026-08-01&to=2026-08-04&metric=averageKw&tag=geyser&tag=heater"
+    );
+    expect(replaceActivityTagParams(current, []).toString()).toBe("from=2026-08-01&to=2026-08-04&metric=averageKw");
   });
 });

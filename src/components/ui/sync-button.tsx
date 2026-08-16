@@ -21,6 +21,7 @@ const syncModes = [
 type PopoverPosition = {
   left: number;
   top: number;
+  width: number;
 };
 
 const popoverWidth = 256;
@@ -36,7 +37,11 @@ export function SyncButton({
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [position, setPosition] = useState<PopoverPosition>({ left: popoverMargin, top: popoverMargin });
+  const [position, setPosition] = useState<PopoverPosition>({
+    left: popoverMargin,
+    top: popoverMargin,
+    width: popoverWidth
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,11 +55,13 @@ export function SyncButton({
       }
 
       const rect = containerRef.current.getBoundingClientRect();
-      const centeredLeft = rect.left + rect.width / 2 - popoverWidth / 2;
-      const left = Math.min(window.innerWidth - popoverWidth - popoverMargin, Math.max(popoverMargin, centeredLeft));
+      const matchesMobile = window.matchMedia("(max-width: 639px)").matches;
+      const width = matchesMobile ? rect.width : popoverWidth;
+      const desiredLeft = matchesMobile ? rect.left : rect.left + rect.width / 2 - width / 2;
+      const left = Math.min(window.innerWidth - width - popoverMargin, Math.max(popoverMargin, desiredLeft));
       const top = rect.bottom + 8;
 
-      setPosition({ left, top });
+      setPosition({ left, top, width });
     };
 
     updatePosition();
@@ -159,10 +166,10 @@ export function SyncButton({
 
       {isOpen ? (
         <div
-          className="fixed z-40 w-64 rounded-md border border-line bg-paper p-1 shadow-soft"
+          className="fixed z-40 rounded-md border border-line bg-paper p-1 shadow-soft"
           role="listbox"
           aria-label="Sync options"
-          style={{ left: position.left, top: position.top }}
+          style={{ left: position.left, top: position.top, width: position.width }}
         >
           {syncModes.map(({ value, label, subtitle }) => (
             <button
