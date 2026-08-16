@@ -1,4 +1,5 @@
-import { normalizeActivityTag } from "@/lib/activity-utils";
+import { DEFAULT_ACTIVITY_COLOR, normalizeActivityTag, type ActivityInput } from "@/lib/activity-utils";
+import type { UsageActivity } from "@/lib/types";
 
 export const halfHourTimes = Array.from({ length: 48 }, (_, index) => {
   const hour = String(Math.floor(index / 2)).padStart(2, "0");
@@ -6,10 +7,23 @@ export const halfHourTimes = Array.from({ length: 48 }, (_, index) => {
   return `${hour}:${minute}`;
 });
 
+export function activityEndTimeOptions(startTime: string) {
+  const startIndex = halfHourTimes.indexOf(startTime);
+  if (startIndex === -1) return [];
+
+  return Array.from({ length: 48 }, (_, index) => {
+    const value = halfHourTimes[(startIndex + index + 1) % halfHourTimes.length];
+    const isNextDay = value <= startTime;
+    return {
+      value,
+      label: isNextDay ? `${value} next day` : value
+    };
+  });
+}
+
 export function defaultActivityEndTime(startTime: string) {
   const [hours, minutes] = startTime.split(":").map(Number);
-  const endMinutes = hours * 60 + minutes + 2 * 60;
-  if (endMinutes >= 24 * 60) return "00:00";
+  const endMinutes = (hours * 60 + minutes + 2 * 60) % (24 * 60);
   return `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 }
 
@@ -22,6 +36,32 @@ export function activityToday(date = new Date()) {
   }).formatToParts(date);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+export function activityDialogInitialForm(
+  activity?: UsageActivity,
+  defaultDate?: string,
+  defaultStartTime?: string
+): ActivityInput {
+  return activity
+    ? {
+        date: activity.startsAt.slice(0, 10),
+        allDay: activity.allDay,
+        startTime: activity.startsAt.slice(11, 16),
+        endTime: activity.endsAt.slice(11, 16),
+        tags: activity.tags,
+        color: activity.color,
+        note: activity.note ?? ""
+      }
+    : {
+        date: defaultDate ?? activityToday(),
+        allDay: false,
+        startTime: defaultStartTime ?? "18:00",
+        endTime: defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30",
+        tags: [],
+        color: DEFAULT_ACTIVITY_COLOR,
+        note: ""
+      };
 }
 
 export function activityTagSuggestions(existingTags: string[], selectedTags: string[], query: string) {

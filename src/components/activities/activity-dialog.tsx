@@ -10,7 +10,6 @@ import { activityFieldErrors, fetchActivityTags, removeActivity, saveActivity } 
 import {
   ACTIVITY_COLOR_OPTIONS,
   ACTIVITY_MAX_TAGS,
-  DEFAULT_ACTIVITY_COLOR,
   activityTimeLabel,
   displayActivityTag,
   validateActivityInput,
@@ -20,9 +19,9 @@ import type { UsageActivity } from "@/lib/types";
 import { ActivityTagChip } from "./tag-chip";
 import {
   activityColorAfterAddingTag,
+  activityDialogInitialForm,
+  activityEndTimeOptions,
   activityTagSuggestions,
-  activityToday,
-  defaultActivityEndTime,
   halfHourTimes,
   resolveAddTag
 } from "./activity-dialog-model";
@@ -35,31 +34,11 @@ type ActivityDialogProps = {
   defaultStartTime?: string;
 };
 
-function initialForm(activity?: UsageActivity, defaultDate?: string, defaultStartTime?: string): ActivityInput {
-  return activity
-    ? {
-        date: activity.startsAt.slice(0, 10),
-        allDay: activity.allDay,
-        startTime: activity.startsAt.slice(11, 16),
-        endTime: activity.endsAt.slice(11, 16),
-        tags: activity.tags,
-        color: activity.color,
-        note: activity.note ?? ""
-      }
-    : {
-        date: defaultDate ?? activityToday(),
-        allDay: false,
-        startTime: defaultStartTime ?? "18:00",
-        endTime: defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30",
-        tags: [],
-        color: DEFAULT_ACTIVITY_COLOR,
-        note: ""
-      };
-}
-
 export function ActivityDialog({ isOpen, onClose, activity, defaultDate, defaultStartTime }: ActivityDialogProps) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ActivityInput>(() => initialForm(activity, defaultDate, defaultStartTime));
+  const [form, setForm] = useState<ActivityInput>(() =>
+    activityDialogInitialForm(activity, defaultDate, defaultStartTime)
+  );
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tagNotice, setTagNotice] = useState<string | null>(null);
@@ -90,7 +69,7 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
 
   useEffect(() => {
     if (isOpen) {
-      setForm(initialForm(activity, defaultDate, defaultStartTime));
+      setForm(activityDialogInitialForm(activity, defaultDate, defaultStartTime));
       setTagInput("");
       setErrors({});
       setTagNotice(null);
@@ -155,11 +134,7 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
     setIsConfirmingDelete(false);
   }
 
-  const endOptions = [...halfHourTimes.slice(1), "00:00"].map((value) => ({
-    value,
-    label: value === "00:00" ? "00:00 next day" : value,
-    disabled: value !== "00:00" && value <= (form.startTime ?? "")
-  }));
+  const endOptions = activityEndTimeOptions(form.startTime ?? "");
 
   const dialogFooter =
     isConfirmingDelete && activity ? (

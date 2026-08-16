@@ -3,6 +3,8 @@ import {
   activityDurationMinutes,
   activityIncludesInterval,
   activityOverlayRange,
+  activityRangeValidationError,
+  activityTimeLabel,
   aggregateActivityReportRow,
   averageDemandKw,
   buildActivityRange,
@@ -29,25 +31,80 @@ describe("activity ranges and validation", () => {
     });
   });
 
+  it("builds a same-day timed range", () => {
+    expect(
+      buildActivityRange({
+        date: "2026-08-16",
+        allDay: false,
+        startTime: "22:00",
+        endTime: "23:30"
+      })
+    ).toEqual({
+      startsAt: "2026-08-16T22:00:00",
+      endsAt: "2026-08-16T23:30:00"
+    });
+  });
+
+  it("builds a cross-midnight timed range", () => {
+    expect(
+      buildActivityRange({
+        date: "2026-08-16",
+        allDay: false,
+        startTime: "22:00",
+        endTime: "05:00"
+      })
+    ).toEqual({
+      startsAt: "2026-08-16T22:00:00",
+      endsAt: "2026-08-17T05:00:00"
+    });
+  });
+
+  it("treats equal clock times as exactly 24 hours", () => {
+    const range = buildActivityRange({
+      date: "2026-08-16",
+      allDay: false,
+      startTime: "22:00",
+      endTime: "22:00"
+    });
+
+    expect(range).toEqual({
+      startsAt: "2026-08-16T22:00:00",
+      endsAt: "2026-08-17T22:00:00"
+    });
+    expect(activityDurationMinutes(range.startsAt, range.endsAt)).toBe(24 * 60);
+  });
+
   it("accepts only 30-minute time increments", () => {
     expect(isHalfHourTime("18:00")).toBe(true);
     expect(isHalfHourTime("18:30")).toBe(true);
     expect(isHalfHourTime("18:15")).toBe(false);
   });
 
-  it("allows midnight as the following-day end and rejects an earlier same-day end", () => {
+  it("accepts valid cross-midnight and exactly-24-hour activities", () => {
     expect(
-      validateActivityInput({ date: "2026-08-04", allDay: false, startTime: "22:30", endTime: "00:00", tags: ["away"] })
-        .success
+      validateActivityInput({
+        date: "2026-08-16",
+        allDay: false,
+        startTime: "22:00",
+        endTime: "05:00",
+        tags: ["away"]
+      }).success
     ).toBe(true);
-    const invalid = validateActivityInput({
-      date: "2026-08-04",
-      allDay: false,
-      startTime: "20:30",
-      endTime: "18:00",
-      tags: ["heater"]
-    });
-    expect(invalid.success).toBe(false);
+    expect(
+      validateActivityInput({
+        date: "2026-08-16",
+        allDay: false,
+        startTime: "22:00",
+        endTime: "22:00",
+        tags: ["heater"]
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects timed timestamp ranges longer than 24 hours", () => {
+    expect(activityRangeValidationError("2026-08-16T22:00:00", "2026-08-17T22:30:00", false)).toBe(
+      "Timed activities cannot be longer than 24 hours."
+    );
   });
 
   it("requires tags and validates tag and note limits", () => {
@@ -66,6 +123,38 @@ describe("activity ranges and validation", () => {
     ).toBe(false);
     const normalized = validateActivityInput({ date: "2026-08-04", allDay: true, tags: ["home"], color: "#2563EB" });
     expect(normalized.success && normalized.value.color).toBe("#2563eb");
+  });
+});
+
+describe("activity time labels", () => {
+  it("shows same-day times without a suffix", () => {
+    expect(
+      activityTimeLabel({
+        startsAt: "2026-08-16T18:00:00",
+        endsAt: "2026-08-16T20:30:00",
+        allDay: false
+      })
+    ).toBe("18:00 to 20:30");
+  });
+
+  it("marks cross-midnight times using the actual end date", () => {
+    expect(
+      activityTimeLabel({
+        startsAt: "2026-08-16T22:00:00",
+        endsAt: "2026-08-17T05:00:00",
+        allDay: false
+      })
+    ).toBe("22:00 to 05:00 next day");
+  });
+
+  it("keeps the whole-day label unchanged", () => {
+    expect(
+      activityTimeLabel({
+        startsAt: "2026-08-16T00:00:00",
+        endsAt: "2026-08-17T00:00:00",
+        allDay: true
+      })
+    ).toBe("Whole day");
   });
 });
 
@@ -92,6 +181,17 @@ describe("activity usage calculations", () => {
         "2026-08-04"
       )
     ).toEqual({ startTime: "00:00", endTime: "23:30" });
+  });
+
+  it("clips a cross-midnight activity to each day it overlaps", () => {
+    const activity = {
+      startsAt: "2026-08-16T22:00:00",
+      endsAt: "2026-08-17T05:00:00",
+      allDay: false
+    };
+
+    expect(activityOverlayRange(activity, "2026-08-16")).toEqual({ startTime: "22:00", endTime: "23:30" });
+    expect(activityOverlayRange(activity, "2026-08-17")).toEqual({ startTime: "00:00", endTime: "05:00" });
   });
 
   it("calculates average demand from kWh over duration hours", () => {

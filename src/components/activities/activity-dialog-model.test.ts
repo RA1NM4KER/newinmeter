@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   activityColorAfterAddingTag,
+  activityDialogInitialForm,
+  activityEndTimeOptions,
   activityTagSuggestions,
   activityToday,
   defaultActivityEndTime,
@@ -27,6 +29,33 @@ describe("activity dialog model", () => {
     expect(halfHourTimes.at(-1)).toBe("23:30");
   });
 
+  it("offers the next 48 chronological boundaries after a late start", () => {
+    const options = activityEndTimeOptions("22:00");
+
+    expect(options).toHaveLength(48);
+    expect(options[0]).toEqual({ value: "22:30", label: "22:30" });
+    expect(options.find((option) => option.value === "23:30")).toEqual({ value: "23:30", label: "23:30" });
+    expect(options.find((option) => option.value === "00:00")).toEqual({
+      value: "00:00",
+      label: "00:00 next day"
+    });
+    expect(options.find((option) => option.value === "05:00")).toEqual({
+      value: "05:00",
+      label: "05:00 next day"
+    });
+    expect(options.at(-1)).toEqual({ value: "22:00", label: "22:00 next day" });
+    expect(options.every((option) => !("disabled" in option))).toBe(true);
+  });
+
+  it("rolls an early start over only after midnight", () => {
+    const options = activityEndTimeOptions("05:30");
+
+    expect(options[0]).toEqual({ value: "06:00", label: "06:00" });
+    expect(options.find((option) => option.value === "23:30")?.label).toBe("23:30");
+    expect(options.find((option) => option.value === "00:00")?.label).toBe("00:00 next day");
+    expect(options.at(-1)).toEqual({ value: "05:30", label: "05:30 next day" });
+  });
+
   it("offers existing tags case-insensitively without already selected tags", () => {
     expect(activityTagSuggestions(["Geyser", "heater", "guests"], ["geyser"], "he")).toEqual(["heater"]);
   });
@@ -35,10 +64,30 @@ describe("activity dialog model", () => {
     expect(activityToday(new Date("2026-08-03T22:30:00Z"))).toBe("2026-08-04");
   });
 
-  it("defaults a focused activity to two hours and caps it at midnight", () => {
+  it("defaults a focused activity to two hours with natural midnight wrapping", () => {
     expect(defaultActivityEndTime("17:30")).toBe("19:30");
     expect(defaultActivityEndTime("22:00")).toBe("00:00");
-    expect(defaultActivityEndTime("23:30")).toBe("00:00");
+    expect(defaultActivityEndTime("22:30")).toBe("00:30");
+    expect(defaultActivityEndTime("23:30")).toBe("01:30");
+  });
+
+  it("loads an existing cross-midnight activity without losing its end clock time", () => {
+    expect(
+      activityDialogInitialForm({
+        id: "activity-a",
+        startsAt: "2026-08-16T22:00:00",
+        endsAt: "2026-08-17T05:00:00",
+        allDay: false,
+        tags: ["heater"],
+        color: "#0f766e",
+        createdAt: "",
+        updatedAt: ""
+      })
+    ).toMatchObject({
+      date: "2026-08-16",
+      startTime: "22:00",
+      endTime: "05:00"
+    });
   });
 });
 

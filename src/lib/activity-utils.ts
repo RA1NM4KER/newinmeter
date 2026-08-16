@@ -3,6 +3,7 @@ import type { ActivityReportRow, UsageActivity } from "./types";
 export const ACTIVITY_MAX_TAGS = 10;
 export const ACTIVITY_MAX_TAG_LENGTH = 30;
 export const ACTIVITY_MAX_NOTE_LENGTH = 500;
+export const ACTIVITY_MAX_DURATION_MINUTES = 24 * 60;
 export const DEFAULT_ACTIVITY_COLOR = "#0f766e";
 export const ACTIVITY_COLOR_OPTIONS = [
   DEFAULT_ACTIVITY_COLOR,
@@ -74,7 +75,7 @@ export function buildActivityRange(input: Pick<ActivityInput, "date" | "allDay" 
 
   const startTime = input.startTime ?? "";
   const endTime = input.endTime ?? "";
-  const endDate = endTime === "00:00" ? addDaysToIsoDate(input.date, 1) : input.date;
+  const endDate = endTime <= startTime ? addDaysToIsoDate(input.date, 1) : input.date;
   return {
     startsAt: `${input.date}T${startTime}:00`,
     endsAt: `${endDate}T${endTime}:00`
@@ -89,6 +90,15 @@ function localTimestampValue(value: string) {
 
 export function activityDurationMinutes(startsAt: string, endsAt: string) {
   return Math.round((localTimestampValue(endsAt) - localTimestampValue(startsAt)) / 60_000);
+}
+
+export function activityRangeValidationError(startsAt: string, endsAt: string, allDay: boolean) {
+  const durationMinutes = activityDurationMinutes(startsAt, endsAt);
+  if (durationMinutes <= 0) return "End time must be after start time.";
+  if (!allDay && durationMinutes > ACTIVITY_MAX_DURATION_MINUTES) {
+    return "Timed activities cannot be longer than 24 hours.";
+  }
+  return undefined;
 }
 
 export function activityOverlapsRange(startsAt: string, endsAt: string, rangeStart: string, rangeEnd: string) {
@@ -163,9 +173,8 @@ export function validateActivityInput(input: ActivityInput) {
 
   if (!Object.keys(errors).length) {
     const range = buildActivityRange(input);
-    if (activityDurationMinutes(range.startsAt, range.endsAt) <= 0) {
-      errors.endTime = "End time must be after start time.";
-    }
+    const rangeError = activityRangeValidationError(range.startsAt, range.endsAt, input.allDay);
+    if (rangeError) errors.endTime = rangeError;
   }
 
   return Object.keys(errors).length
@@ -179,7 +188,8 @@ export function activityDate(activity: Pick<UsageActivity, "startsAt">) {
 
 export function activityTimeLabel(activity: Pick<UsageActivity, "startsAt" | "endsAt" | "allDay">) {
   if (activity.allDay) return "Whole day";
-  return `${activity.startsAt.slice(11, 16)} to ${activity.endsAt.slice(11, 16)}`;
+  const isNextDay = activity.endsAt.slice(0, 10) !== activity.startsAt.slice(0, 10);
+  return `${activity.startsAt.slice(11, 16)} to ${activity.endsAt.slice(11, 16)}${isNextDay ? " next day" : ""}`;
 }
 
 export function activityOverlayRange(
