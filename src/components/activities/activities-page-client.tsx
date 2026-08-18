@@ -95,6 +95,7 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
         rightControls={<ActivityExportButton params={exportParams} />}
         splitMobileRow
         fullBleed
+        sticky
       />
 
       <div>
