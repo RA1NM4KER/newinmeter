@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ArrowRight, CheckCircle2, Loader2, Mail, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 function GoogleIcon() {
@@ -90,11 +90,7 @@ function DemoLoginButton({ token }: { token: string }) {
         disabled={isSubmitting}
         className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-brandGreen/30 bg-brandGreen/10 px-5 text-sm font-medium text-brandGreen transition hover:bg-brandGreen/15 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {isSubmitting ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        ) : (
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-        )}
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
         Explore demo account
       </button>
       <p className="text-xs text-white/35">View NewinMeter with synthetic data</p>
