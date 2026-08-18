@@ -29,7 +29,7 @@ function PlatformCard({ title, children }: { title: string; children: React.Reac
 export default function InstallPage() {
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="border-b border-line px-6 py-5">
+      <header className="sticky top-0 z-20 border-b border-line bg-canvas/90 px-6 py-5 backdrop-blur">
         <Link href="/">
           <Wordmark className="text-xl" textClassName="text-ink" accentClassName="text-accent" />
         </Link>
