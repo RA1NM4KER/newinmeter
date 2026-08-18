@@ -11,6 +11,8 @@ export type SyncButtonProps = {
   tone?: ControlTone;
   onSuccess?: () => void | Promise<void>;
   showNudge?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 const syncModes = [
@@ -32,7 +34,9 @@ export function SyncButton({
   className,
   tone = "light",
   onSuccess,
-  showNudge = false
+  showNudge = false,
+  disabled = false,
+  disabledReason
 }: SyncButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -138,10 +142,11 @@ export function SyncButton({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-busy={isLoading}
+        title={disabled ? disabledReason : undefined}
         className={`relative inline-flex h-9 items-center gap-2 rounded-md border text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${triggerToneClass(tone)} ${
           iconOnly ? "px-2" : "px-3"
         } ${className ?? ""}`}
-        disabled={isLoading}
+        disabled={isLoading || disabled}
         onClick={() => setIsOpen((prev) => !prev)}
         type="button"
       >

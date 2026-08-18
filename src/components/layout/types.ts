@@ -6,6 +6,7 @@ export type AppShellProps = {
   isAdmin?: boolean;
   isActivitiesEnabled?: boolean;
   isLiveMeterEnabled?: boolean;
+  isDemo?: boolean;
 };
 
 export type ThemeChoice = "system" | "light" | "dark";

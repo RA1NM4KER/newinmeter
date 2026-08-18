@@ -35,6 +35,7 @@ export default async function SettingsPage() {
         livemopayEmail={connection?.livemopayEmail ?? null}
         accountLabel={connection?.accountLabel ?? null}
         lastSyncedAt={connection?.lastSyncedAt ?? null}
+        isDemo={connection?.isDemo ?? false}
       />
 
       <SettingsGroup label="Preferences">
@@ -66,7 +67,7 @@ export default async function SettingsPage() {
         />
       </SettingsGroup>
 
-      <DeleteAccountCard />
+      <DeleteAccountCard isDemo={connection?.isDemo ?? false} />
     </div>
   );
 }

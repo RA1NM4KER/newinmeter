@@ -81,6 +81,22 @@ describe("activities API", () => {
     );
   });
 
+  it("blocks activity creation for the shared demo connection", async () => {
+    mocks.requireActivitiesSession.mockResolvedValue({
+      ok: true,
+      session: { ...session, connection: { id: "connection-a", isDemo: true } }
+    });
+    const response = await POST(
+      new Request("http://localhost/api/activities", {
+        method: "POST",
+        body: JSON.stringify({ date: "2026-08-04", allDay: true, tags: ["Guests"] })
+      })
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ demoAccount: true });
+    expect(mocks.createActivity).not.toHaveBeenCalled();
+  });
+
   it("returns field validation failures as 400", async () => {
     mocks.createActivity.mockRejectedValue(
       Object.assign(new Error("Invalid"), { validationErrors: { tags: "Add at least one tag." } })

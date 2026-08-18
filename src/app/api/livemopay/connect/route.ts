@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { discoverLiveMopayAccounts, loginWithLiveMopayCredentials } from "@/lib/newinmeter-web";
-import { beginLivemopayConnection, getConnectionForUser } from "@/lib/newinmeter-connection";
+import { beginLivemopayConnection, DemoAccountProtectedError, getConnectionForUser } from "@/lib/newinmeter-connection";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,15 @@ export async function POST(request: Request) {
 
   try {
     const existing = await getConnectionForUser(session.userId);
+    if (existing?.isDemo) {
+      return NextResponse.json(
+        {
+          message: "This is a shared demo account and cannot be connected to real LiveMopay credentials.",
+          demoAccount: true
+        },
+        { status: 403, headers: rateHeaders }
+      );
+    }
     if (existing?.status === "connected") {
       return NextResponse.json(
         { message: "A LiveMopay account is already connected." },
@@ -75,6 +84,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: "Enter a valid LiveMopay email and password." },
         { status: 400, headers: rateHeaders }
+      );
+    }
+
+    if (error instanceof DemoAccountProtectedError) {
+      return NextResponse.json(
+        {
+          message: "This is a shared demo account and cannot be connected to real LiveMopay credentials.",
+          demoAccount: true
+        },
+        { status: 403, headers: rateHeaders }
       );
     }
 

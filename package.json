@@ -9,6 +9,7 @@
     "refresh:emulator": "scripts/refresh_with_emulator.sh",
     "backfill:legacy-owner": "tsx --env-file=.env.local scripts/backfill-legacy-owner.ts",
     "create:meter-device": "tsx --conditions=react-server --env-file=.env.local scripts/create-meter-device.ts",
+    "seed:demo-account": "tsx --conditions=react-server --env-file=.env.local scripts/seed-demo-account.ts",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
@@ -44,8 +45,11 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/web-push": "^3.6.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.2",
     "tsx": "^4.23.1",
     "vitest": "^4.1.10"

@@ -45,12 +45,21 @@ function KofiLink() {
   );
 }
 
+function DemoBadge() {
+  return (
+    <span className="inline-flex w-fit items-center rounded-full border border-accent/30 bg-accentSoft px-2 py-0.5 text-[0.6875rem] font-medium text-brandTeal dark:text-accent">
+      Demo account · synthetic data
+    </span>
+  );
+}
+
 export function AppShell({
   children,
   userEmail,
   isAdmin = false,
   isActivitiesEnabled = false,
-  isLiveMeterEnabled = false
+  isLiveMeterEnabled = false,
+  isDemo = false
 }: AppShellProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const pathname = usePathname();
@@ -76,6 +85,11 @@ export function AppShell({
           <KofiLink />
         </div>
         <div className="shrink-0 border-t border-line px-4 py-4">
+          {isDemo ? (
+            <div className="mb-2">
+              <DemoBadge />
+            </div>
+          ) : null}
           <div className="flex items-center gap-2">
             {userEmail ? <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p> : null}
             <SignOutForm />
@@ -142,6 +156,11 @@ export function AppShell({
           <InstallLink />
           <KofiLink />
           <div className="border-t border-line pt-4">
+            {isDemo ? (
+              <div className="mb-2">
+                <DemoBadge />
+              </div>
+            ) : null}
             <div className="flex items-center gap-2">
               {userEmail ? <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p> : null}
               <SignOutForm />

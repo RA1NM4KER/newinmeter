@@ -7,6 +7,18 @@ import type { LiveMopayAccountCandidate } from "./newinmeter-web";
 
 export type ConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
 
+// Thrown by every mutation that would destroy or repoint the shared demo
+// connection (reconnect, disconnect, account delete). This is the backstop
+// -- route handlers also check connection.isDemo themselves for a clean
+// 403, but a demo-aware check lives here too so no future caller of these
+// functions can bypass it by skipping the route-level check.
+export class DemoAccountProtectedError extends Error {
+  constructor(action: string) {
+    super(`Demo account: ${action} is disabled for the shared demo connection.`);
+    this.name = "DemoAccountProtectedError";
+  }
+}
+
 type ConnectionRow = {
   id: string;
   user_id: string;
@@ -25,6 +37,7 @@ type ConnectionRow = {
   updated_at: string;
   last_synced_at: string | null;
   last_error: string | null;
+  is_demo: boolean;
 };
 
 export type LivemopayConnection = {
@@ -40,12 +53,16 @@ export type LivemopayConnection = {
   connectedAt: string;
   lastSyncedAt: string | null;
   lastError: string | null;
+  // Marks a seeded recruiter/demo connection: real connection-scoped data
+  // model, fixed synthetic content, never a real LiveMopay credential. See
+  // scripts/seed-demo-account.ts.
+  isDemo: boolean;
 };
 
 const CONNECTION_SELECT =
   "id,user_id,livemopay_email,firebase_local_id,account_id,company_id,property_id,account_label," +
   "refresh_token_ciphertext,refresh_token_iv,refresh_token_auth_tag,pending_accounts,status," +
-  "connected_at,updated_at,last_synced_at,last_error";
+  "connected_at,updated_at,last_synced_at,last_error,is_demo";
 
 function toConnection(row: ConnectionRow): LivemopayConnection {
   return {
@@ -60,7 +77,8 @@ function toConnection(row: ConnectionRow): LivemopayConnection {
     pendingAccounts: row.pending_accounts,
     connectedAt: row.connected_at,
     lastSyncedAt: row.last_synced_at,
-    lastError: row.last_error
+    lastError: row.last_error,
+    isDemo: row.is_demo
   };
 }
 
@@ -109,8 +127,13 @@ export type BeginConnectionParams = {
 // reaches this function and the refresh token is encrypted before it's
 // written.
 export async function beginLivemopayConnection(params: BeginConnectionParams): Promise<LivemopayConnection> {
-  const encrypted = encryptRefreshToken(params.refreshToken);
   const existing = await getConnectionRowForUser(params.userId);
+
+  if (existing?.is_demo) {
+    throw new DemoAccountProtectedError("connecting real LiveMopay credentials");
+  }
+
+  const encrypted = encryptRefreshToken(params.refreshToken);
   const single = params.candidates.length === 1 ? params.candidates[0] : null;
   const nowIso = new Date().toISOString();
 
@@ -191,6 +214,10 @@ export async function disconnectLivemopayConnection(userId: string): Promise<voi
     return;
   }
 
+  if (row.is_demo) {
+    throw new DemoAccountProtectedError("disconnecting");
+  }
+
   await adminSupabaseRequest(
     "PATCH",
     `/livemopay_connections?id=eq.${encodeURIComponent(row.id)}`,
@@ -213,6 +240,11 @@ export async function disconnectLivemopayConnection(userId: string): Promise<voi
 // failure there still leaves the user's data already gone rather than
 // stranding an auth account with no way to reach it.
 export async function deleteAccountForUser(userId: string): Promise<void> {
+  const row = await getConnectionRowForUser(userId);
+  if (row?.is_demo) {
+    throw new DemoAccountProtectedError("account deletion");
+  }
+
   await adminSupabaseRequest(
     "DELETE",
     `/livemopay_connections?user_id=eq.${encodeURIComponent(userId)}`,
@@ -265,7 +297,10 @@ export async function markConnectionSyncOutcome(connectionId: string, lastError:
 // Lightweight projection for the stale-check cron: just what the dedupe
 // decision needs, for every currently-connected account. Deliberately omits
 // the token/account columns -- the cron never touches LiveMopay, only decides
-// whether to send a "your data looks stale" push.
+// whether to send a "your data looks stale" push. Demo connections are
+// excluded (is_demo=eq.false) since their data is intentionally static and
+// never syncs -- they would otherwise look permanently stale and get
+// notified on every run.
 export type StaleCheckConnection = {
   id: string;
   userId: string;
@@ -276,7 +311,7 @@ export type StaleCheckConnection = {
 export async function listConnectionsForStaleCheck(): Promise<StaleCheckConnection[]> {
   const rows = await adminSupabaseFetch<
     Array<Pick<ConnectionRow, "id" | "user_id" | "last_synced_at"> & { stale_notified_at: string | null }>
-  >("/livemopay_connections?select=id,user_id,last_synced_at,stale_notified_at&status=eq.connected");
+  >("/livemopay_connections?select=id,user_id,last_synced_at,stale_notified_at&status=eq.connected&is_demo=eq.false");
 
   return rows.map((row) => ({
     id: row.id,

@@ -14,9 +14,16 @@ type ConnectionCardProps = {
   livemopayEmail: string | null;
   accountLabel: string | null;
   lastSyncedAt: string | null;
+  isDemo?: boolean;
 };
 
-export function ConnectionCard({ status, livemopayEmail, accountLabel, lastSyncedAt }: ConnectionCardProps) {
+export function ConnectionCard({
+  status,
+  livemopayEmail,
+  accountLabel,
+  lastSyncedAt,
+  isDemo = false
+}: ConnectionCardProps) {
   const router = useRouter();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -43,10 +50,15 @@ export function ConnectionCard({ status, livemopayEmail, accountLabel, lastSynce
           </IconTile>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[0.9375rem] font-semibold text-ink">
-              {connected ? (accountLabel ?? "LiveMopay account") : "No account connected"}
+              {isDemo ? "Demo dataset" : connected ? (accountLabel ?? "LiveMopay account") : "No account connected"}
             </p>
             <p className="mt-0.5 inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
-              {connected ? (
+              {isDemo ? (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                  Synthetic data, shared by every reviewer
+                </>
+              ) : connected ? (
                 <>
                   <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
                   Connected to LiveMopay
@@ -60,7 +72,27 @@ export function ConnectionCard({ status, livemopayEmail, accountLabel, lastSynce
           </div>
         </div>
 
-        {connected ? (
+        {isDemo ? (
+          <>
+            <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
+              <div className="min-w-0">
+                <dt className="text-muted">Data source</dt>
+                <dd className="mt-1 truncate text-ink">Fixed demo dataset</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-muted">Last synced</dt>
+                <dd className="mt-1 truncate text-ink">
+                  {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+              <SyncButton disabled disabledReason="Demo data · Live sync unavailable" />
+              <p className="text-[0.8125rem] text-muted">Demo data · Live sync unavailable</p>
+            </div>
+          </>
+        ) : connected ? (
           <>
             <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
               <div className="min-w-0">

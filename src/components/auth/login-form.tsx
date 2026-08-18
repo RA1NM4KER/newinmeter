@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, Sparkles } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 function GoogleIcon() {
@@ -27,7 +27,83 @@ function GoogleIcon() {
   );
 }
 
-export function LoginForm() {
+// Only rendered when the server-validated `demo` query token was present and
+// correct (see src/app/login/page.tsx and src/lib/demo/access-token.ts) --
+// this component itself never checks or knows the expected token, it just
+// holds the already-validated one in memory long enough to POST it once. The
+// login-form parent doesn't render this at all for a missing/invalid token,
+// so an ordinary visitor sees nothing different about the page.
+function DemoLoginButton({ token }: { token: string }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleClick() {
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok || !body?.tokenHash) {
+        setError(body?.message || "Could not start the demo. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Redeems the server-generated magic link with the same anon-key
+      // browser client every other sign-in path uses -- this is Supabase's
+      // own supported way to consume a link generated out-of-band (the
+      // action_link itself only works when opened by the same browser that
+      // requested it, which isn't the case for a server-admin-generated
+      // link). A normal Supabase session comes out of this, same as any
+      // other verified sign-in.
+      const supabase = createSupabaseBrowserClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: body.tokenHash,
+        type: "magiclink"
+      });
+
+      if (verifyError) {
+        setError("Could not start the demo. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      window.location.href = "/";
+    } catch {
+      setError("Could not start the demo. Please try again.");
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-col items-center gap-1.5 border-t border-white/10 pt-4">
+      <button
+        type="button"
+        onClick={() => void handleClick()}
+        disabled={isSubmitting}
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-brandGreen/30 bg-brandGreen/10 px-5 text-sm font-medium text-brandGreen transition hover:bg-brandGreen/15 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {isSubmitting ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+        )}
+        Explore demo account
+      </button>
+      <p className="text-xs text-white/35">View NewinMeter with synthetic data</p>
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+    </div>
+  );
+}
+
+export function LoginForm({ demoToken }: { demoToken?: string }) {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -144,6 +220,8 @@ export function LoginForm() {
 
         <p className="mt-1 text-xs text-white/35">One-time link, no password to remember.</p>
       </form>
+
+      {demoToken ? <DemoLoginButton token={demoToken} /> : null}
     </div>
   );
 }

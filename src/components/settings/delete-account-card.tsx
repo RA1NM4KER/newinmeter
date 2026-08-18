@@ -7,7 +7,7 @@ import { IconTile, SettingsGroup, SettingsRow } from "@/components/ui/settings";
 
 const confirmPhrase = "DELETE";
 
-export function DeleteAccountCard() {
+export function DeleteAccountCard({ isDemo = false }: { isDemo?: boolean }) {
   const [confirmText, setConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -32,6 +32,22 @@ export function DeleteAccountCard() {
   }
 
   const canDelete = confirmText === confirmPhrase && !isDeleting;
+
+  if (isDemo) {
+    return (
+      <SettingsGroup label="Danger zone" tone="danger">
+        <SettingsRow
+          leading={
+            <IconTile tone="danger">
+              <Trash2 size={18} strokeWidth={2} />
+            </IconTile>
+          }
+          title="Delete account"
+          description="This is a shared demo account. Deletion is disabled so every reviewer sees the same dataset."
+        />
+      </SettingsGroup>
+    );
+  }
 
   return (
     <SettingsGroup label="Danger zone" tone="danger">

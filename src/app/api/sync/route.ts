@@ -44,6 +44,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Connect a LiveMopay account first." }, { status: 409 });
   }
 
+  // Demo accounts never reach LiveMopay: checked before any refresh-token
+  // decryption or network call, not just hidden in the UI. The dataset is
+  // fixed and seeded by scripts/seed-demo-account.ts.
+  if (connectionRow.is_demo) {
+    return NextResponse.json(
+      { message: "This account uses fixed demo data and cannot sync with LiveMopay.", demoAccount: true },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = syncRequestSchema.parse(await request.json().catch(() => ({})));
     const refreshToken = getDecryptedRefreshToken(connectionRow);

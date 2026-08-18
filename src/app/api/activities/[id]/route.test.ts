@@ -64,4 +64,24 @@ describe("activity item API", () => {
     expect((await DELETE(new Request("http://localhost"), { params: { id: "owned" } })).status).toBe(200);
     expect((await DELETE(new Request("http://localhost"), { params: { id: "other" } })).status).toBe(404);
   });
+
+  it("blocks update and delete for the shared demo connection", async () => {
+    mocks.requireActivitiesSession.mockResolvedValue({
+      ok: true,
+      session: { ...session, connection: { id: "connection-a", isDemo: true } }
+    });
+
+    const patchResponse = await PATCH(
+      new Request("http://localhost/api/activities/owned", { method: "PATCH", body: JSON.stringify({ note: "x" }) }),
+      { params: { id: "owned" } }
+    );
+    expect(patchResponse.status).toBe(403);
+    await expect(patchResponse.json()).resolves.toMatchObject({ demoAccount: true });
+    expect(mocks.updateActivity).not.toHaveBeenCalled();
+
+    const deleteResponse = await DELETE(new Request("http://localhost"), { params: { id: "owned" } });
+    expect(deleteResponse.status).toBe(403);
+    await expect(deleteResponse.json()).resolves.toMatchObject({ demoAccount: true });
+    expect(mocks.deleteActivity).not.toHaveBeenCalled();
+  });
 });

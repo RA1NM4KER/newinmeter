@@ -27,6 +27,15 @@ const RATE_LIMIT_POLICIES = {
   live: {
     minuteLimit: 30,
     dayLimit: 30000
+  },
+  // /api/demo-login is unauthenticated by nature (that's the whole point --
+  // one click, no inbox needed), so it's keyed by request IP instead of a
+  // user id. Tight on purpose: this is the endpoint an attacker would use to
+  // brute-force NEWINMETER_DEMO_ACCESS_TOKEN, and legitimate use is at most
+  // a handful of clicks per recruiter.
+  demoLogin: {
+    minuteLimit: 5,
+    dayLimit: 30
   }
 } as const;
 

@@ -74,6 +74,23 @@ export function getCronSecret() {
   return required("CRON_SECRET");
 }
 
+// Shared secret gating the one-click recruiter demo entry point
+// (/login?demo=<token> -> /api/demo-login). Server-only -- deliberately not
+// a NEXT_PUBLIC_ var. Optional: unset disables the feature entirely (the
+// demo button never renders and the endpoint always denies).
+export function getNewinmeterDemoAccessToken(): string | undefined {
+  const value = process.env.NEWINMETER_DEMO_ACCESS_TOKEN;
+  return value && value.length ? value : undefined;
+}
+
+// Email of the one seeded demo Supabase Auth user (scripts/seed-demo-account.ts).
+// /api/demo-login only ever signs in this one operator-configured address --
+// it never accepts an email from the request.
+export function getNewinmeterDemoEmail(): string | undefined {
+  const value = process.env.NEWINMETER_DEMO_EMAIL;
+  return value && value.length ? value : undefined;
+}
+
 export function getOpenAiApiKey(): string | undefined {
   const value = process.env.OPENAI_API_KEY;
   return value && value.length ? value : undefined;
