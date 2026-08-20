@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FileDown } from "lucide-react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
+import { buildExportUrl } from "@/lib/endpoints";
 
 export type ExportButtonProps = {
   from?: string;
@@ -47,7 +48,7 @@ export function ExportButton({
     if (search) params.set("search", search);
     if (sort) params.set("sort", sort);
     if (dir) params.set("dir", dir);
-    return `/api/export?${params.toString()}`;
+    return buildExportUrl(params);
   }
 
   // Fixed positioning sized to the trigger width (same as the activities export

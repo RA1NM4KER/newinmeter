@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Heart, Menu, Smartphone } from "lucide-react";
 import { FullscreenDialog } from "@/components/ui/fullscreen-dialog";
+import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { SidebarNav } from "./sidebar-nav";
 import { Wordmark } from "./wordmark";
 import type { AppShellProps } from "./types";
@@ -45,6 +46,19 @@ function KofiLink() {
   );
 }
 
+// Isolated in its own Suspense boundary so useSearchParams() (which opts a
+// tree out of static generation) can't affect callers that render AppShell
+// on a static page, like /offline.
+function ActivitiesTableTabDetector({ onChange }: { onChange: (isTableTab: boolean) => void }) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    onChange(searchParams.get("tab") === "table");
+  }, [searchParams, onChange]);
+
+  return null;
+}
+
 function DemoBadge() {
   return (
     <span className="inline-flex w-fit items-center rounded-full border border-accent/30 bg-accentSoft px-2 py-0.5 text-[0.6875rem] font-medium text-brandTeal dark:text-accent">
@@ -62,11 +76,18 @@ export function AppShell({
   isDemo = false
 }: AppShellProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [isActivitiesTableTab, setIsActivitiesTableTab] = useState(false);
   const pathname = usePathname();
-  const lockViewport = pathname === "/data" || pathname === "/admin";
+  const lockViewport =
+    pathname === "/data" || pathname === "/admin" || (pathname === "/activities" && isActivitiesTableTab);
 
   return (
     <div className="flex h-[100svh] overflow-hidden">
+      {pathname === "/activities" ? (
+        <Suspense fallback={null}>
+          <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
+        </Suspense>
+      ) : null}
       <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex">
         <div className="flex h-16 shrink-0 items-center px-6">
           <Link href="/">
@@ -101,7 +122,7 @@ export function AppShell({
             <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
               Terms
             </Link>
-            <a className="text-xs text-muted transition hover:text-ink" href="mailto:kefasa112@gmail.com">
+            <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
               Feedback
             </a>
           </div>
@@ -127,9 +148,9 @@ export function AppShell({
 
         {/* The shell itself never scrolls -- the sidebar must stay put.
             Regular pages scroll their own content here; lockViewport pages
-            (data table, admin users table) instead delegate scrolling to a
-            nested region so their own header/toolbar/footer can stay pinned
-            too. */}
+            (data table, admin users table, activities table tab) instead
+            delegate scrolling to a nested region so their own
+            header/toolbar/footer can stay pinned too. */}
         <main
           className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pb-5 sm:px-6 lg:px-8 ${
             lockViewport ? "min-h-0 overflow-hidden" : "overflow-y-auto"
@@ -172,7 +193,7 @@ export function AppShell({
               <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
                 Terms
               </Link>
-              <a className="text-xs text-muted transition hover:text-ink" href="mailto:kefasa112@gmail.com">
+              <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
                 Feedback
               </a>
             </div>

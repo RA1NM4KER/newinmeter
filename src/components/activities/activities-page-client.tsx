@@ -1,31 +1,40 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Info } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ACTIVITY_TAGS_DISCLAIMER, activityTabs } from "./activity-tabs";
+import {
+  ACTIVITY_REPORT_DEFAULT_DIRECTION,
+  ACTIVITY_REPORT_DEFAULT_SORT,
+  activityReportColumns,
+  sortActivityReportRows,
+  type ActivityReportSortKey
+} from "./activity-report-columns";
+import { ActivityDashboardTab } from "./activity-dashboard-tab";
+import { ActivityReportTable } from "./activity-report-table";
 import { ActivityExportButton } from "./activity-export-button";
 import { ActivityDialog } from "./activity-dialog";
-import { ActivityReportChart, activityMetricOptions } from "./activity-report-chart";
-import { formatActivityMetric } from "./activity-report-model";
-import { TaggedUsageChartSkeleton } from "./tagged-usage-chart-skeleton";
-import { ActivityTagChip } from "./tag-chip";
 import { TagFilter } from "./tag-filter";
-import { ChartShell } from "@/components/charts/chart-shell";
+import { DayBreakdownChart } from "@/components/charts/day-breakdown-chart";
 import { FilterBar } from "@/components/dashboard/filter-bar";
-import { Card, CardHeader } from "@/components/ui/card";
-import { DropdownSelect } from "@/components/ui/dropdown-select";
-import { MetricCard } from "@/components/ui/metric-card";
-import { ScrollHint } from "@/components/ui/scroll-hint";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "@/lib/activity-query-params";
-import { fetchActivityReport, fetchActivityTags, removeActivity } from "@/lib/activity-client";
-import { activityTimeLabel, formatActivityDuration } from "@/lib/activity-utils";
-import { chartDate, formatCurrency, formatKl, formatKwh } from "@/lib/format";
+import { fetchActivityReport, fetchActivityTags } from "@/lib/activity-client";
+import { fetchDailyRollups } from "@/lib/dashboard-client";
+import { buildGlobalDomainsFromSummary } from "@/lib/day-breakdown";
 import { useFilterUrlState } from "@/lib/use-filter-url-state";
 import { queryHref } from "@/lib/url-query";
-import type { ActivityMetric, UsageActivity } from "@/lib/types";
+import type { ActivityMetric, ActivityReportRow, DashboardSummary, UsageActivity } from "@/lib/types";
 
-export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?: string } }) {
+export function ActivitiesPageClient({
+  bounds,
+  summary: dashboardSummary
+}: {
+  bounds: { from?: string; to?: string };
+  summary: DashboardSummary;
+}) {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState(bounds);
   const pathname = usePathname();
   const router = useRouter();
@@ -35,10 +44,35 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
     () => parseActivityQuery(new URLSearchParams(searchParams.toString())).tags,
     [searchParams]
   );
+  const activeTab = searchParams.get("tab") === "table" ? "table" : "dashboard";
+  const sortableColumnIds = useMemo(
+    () => new Set<string>(activityReportColumns.filter((column) => column.sortable).map((column) => column.id)),
+    []
+  );
+  const requestedSortKey = searchParams.get("sort");
+  const sortKey = (
+    requestedSortKey && sortableColumnIds.has(requestedSortKey) ? requestedSortKey : ACTIVITY_REPORT_DEFAULT_SORT
+  ) as ActivityReportSortKey;
+  const sortDirection = searchParams.get("dir") === "asc" ? "asc" : ACTIVITY_REPORT_DEFAULT_DIRECTION;
   const [metric, setMetric] = useState<ActivityMetric>("electricityKwh");
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
+  const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
+  // Lazy: only fetched once "Jump to day detail" is actually clicked, scoped
+  // to the same range already on screen rather than the account's full
+  // history (that's what the main dashboard needs it for; this dialog only
+  // ever shows one day within the current filter).
+  const { data: dailyRollupsData } = useQuery({
+    queryKey: ["daily-rollups", from, to],
+    queryFn: () => fetchDailyRollups({ from, to }),
+    enabled: dayDetailDate !== null && Boolean(from && to)
+  });
+  const dailyRollups = useMemo(() => dailyRollupsData?.rows ?? [], [dailyRollupsData?.rows]);
+  const dayDetailDateOptions = useMemo(
+    () =>
+      Array.from(new Set(dailyRollups.map((row) => row.periodDate))).sort((left, right) => left.localeCompare(right)),
+    [dailyRollups]
+  );
+  const dayDetailGlobalDomains = buildGlobalDomainsFromSummary(dashboardSummary);
   const filters = useMemo(() => ({ from, to, tags: selectedTags }), [from, selectedTags, to]);
   const { data, isLoading, error } = useQuery({
     queryKey: ["activity-report", filters],
@@ -46,17 +80,13 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
     enabled: Boolean(from && to)
   });
   const { data: tagsData } = useQuery({ queryKey: ["activity-tags"], queryFn: fetchActivityTags });
-  const deletion = useMutation({
-    mutationFn: removeActivity,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["activities"] }),
-        queryClient.invalidateQueries({ queryKey: ["activity-report"] }),
-        queryClient.invalidateQueries({ queryKey: ["activity-tags"] })
-      ]);
-    }
-  });
-  const rows = data?.rows ?? [];
+  const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  // The chart stays chronological regardless of the table's sort -- only the
+  // table itself reflects it.
+  const sortedRows = useMemo(
+    () => sortActivityReportRows(rows, sortKey, sortDirection),
+    [rows, sortKey, sortDirection]
+  );
   const summary = data?.summary;
   const exportParams = buildActivitySearchParams({ ...filters, metric });
   // Every activity requires at least one tag (see validateActivityInput), so
@@ -73,8 +103,36 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
     });
   };
 
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (tab === "dashboard") {
+      next.delete("tab");
+    } else {
+      next.set("tab", tab);
+    }
+    router.replace(queryHref(pathname, next), { scroll: false });
+  };
+
+  const onSortChange = (key: ActivityReportSortKey) => {
+    const nextDirection =
+      key === sortKey ? (sortDirection === "asc" ? "desc" : "asc") : ACTIVITY_REPORT_DEFAULT_DIRECTION;
+    const next = new URLSearchParams(searchParams.toString());
+    if (key === ACTIVITY_REPORT_DEFAULT_SORT) next.delete("sort");
+    else next.set("sort", key);
+    if (nextDirection === ACTIVITY_REPORT_DEFAULT_DIRECTION) next.delete("dir");
+    else next.set("dir", nextDirection);
+    router.replace(queryHref(pathname, next), { scroll: false });
+  };
+
+  // From a tagged-usage chart hover card: open that day's detail chart as a
+  // dialog right here, so closing it leaves you on Activities to check
+  // another day rather than bouncing to the main dashboard.
+  const handleJumpToDay = (activity: ActivityReportRow) => {
+    setDayDetailDate(activity.date);
+  };
+
   return (
-    <div className="flex flex-1 flex-col gap-5 py-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
       <FilterBar
         from={from}
         to={to}
@@ -99,179 +157,61 @@ export function ActivitiesPageClient({ bounds }: { bounds: { from?: string; to?:
       />
 
       <div>
-        <h1 className="text-xl font-semibold text-ink">Activities</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-xl font-semibold text-ink">Activities</h1>
+          <span className="sm:hidden">
+            <InfoTooltip label="About activity tags" text={ACTIVITY_TAGS_DISCLAIMER} />
+          </span>
+        </div>
         <p className="mt-1 text-sm text-muted">Compare household usage during the periods you tagged.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Activities" value={String(summary?.activityCount ?? 0)} detail="Filtered occurrences" />
-        <MetricCard
-          label="Tagged duration"
-          value={formatActivityDuration(summary?.taggedDurationMinutes ?? 0)}
-          detail="Overlaps counted once"
-        />
-        <MetricCard
-          label="Household electricity"
-          value={formatKwh(summary?.electricityKwh ?? 0)}
-          detail="Overlapping intervals counted once"
-        />
-        <MetricCard
-          label="Average per activity"
-          value={formatKwh(summary?.averageElectricityKwhPerActivity ?? 0)}
-          detail="Average household usage per occurrence"
-        />
-      </div>
+      <UnderlineTabs tabs={activityTabs} activeId={activeTab} onChange={setActiveTab} />
 
-      <div className="flex gap-2 rounded-md border border-line bg-paper px-3 py-3 text-sm text-muted">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-        <p>
-          Tags provide context for household usage during a period. NewinMeter cannot identify the exact consumption of
-          an individual appliance without device-level monitoring.
-        </p>
-      </div>
-
-      <ChartShell
-        title="Tagged usage"
-        action={
-          <DropdownSelect
-            ariaLabel="Activity metric"
-            className="w-48"
-            value={metric}
-            options={activityMetricOptions}
-            onChange={(value) => setMetric(value as ActivityMetric)}
-          />
-        }
-      >
-        {isLoading ? (
-          <TaggedUsageChartSkeleton />
-        ) : rows.length ? (
-          <ActivityReportChart rows={rows} metric={metric} />
-        ) : hasNoActivitiesEver ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <div>
-              <p className="text-sm font-medium text-ink">Nothing tagged yet</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
-                Tag a day or time range with what was happening, then compare your household usage during those periods.
-              </p>
-            </div>
-            <button
-              className="inline-flex h-9 items-center rounded-md bg-brandTeal px-3 text-sm font-medium text-white transition hover:brightness-110"
-              onClick={() => setDialogActivity(null)}
-              type="button"
-            >
-              Add your first activity
-            </button>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted">
-            No activities match these filters.
-          </div>
-        )}
-      </ChartShell>
-
-      <Card>
-        <CardHeader
-          title="Activity report"
-          action={
-            <p className="mt-1 text-sm text-muted">
-              {rows.length} {rows.length === 1 ? "activity" : "activities"}
-            </p>
-          }
+      {activeTab === "dashboard" ? (
+        <ActivityDashboardTab
+          summary={summary}
+          rows={rows}
+          isLoading={isLoading}
+          hasNoActivitiesEver={hasNoActivitiesEver}
+          metric={metric}
+          onMetricChange={setMetric}
+          onAddActivity={() => setDialogActivity(null)}
+          onEditActivity={setDialogActivity}
+          onJumpToDay={handleJumpToDay}
         />
-        {error ? <p className="p-4 text-sm text-red-600">{error.message}</p> : null}
-        <div className="relative">
-          <div className="overflow-x-auto" ref={tableScrollRef}>
-            <table className="w-full min-w-[1180px] text-left text-sm">
-              <thead className="bg-accentSoft text-xs uppercase tracking-[0.12em] text-brandTeal dark:text-accent">
-                <tr>
-                  {[
-                    "Date",
-                    "Time",
-                    "Tags",
-                    "Duration",
-                    "Electricity usage",
-                    "Average demand",
-                    "Electricity spend",
-                    "Water usage",
-                    "Water spend",
-                    "Note",
-                    "Actions"
-                  ].map((header) => (
-                    <th className="px-3 py-3 font-medium" key={header}>
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((row) => (
-                  <tr className="align-top hover:bg-canvas/60" key={row.id}>
-                    <td className="whitespace-nowrap px-3 py-3 font-medium text-ink">{chartDate(row.date)}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-muted">{activityTimeLabel(row)}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-start gap-2">
-                        <span
-                          aria-label={`Activity colour ${row.color}`}
-                          className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: row.color }}
-                        />
-                        <div className="flex max-w-52 flex-wrap gap-1">
-                          {row.tags.map((tag) => (
-                            <ActivityTagChip key={tag} tag={tag} />
-                          ))}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-muted">
-                      {formatActivityDuration(row.durationMinutes)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatKwh(row.electricityKwh)}</td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatActivityMetric("averageKw", row.averageKw)}</td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatCurrency(row.electricitySpend)}</td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatKl(row.waterKl)}</td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatCurrency(row.waterSpend)}</td>
-                    <td className="max-w-60 px-3 py-3 text-muted">{row.note ?? "-"}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          className="text-xs text-muted hover:text-ink"
-                          onClick={() => setDialogActivity(row)}
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
-                          disabled={deletion.isPending}
-                          onClick={() => {
-                            if (window.confirm("Delete this activity? This cannot be undone.")) deletion.mutate(row.id);
-                          }}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ScrollHint containerRef={tableScrollRef} />
-        </div>
-        {!rows.length && !isLoading && !hasNoActivitiesEver ? (
-          <p className="p-6 text-center text-sm text-muted">Add an activity or adjust the filters to build a report.</p>
-        ) : null}
-        {deletion.error ? (
-          <p className="border-t border-line p-3 text-sm text-red-600">{deletion.error.message}</p>
-        ) : null}
-      </Card>
+      ) : (
+        <ActivityReportTable
+          rows={sortedRows}
+          error={error}
+          isLoading={isLoading}
+          hasNoActivitiesEver={hasNoActivitiesEver}
+          onEdit={setDialogActivity}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSortChange={onSortChange}
+        />
+      )}
 
       <ActivityDialog
         activity={dialogActivity ?? undefined}
         isOpen={dialogActivity !== undefined}
         onClose={() => setDialogActivity(undefined)}
       />
+
+      {dayDetailDate ? (
+        <DayBreakdownChart
+          activitiesEnabled
+          autoExpand
+          dailyRows={dailyRollups}
+          dateOptions={dayDetailDateOptions}
+          globalDomains={dayDetailGlobalDomains}
+          hideInlineCard
+          onCloseDialog={() => setDayDetailDate(null)}
+          onSelectedDateChange={setDayDetailDate}
+          selectedDate={dayDetailDate}
+        />
+      ) : null}
     </div>
   );
 }

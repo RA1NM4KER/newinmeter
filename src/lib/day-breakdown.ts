@@ -1,4 +1,4 @@
-import type { IntervalRollupRow } from "./types";
+import type { DashboardSummary, IntervalRollupRow } from "./types";
 
 export type IntervalPoint = {
   time: string;
@@ -108,6 +108,22 @@ export function buildGlobalDomains(
     waterSpend: roundedCeiling(maxWaterSpend, 0.1),
     waterKl: roundedCeiling(maxWaterKl, 0.05)
   };
+}
+
+// Shared by every place that renders DayBreakdownChart (the main dashboard,
+// and the on-demand dialog from activities) so their axis scaling can't
+// silently drift apart.
+export function buildGlobalDomainsFromSummary(summary: DashboardSummary): DayBreakdownDomains | undefined {
+  if (summary.maxIntervalSpend === undefined || summary.maxIntervalKwh === undefined) {
+    return undefined;
+  }
+
+  return buildGlobalDomains(
+    summary.maxIntervalSpend,
+    summary.maxIntervalKwh,
+    summary.maxWaterIntervalSpend ?? 0,
+    summary.maxWaterIntervalKl ?? 0
+  );
 }
 
 export function sumRows(rows: IntervalRollupRow[], key: "spend" | "kwh" | "waterSpend" | "waterKl") {

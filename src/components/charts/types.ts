@@ -35,6 +35,13 @@ export type DayBreakdownChartProps = {
   dailyRows: DailyRollupRow[];
   globalDomains?: DayBreakdownDomains;
   activitiesEnabled?: boolean;
+  // Dialog-only mode: skip the permanent inline "Day detail" card and open
+  // straight into the fullscreen chart. Used when this component is mounted
+  // on demand (e.g. activities' "Jump to day detail") rather than living
+  // permanently on the page like the main dashboard's copy does.
+  hideInlineCard?: boolean;
+  autoExpand?: boolean;
+  onCloseDialog?: () => void;
 };
 
 export type ProjectedBarShapeProps = {

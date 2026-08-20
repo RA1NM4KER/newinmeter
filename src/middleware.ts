@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabasePublicConfig } from "@/lib/supabase/public-config";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/sign-out", "/privacy", "/terms", "/install"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/sign-out", "/privacy", "/terms", "/install", "/splash"];
 
 // Session refresh + gate for unauthenticated access. The connection-required
 // redirect (authenticated but not yet connected -> /connect) lives in the
@@ -25,9 +25,15 @@ export async function middleware(request: NextRequest) {
     }
   });
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the JWT signature locally (via a cached JWKS) once
+  // the project is on asymmetric signing keys, instead of getUser()'s
+  // unconditional round trip to the Auth server -- this runs on every
+  // navigation, so that's the difference between one network hop and zero.
+  // On projects still using symmetric (HS256) keys it transparently falls
+  // back to calling getUser() itself, so this is safe before and after that
+  // migration (see supabase.com/docs/guides/auth/signing-keys).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const pathname = request.nextUrl.pathname;
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

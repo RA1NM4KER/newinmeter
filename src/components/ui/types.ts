@@ -21,3 +21,22 @@ export type MetricCardProps = {
     tone: "good" | "watch" | "danger" | "neutral";
   };
 };
+
+export type UnderlineTabsProps = {
+  tabs: Array<{ id: string; label: string }>;
+  activeId: string;
+  onChange: (id: string) => void;
+};
+
+export type SortHeaderButtonProps = {
+  label: string;
+  shortLabel?: string;
+  active: boolean;
+  direction: "asc" | "desc";
+  onClick: () => void;
+};
+
+export type InfoTooltipProps = {
+  text: string;
+  label?: string;
+};

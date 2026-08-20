@@ -15,5 +15,5 @@ export default async function ActivitiesPage() {
   const permissions = await getOrCreateUserPermissions(session.userId);
   if (!permissions.activitiesEnabled) redirect("/");
   const summary = await loadDashboardSummary(session.accessToken);
-  return <ActivitiesPageClient bounds={{ from: summary.dateStart, to: summary.dateEnd }} />;
+  return <ActivitiesPageClient bounds={{ from: summary.dateStart, to: summary.dateEnd }} summary={summary} />;
 }

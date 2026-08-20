@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Bar,
@@ -15,7 +14,7 @@ import {
   YAxis
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ActivityDialog } from "@/components/activities/activity-dialog";
 import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -34,6 +33,8 @@ import { buildDayIntervalsUrl } from "@/lib/endpoints";
 import { formatCurrency, formatCurrencyAxisTick, formatKl, formatKwh } from "@/lib/format";
 import { queryHref } from "@/lib/url-query";
 import type { ActivityReportRow, UsageActivity } from "@/lib/types";
+import { ActivityHoverCard, type ActivityCardAnchor } from "./activity-hover-card";
+import { BarChartSkeleton } from "./bar-chart-skeleton";
 import { ExpandChartButton, ExpandProvider, FullscreenChart } from "./chart-shell";
 import { chartColors, chartMargin } from "./chart-config";
 import { DaySummaryCard } from "./day-summary-card";
@@ -50,11 +51,7 @@ type IntervalApiResponse = {
   }>;
 };
 
-type ActivityCardAnchor = {
-  surface: "inline" | "fullscreen";
-  x: number;
-  top: number;
-};
+type DayDetailCardAnchor = ActivityCardAnchor & { surface: "inline" | "fullscreen" };
 
 const formatUsageAxisTick = (value: number, unit: "kWh" | "kL") => `${value} ${unit}`;
 
@@ -158,105 +155,6 @@ function ActivityTextLabel({
   );
 }
 
-function ActivityHoverCard({
-  activities,
-  anchor,
-  onEdit
-}: {
-  activities: ActivityReportRow[];
-  anchor: ActivityCardAnchor;
-  onEdit: (activity: ActivityReportRow) => void;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ left: number; top: number }>();
-
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    const placeCard = () => {
-      const edgeGap = 8;
-      const { width, height } = card.getBoundingClientRect();
-      const viewport = window.visualViewport;
-      const viewportLeft = viewport?.offsetLeft ?? 0;
-      const viewportTop = viewport?.offsetTop ?? 0;
-      const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
-      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
-      setPosition({
-        left: Math.max(viewportLeft + edgeGap, Math.min(anchor.x - width / 2, viewportRight - width - edgeGap)),
-        top: Math.max(viewportTop + edgeGap, Math.min(anchor.top + edgeGap, viewportBottom - height - edgeGap))
-      });
-    };
-
-    placeCard();
-    window.addEventListener("resize", placeCard);
-    window.visualViewport?.addEventListener("resize", placeCard);
-    window.visualViewport?.addEventListener("scroll", placeCard);
-    return () => {
-      window.removeEventListener("resize", placeCard);
-      window.visualViewport?.removeEventListener("resize", placeCard);
-      window.visualViewport?.removeEventListener("scroll", placeCard);
-    };
-  }, [activities, anchor]);
-
-  return createPortal(
-    <div
-      ref={cardRef}
-      data-activity-card
-      className="fixed z-50 max-h-[calc(100dvh-1rem)] w-max max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto rounded-md border border-line bg-paper/95 p-2 text-[0.7rem] shadow-soft sm:max-w-[min(18rem,calc(100vw-1rem))] sm:p-3 sm:text-xs"
-      style={{
-        left: position?.left ?? anchor.x,
-        top: position?.top ?? anchor.top,
-        visibility: position ? "visible" : "hidden"
-      }}
-    >
-      {activities.map((activity, index) => (
-        <div className={index ? "mt-2 border-t border-line pt-2" : ""} key={activity.id}>
-          <div className="flex items-start justify-between gap-3">
-            <p className="font-medium text-ink">{activityTimeLabel(activity)}</p>
-            <button
-              aria-label={`Edit ${activity.tags.map(displayActivityTag).join(", ")}`}
-              className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-canvas hover:text-ink"
-              onClick={() => onEdit(activity)}
-              type="button"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <p className="mt-0.5 flex items-center gap-1.5 text-muted sm:mt-1">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: activity.color ?? DEFAULT_ACTIVITY_COLOR }}
-            />
-            {activity.tags.map(displayActivityTag).join(", ")}
-          </p>
-          {activity.note ? <p className="mt-0.5 hidden text-muted sm:mt-1 sm:block">{activity.note}</p> : null}
-          <div className="mt-1.5 space-y-0.5 text-muted sm:mt-2 sm:space-y-1">
-            <div className="flex items-baseline justify-between gap-4">
-              <span>Electricity</span>
-              <span className="flex items-baseline gap-1 whitespace-nowrap text-right">
-                <span style={{ color: chartColors.usage }}>{formatKwh(activity.electricityKwh)}</span>
-                <span aria-hidden="true">·</span>
-                <span style={{ color: chartColors.spend }}>{formatCurrency(activity.electricitySpend)}</span>
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between gap-4">
-              <span>Water</span>
-              <span className="flex items-baseline gap-1 whitespace-nowrap text-right">
-                <span style={{ color: chartColors.usage }}>{formatKl(activity.waterKl)}</span>
-                <span aria-hidden="true">·</span>
-                <span style={{ color: chartColors.spend }}>{formatCurrency(activity.waterSpend)}</span>
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>,
-    document.body
-  );
-}
-
 async function fetchIntervals(periodDate: string) {
   const response = await fetch(buildDayIntervalsUrl(periodDate), {
     cache: "no-store"
@@ -276,18 +174,21 @@ export function DayBreakdownChart({
   dateOptions,
   dailyRows,
   globalDomains,
-  activitiesEnabled = false
+  activitiesEnabled = false,
+  hideInlineCard = false,
+  autoExpand = false,
+  onCloseDialog
 }: DayBreakdownChartProps) {
   const [isCompactAxis, setIsCompactAxis] = useState(false);
   const [utility, setUtility] = useState<"electricity" | "water">("electricity");
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
   const [activeActivityIds, setActiveActivityIds] = useState<string[]>([]);
-  const [activityCardAnchor, setActivityCardAnchor] = useState<ActivityCardAnchor>();
+  const [activityCardAnchor, setActivityCardAnchor] = useState<DayDetailCardAnchor>();
   const [focusedTime, setFocusedTime] = useState<string>();
   const searchParams = useSearchParams();
   const activitiesHref = queryHref("/activities", new URLSearchParams(searchParams.toString()));
   const selectableDates = useMemo(() => new Set(dateOptions), [dateOptions]);
-  const { data } = useQuery({
+  const { data, isLoading: isLoadingIntervals } = useQuery({
     queryKey: ["day-intervals", selectedDate],
     queryFn: () => fetchIntervals(selectedDate),
     enabled: Boolean(selectedDate)
@@ -383,7 +284,7 @@ export function DayBreakdownChart({
     );
   };
 
-  const focusActivitiesAtTime = (time: string | number | undefined, anchor: ActivityCardAnchor) => {
+  const focusActivitiesAtTime = (time: string | number | undefined, anchor: DayDetailCardAnchor) => {
     const activities = findActivitiesAtTime(time);
     setActiveActivityIds(activities.map((activity) => activity.id));
     if (activities.length) setActivityCardAnchor(anchor);
@@ -395,7 +296,7 @@ export function DayBreakdownChart({
   const spendAxisWidth = isCompactAxis ? 34 : 48;
   const usageAxisWidth = isCompactAxis ? 38 : 42;
 
-  const renderChart = (axisInterval: number, surface: ActivityCardAnchor["surface"]) => (
+  const renderChart = (axisInterval: number, surface: DayDetailCardAnchor["surface"]) => (
     <div className="relative flex h-full flex-col">
       {isCompactAxis ? (
         <div className="pointer-events-none z-[1] flex h-7 w-full shrink-0 items-center px-3">
@@ -420,195 +321,201 @@ export function DayBreakdownChart({
         </div>
       ) : null}
       <div className="relative min-h-0 w-full flex-1 overflow-hidden">
-        <ResponsiveContainer height="100%" width="100%">
-          <ComposedChart
-            data={intervalData}
-            margin={dayChartMargin}
-            onMouseMove={(state, event) => {
-              if (state.activeLabel !== undefined) setFocusedTime(String(state.activeLabel));
-              const chartX = state.chartX ?? 0;
-              const focusX = state.activeCoordinate?.x ?? chartX;
-              focusActivitiesAtTime(state.activeLabel, {
-                surface,
-                x: event.clientX - chartX + focusX,
-                top: event.clientY - (state.chartY ?? 0)
-              });
-            }}
-            onClick={(state, event) => {
-              const chartX = state.activeCoordinate?.x ?? state.chartX ?? 0;
-              focusActivitiesAtTime(state.activeLabel, {
-                surface,
-                x: event.clientX - (state.chartX ?? 0) + chartX,
-                top: event.clientY - (state.chartY ?? 0)
-              });
-            }}
-            onMouseLeave={(_, event) => {
-              const nextTarget = event.relatedTarget;
-              if (nextTarget instanceof Element && nextTarget.closest("[data-activity-card]")) return;
-              setActiveActivityIds([]);
-              setActivityCardAnchor(undefined);
-            }}
-          >
-            <CartesianGrid stroke={chartColors.line} vertical={false} />
-            <XAxis
-              dataKey="time"
-              interval={axisInterval}
-              minTickGap={16}
-              tick={{ fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              yAxisId="spend"
-              domain={[0, utilityConfig.spendDomain]}
-              tickFormatter={formatCurrencyAxisTick}
-              tickLine={false}
-              axisLine={false}
-              width={spendAxisWidth}
-            />
-            <YAxis
-              yAxisId={utilityConfig.usageAxisId}
-              domain={[0, utilityConfig.usageDomain]}
-              orientation="right"
-              tickFormatter={utilityConfig.usageTickFormatter}
-              tickLine={false}
-              axisLine={false}
-              width={usageAxisWidth}
-            />
-            <Tooltip
-              content={({ active, label, payload }) => {
-                if (!active || !payload?.length) return null;
-                const spendEntry = payload.find((entry) => entry.dataKey === utilityConfig.spendKey);
-                const usageEntry = payload.find((entry) => entry.dataKey === utilityConfig.usageKey);
-                const spendValue =
-                  spendEntry?.value === undefined ? undefined : formatCurrency(Number(spendEntry.value));
-                const usageValue =
-                  usageEntry?.value === undefined ? undefined : utilityConfig.usageFormatter(Number(usageEntry.value));
-
-                return (
-                  <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-[0.7rem] shadow-soft">
-                    <p className="leading-none text-muted">{label}</p>
-                    <div className="mt-1 flex items-center gap-3 whitespace-nowrap font-medium text-ink">
-                      {spendValue !== undefined ? (
-                        <span
-                          aria-label={`${utilityConfig.spendLabel}: ${spendValue}`}
-                          className="flex items-center gap-1"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: chartColors.spend }}
-                          />
-                          {spendValue}
-                        </span>
-                      ) : null}
-                      {usageValue !== undefined ? (
-                        <span
-                          aria-label={`${utilityConfig.usageLabel}: ${usageValue}`}
-                          className="flex items-center gap-1"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: chartColors.usage }}
-                          />
-                          {usageValue}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                );
+        {isLoadingIntervals ? (
+          <BarChartSkeleton label="day detail chart" />
+        ) : (
+          <ResponsiveContainer height="100%" width="100%">
+            <ComposedChart
+              data={intervalData}
+              margin={dayChartMargin}
+              onMouseMove={(state, event) => {
+                if (state.activeLabel !== undefined) setFocusedTime(String(state.activeLabel));
+                const chartX = state.chartX ?? 0;
+                const focusX = state.activeCoordinate?.x ?? chartX;
+                focusActivitiesAtTime(state.activeLabel, {
+                  surface,
+                  x: event.clientX - chartX + focusX,
+                  top: event.clientY - (state.chartY ?? 0)
+                });
               }}
-            />
-            {activityOverlays.map(({ activity, range }) => {
-              const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
-              return (
-                <ReferenceArea
-                  fill={activityColor}
-                  fillOpacity={activity.allDay ? 0.04 : 0.07}
-                  ifOverflow="extendDomain"
-                  key={`${activity.id}-fill`}
-                  stroke="none"
-                  x1={range.startTime}
-                  x2={range.endTime}
-                  yAxisId="spend"
-                />
-              );
-            })}
-            {activityOverlays.map(({ activity, range }, activityIndex) => {
-              const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
-              return (
-                <ReferenceArea
-                  fill="none"
-                  key={`${activity.id}-border`}
-                  stroke={activityColor}
-                  strokeOpacity={1}
-                  strokeWidth={1.5}
-                  shape={(shapeProps) => <StaggeredActivityBorder {...shapeProps} lane={activityIndex} />}
-                  x1={range.startTime}
-                  x2={range.endTime}
-                  // A whole-day range's x2 lands exactly on the chart's final
-                  // category tick. Recharts' ReferenceArea computes that
-                  // point via scale(value) + bandwidth(), which lands a hair
-                  // outside the scaleBand's floating-point range on this axis
-                  // -- its default ifOverflow="discard" then silently drops
-                  // the whole area (0 DOM nodes, no error). extendDomain
-                  // skips that in-range check; every other range here is
-                  // already within bounds, so this only changes behavior for
-                  // the previously-broken whole-day case. Reproduced by
-                  // shrinking x2 by one tick (renders) vs. leaving it exact
-                  // (doesn't) before landing on this fix.
-                  ifOverflow="extendDomain"
-                  yAxisId="spend"
-                />
-              );
-            })}
-            {activityOverlays.map(({ activity, range }, activityIndex) => {
-              const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
-              return (
-                <ReferenceArea
-                  fill="none"
-                  ifOverflow="extendDomain"
-                  key={`${activity.id}-label`}
-                  label={
-                    isCompactAxis
-                      ? { content: <ActivityNumberLabel color={activityColor} index={activityIndex} /> }
-                      : {
-                          content: (
-                            <ActivityTextLabel
-                              color={activityColor}
-                              index={activityIndex}
-                              label={displayActivityTag(activity.tags[0])}
+              onClick={(state, event) => {
+                const chartX = state.activeCoordinate?.x ?? state.chartX ?? 0;
+                focusActivitiesAtTime(state.activeLabel, {
+                  surface,
+                  x: event.clientX - (state.chartX ?? 0) + chartX,
+                  top: event.clientY - (state.chartY ?? 0)
+                });
+              }}
+              onMouseLeave={(_, event) => {
+                const nextTarget = event.relatedTarget;
+                if (nextTarget instanceof Element && nextTarget.closest("[data-activity-card]")) return;
+                setActiveActivityIds([]);
+                setActivityCardAnchor(undefined);
+              }}
+            >
+              <CartesianGrid stroke={chartColors.line} vertical={false} />
+              <XAxis
+                dataKey="time"
+                interval={axisInterval}
+                minTickGap={16}
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                yAxisId="spend"
+                domain={[0, utilityConfig.spendDomain]}
+                tickFormatter={formatCurrencyAxisTick}
+                tickLine={false}
+                axisLine={false}
+                width={spendAxisWidth}
+              />
+              <YAxis
+                yAxisId={utilityConfig.usageAxisId}
+                domain={[0, utilityConfig.usageDomain]}
+                orientation="right"
+                tickFormatter={utilityConfig.usageTickFormatter}
+                tickLine={false}
+                axisLine={false}
+                width={usageAxisWidth}
+              />
+              <Tooltip
+                content={({ active, label, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const spendEntry = payload.find((entry) => entry.dataKey === utilityConfig.spendKey);
+                  const usageEntry = payload.find((entry) => entry.dataKey === utilityConfig.usageKey);
+                  const spendValue =
+                    spendEntry?.value === undefined ? undefined : formatCurrency(Number(spendEntry.value));
+                  const usageValue =
+                    usageEntry?.value === undefined
+                      ? undefined
+                      : utilityConfig.usageFormatter(Number(usageEntry.value));
+
+                  return (
+                    <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-[0.7rem] shadow-soft">
+                      <p className="leading-none text-muted">{label}</p>
+                      <div className="mt-1 flex items-center gap-3 whitespace-nowrap font-medium text-ink">
+                        {spendValue !== undefined ? (
+                          <span
+                            aria-label={`${utilityConfig.spendLabel}: ${spendValue}`}
+                            className="flex items-center gap-1"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: chartColors.spend }}
                             />
-                          )
-                        }
-                  }
-                  stroke="none"
-                  x1={range.startTime}
-                  x2={range.endTime}
-                  yAxisId="spend"
-                />
-              );
-            })}
-            <Bar
-              yAxisId={utilityConfig.usageAxisId}
-              dataKey={utilityConfig.usageKey}
-              fill={chartColors.usage}
-              radius={[4, 4, 0, 0]}
-            />
-            <Line
-              yAxisId="spend"
-              dataKey={utilityConfig.spendKey}
-              type="monotone"
-              stroke={chartColors.spend}
-              strokeWidth={2}
-              dot={false}
-              connectNulls={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+                            {spendValue}
+                          </span>
+                        ) : null}
+                        {usageValue !== undefined ? (
+                          <span
+                            aria-label={`${utilityConfig.usageLabel}: ${usageValue}`}
+                            className="flex items-center gap-1"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: chartColors.usage }}
+                            />
+                            {usageValue}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              {activityOverlays.map(({ activity, range }) => {
+                const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
+                return (
+                  <ReferenceArea
+                    fill={activityColor}
+                    fillOpacity={activity.allDay ? 0.04 : 0.07}
+                    ifOverflow="extendDomain"
+                    key={`${activity.id}-fill`}
+                    stroke="none"
+                    x1={range.startTime}
+                    x2={range.endTime}
+                    yAxisId="spend"
+                  />
+                );
+              })}
+              {activityOverlays.map(({ activity, range }, activityIndex) => {
+                const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
+                return (
+                  <ReferenceArea
+                    fill="none"
+                    key={`${activity.id}-border`}
+                    stroke={activityColor}
+                    strokeOpacity={1}
+                    strokeWidth={1.5}
+                    shape={(shapeProps) => <StaggeredActivityBorder {...shapeProps} lane={activityIndex} />}
+                    x1={range.startTime}
+                    x2={range.endTime}
+                    // A whole-day range's x2 lands exactly on the chart's final
+                    // category tick. Recharts' ReferenceArea computes that
+                    // point via scale(value) + bandwidth(), which lands a hair
+                    // outside the scaleBand's floating-point range on this axis
+                    // -- its default ifOverflow="discard" then silently drops
+                    // the whole area (0 DOM nodes, no error). extendDomain
+                    // skips that in-range check; every other range here is
+                    // already within bounds, so this only changes behavior for
+                    // the previously-broken whole-day case. Reproduced by
+                    // shrinking x2 by one tick (renders) vs. leaving it exact
+                    // (doesn't) before landing on this fix.
+                    ifOverflow="extendDomain"
+                    yAxisId="spend"
+                  />
+                );
+              })}
+              {activityOverlays.map(({ activity, range }, activityIndex) => {
+                const activityColor = activity.color ?? DEFAULT_ACTIVITY_COLOR;
+                return (
+                  <ReferenceArea
+                    fill="none"
+                    ifOverflow="extendDomain"
+                    key={`${activity.id}-label`}
+                    label={
+                      isCompactAxis
+                        ? { content: <ActivityNumberLabel color={activityColor} index={activityIndex} /> }
+                        : {
+                            content: (
+                              <ActivityTextLabel
+                                color={activityColor}
+                                index={activityIndex}
+                                label={displayActivityTag(activity.tags[0])}
+                              />
+                            )
+                          }
+                    }
+                    stroke="none"
+                    x1={range.startTime}
+                    x2={range.endTime}
+                    yAxisId="spend"
+                  />
+                );
+              })}
+              <Bar
+                yAxisId={utilityConfig.usageAxisId}
+                dataKey={utilityConfig.usageKey}
+                fill={chartColors.usage}
+                radius={[4, 4, 0, 0]}
+              />
+              <Line
+                yAxisId="spend"
+                dataKey={utilityConfig.spendKey}
+                type="monotone"
+                stroke={chartColors.spend}
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
       </div>
-      {activeActivities.length && activityCardAnchor?.surface === surface ? (
+      {!isLoadingIntervals && activeActivities.length && activityCardAnchor?.surface === surface ? (
         <ActivityHoverCard activities={activeActivities} anchor={activityCardAnchor} onEdit={setDialogActivity} />
       ) : null}
     </div>
@@ -654,41 +561,43 @@ export function DayBreakdownChart({
   );
 
   return (
-    <ExpandProvider>
-      <Card>
-        <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-5">
-          <h2 className="mr-auto text-base font-semibold text-ink">Day detail</h2>
-          {/* On mobile the date/add controls drop to a full-width row of their
-              own (order-last) so the expand button stays on the title line; on
-              sm+ everything sits inline on one row. */}
-          <div className="order-last flex w-full flex-wrap items-center justify-end gap-2 sm:order-none sm:w-auto">
-            {dateControl}
-            {activitiesEnabled ? addButton : null}
-          </div>
-          <ExpandChartButton />
-        </div>
-        <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_22rem]">
-          <div className="h-72 sm:h-80">{renderChart(isCompactAxis ? 7 : 3, "inline")}</div>
-          <aside className="space-y-4">
-            <div className="grid content-start grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-2">
-              <DaySummaryCard label="Energy spend" value={formatCurrency(energySpend)} />
-              <DaySummaryCard label="Energy usage" value={formatKwh(usage)} />
-              <DaySummaryCard label="Water spend" value={formatCurrency(waterSpend)} />
-              <DaySummaryCard label="Water usage" value={formatKl(waterUsage)} />
-              <DaySummaryCard label="Fixed charges" value={formatCurrency(fixedSpend)} />
-              {activitiesEnabled ? (
-                <DaySummaryCard
-                  detail={dayActivities.length ? "See what was happening" : "Add context for this day"}
-                  href={dayActivities.length ? activitiesHref : undefined}
-                  label="Activities"
-                  onClick={dayActivities.length ? undefined : () => setDialogActivity(null)}
-                  value={String(dayActivities.length)}
-                />
-              ) : null}
+    <ExpandProvider autoExpand={autoExpand} onCollapse={onCloseDialog}>
+      {!hideInlineCard ? (
+        <Card>
+          <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+            <h2 className="mr-auto text-base font-semibold text-ink">Day detail</h2>
+            {/* On mobile the date/add controls drop to a full-width row of their
+                own (order-last) so the expand button stays on the title line; on
+                sm+ everything sits inline on one row. */}
+            <div className="order-last flex w-full flex-wrap items-center justify-end gap-2 sm:order-none sm:w-auto">
+              {dateControl}
+              {activitiesEnabled ? addButton : null}
             </div>
-          </aside>
-        </div>
-      </Card>
+            <ExpandChartButton />
+          </div>
+          <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[1fr_22rem]">
+            <div className="h-72 sm:h-80">{renderChart(isCompactAxis ? 7 : 3, "inline")}</div>
+            <aside className="space-y-4">
+              <div className="grid content-start grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-2">
+                <DaySummaryCard label="Energy spend" value={formatCurrency(energySpend)} />
+                <DaySummaryCard label="Energy usage" value={formatKwh(usage)} />
+                <DaySummaryCard label="Water spend" value={formatCurrency(waterSpend)} />
+                <DaySummaryCard label="Water usage" value={formatKl(waterUsage)} />
+                <DaySummaryCard label="Fixed charges" value={formatCurrency(fixedSpend)} />
+                {activitiesEnabled ? (
+                  <DaySummaryCard
+                    detail={dayActivities.length ? "See what was happening" : "Add context for this day"}
+                    href={dayActivities.length ? activitiesHref : undefined}
+                    label="Activities"
+                    onClick={dayActivities.length ? undefined : () => setDialogActivity(null)}
+                    value={String(dayActivities.length)}
+                  />
+                ) : null}
+              </div>
+            </aside>
+          </div>
+        </Card>
+      ) : null}
       <FullscreenChart
         title="Day detail"
         action={

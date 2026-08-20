@@ -1,17 +1,9 @@
-import { DocumentShell } from "@/components/layout/document-shell";
+import { DocumentShell, Section } from "@/components/layout/document-shell";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/site-config";
 
 export const metadata = {
   title: "Terms of Service - NewinMeter"
 };
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
-      <div className="flex flex-col gap-3 text-ink/80">{children}</div>
-    </section>
-  );
-}
 
 export default function TermsOfServicePage() {
   return (
@@ -92,8 +84,8 @@ export default function TermsOfServicePage() {
       <Section title="Contact">
         <p>
           Questions about these terms? Email{" "}
-          <a className="text-accent hover:underline" href="mailto:kefasa112@gmail.com">
-            kefasa112@gmail.com
+          <a className="text-accent hover:underline" href={SUPPORT_MAILTO}>
+            {SUPPORT_EMAIL}
           </a>
           .
         </p>

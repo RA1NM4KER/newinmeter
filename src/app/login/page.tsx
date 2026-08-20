@@ -8,12 +8,6 @@ type LoginPageProps = {
   searchParams?: { demo?: string };
 };
 
-// The `demo` query param is validated server-side, here, before anything is
-// rendered -- an invalid or missing token produces byte-identical output to
-// a plain /login visit (no button, no hint a demo account exists). Only a
-// server-confirmed-valid token is ever handed to the client component, and
-// only so it can be replayed once to /api/demo-login, which re-validates it
-// independently rather than trusting this render decision.
 export default function LoginPage({ searchParams }: LoginPageProps) {
   const suppliedToken = searchParams?.demo;
   const demoToken = isValidDemoAccessToken(suppliedToken) ? suppliedToken : undefined;

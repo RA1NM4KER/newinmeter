@@ -41,15 +41,33 @@ function useExpand() {
   return ctx;
 }
 
-export function ExpandProvider({ children }: { children: ReactNode }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function ExpandProvider({
+  children,
+  autoExpand = false,
+  onCollapse
+}: {
+  children: ReactNode;
+  autoExpand?: boolean;
+  // Fires whenever this collapses, from any trigger (close button, escape,
+  // backdrop click). Lets a caller that mounts this on demand (e.g. a
+  // dialog-only chart) know to unmount/clear its own state, rather than
+  // leaving something invisibly mounted that a repeat click can't reopen.
+  onCollapse?: () => void;
+}) {
+  // autoExpand only matters at mount -- useState's initializer runs once,
+  // so later prop changes don't fight a user who's since collapsed it
+  // themselves.
+  const [isExpanded, setIsExpanded] = useState(autoExpand);
   const value = useMemo(
     () => ({
       isExpanded,
       expand: () => setIsExpanded(true),
-      collapse: () => setIsExpanded(false)
+      collapse: () => {
+        setIsExpanded(false);
+        onCollapse?.();
+      }
     }),
-    [isExpanded]
+    [isExpanded, onCollapse]
   );
   return <ExpandContext.Provider value={value}>{children}</ExpandContext.Provider>;
 }

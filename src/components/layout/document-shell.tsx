@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { Wordmark } from "./wordmark";
 
 type DocumentShellProps = {
@@ -28,11 +29,20 @@ export function DocumentShell({ title, updated, children }: DocumentShellProps) 
             Back to NewinMeter
           </Link>
           <span className="text-line">·</span>
-          <a className="text-accent hover:underline" href="mailto:kefasa112@gmail.com">
+          <a className="text-accent hover:underline" href={SUPPORT_MAILTO}>
             Feedback
           </a>
         </div>
       </main>
     </div>
+  );
+}
+
+export function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <div className="flex flex-col gap-3 text-ink/80">{children}</div>
+    </section>
   );
 }

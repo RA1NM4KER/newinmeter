@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { getConnectionForUser, type LivemopayConnection } from "@/lib/newinmeter-connection";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import { getOrCreateUserPermissions, type UserPermissions } from "@/lib/user-roles";
@@ -12,18 +13,11 @@ export type AuthenticatedSession = {
 
 // The one place "who is making this request" gets resolved. Every route
 // handler and server component that needs the caller's identity calls this
-// instead of touching the Supabase client directly.
-export async function getAuthenticatedSession(): Promise<AuthenticatedSession | null> {
+// instead of touching the Supabase client directly. cache()'d because the
+// layout and every page under it each call this independently -- without
+// it, one navigation means the same auth check hits Supabase 2-3 times.
+export const getAuthenticatedSession = cache(async (): Promise<AuthenticatedSession | null> => {
   const supabase = createServerSupabaseClient();
-
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return null;
-  }
 
   const {
     data: { session }
@@ -33,8 +27,19 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
     return null;
   }
 
-  return { userId: user.id, email: user.email ?? null, accessToken: session.access_token };
-}
+  // getClaims() verifies the JWT signature locally (via a cached JWKS) once
+  // the project is on asymmetric signing keys, instead of getUser()'s
+  // unconditional round trip to the Auth server. Falls back to getUser()
+  // itself on projects still using symmetric (HS256) keys, so this is safe
+  // before and after that migration (see supabase.com/docs/guides/auth/signing-keys).
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(session.access_token);
+
+  if (claimsError || !claimsData) {
+    return null;
+  }
+
+  return { userId: claimsData.claims.sub, email: claimsData.claims.email ?? null, accessToken: session.access_token };
+});
 
 export type AuthenticatedConnectionSession = AuthenticatedSession & { connection: LivemopayConnection };
 

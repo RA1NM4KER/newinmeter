@@ -1,19 +1,27 @@
 "use client";
 
 import { ChevronDown, FileDown, Info, Maximize2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { activityMetricOptions } from "@/components/activities/activity-report-chart";
-import { TaggedUsageChartSkeleton } from "@/components/activities/tagged-usage-chart-skeleton";
+import { activityReportColumns } from "@/components/activities/activity-report-columns";
+import { ActivityReportSkeletonRows } from "@/components/activities/activity-report-skeleton-rows";
+import { ACTIVITY_TAGS_DISCLAIMER, activityTabs } from "@/components/activities/activity-tabs";
+import { BarChartSkeleton } from "@/components/charts/bar-chart-skeleton";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { Card } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { MetricCardSkeleton } from "@/components/ui/metric-card";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { useFilterUrlState } from "@/lib/use-filter-url-state";
 
 export default function ActivitiesLoading() {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({});
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") === "table" ? "table" : "dashboard";
 
   return (
-    <div className="flex flex-1 flex-col gap-5 py-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
       <FilterBar
         from={from}
         to={to}
@@ -59,54 +67,81 @@ export default function ActivitiesLoading() {
       />
 
       <div>
-        <h1 className="text-xl font-semibold text-ink">Activities</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-xl font-semibold text-ink">Activities</h1>
+          <span className="sm:hidden">
+            <InfoTooltip label="About activity tags" text={ACTIVITY_TAGS_DISCLAIMER} />
+          </span>
+        </div>
         <p className="mt-1 text-sm text-muted">Compare household usage during the periods you tagged.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div className="rounded-lg border border-line bg-paper p-4" key={index}>
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="mt-3 h-7 w-16" />
-            <Skeleton className="mt-2 h-3 w-32 max-w-full" />
-          </div>
-        ))}
-      </div>
+      <UnderlineTabs tabs={activityTabs} activeId={activeTab} onChange={() => undefined} />
 
-      <div className="flex gap-2 rounded-md border border-line bg-paper px-3 py-3 text-sm text-muted">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-        <p>
-          Tags provide context for household usage during a period. NewinMeter cannot identify the exact consumption of
-          an individual appliance without device-level monitoring.
-        </p>
-      </div>
-
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
-          <h2 className="text-base font-semibold text-ink">Tagged usage</h2>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <DropdownSelect
-              ariaLabel="Activity metric"
-              className="w-48"
-              loading
-              onChange={() => undefined}
-              options={activityMetricOptions}
-              value="electricityKwh"
-            />
-            <button
-              aria-label="Maximize chart"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-ink opacity-70"
-              disabled
-              type="button"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
+      {activeTab === "dashboard" ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <MetricCardSkeleton key={index} />
+            ))}
           </div>
-        </div>
-        <div className="h-64 px-1 py-4 sm:h-72 sm:px-4">
-          <TaggedUsageChartSkeleton />
-        </div>
-      </Card>
+
+          <div className="hidden gap-2 rounded-md border border-line bg-paper px-3 py-3 text-sm text-muted sm:flex">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <p>{ACTIVITY_TAGS_DISCLAIMER}</p>
+          </div>
+
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
+              <h2 className="text-base font-semibold text-ink">Tagged usage</h2>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <DropdownSelect
+                  ariaLabel="Activity metric"
+                  className="w-48"
+                  loading
+                  onChange={() => undefined}
+                  options={activityMetricOptions}
+                  value="electricityKwh"
+                />
+                <button
+                  aria-label="Maximize chart"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-ink opacity-70"
+                  disabled
+                  type="button"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="h-64 px-1 py-4 sm:h-72 sm:px-4">
+              <BarChartSkeleton label="tagged usage chart" />
+            </div>
+          </Card>
+        </>
+      ) : (
+        <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
+              <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.12em] text-brandTeal dark:text-accent">
+                <tr>
+                  {activityReportColumns.map((column) => (
+                    <th className="px-3 py-3 font-medium" key={column.id}>
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                <ActivityReportSkeletonRows rowCount={8} />
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex h-11 shrink-0 items-center gap-3 border-t border-line px-3">
+            <p className="text-sm text-muted">Loading activities...</p>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

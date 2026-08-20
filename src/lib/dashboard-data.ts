@@ -64,7 +64,17 @@ export async function loadDashboardSummary(accessToken: string): Promise<Dashboa
   };
 }
 
-export async function loadDashboardDailyRollups(accessToken: string): Promise<DailyRollupRow[]> {
+export async function loadDashboardDailyRollups(
+  accessToken: string,
+  range?: { from?: string; to?: string }
+): Promise<DailyRollupRow[]> {
+  const filters = [
+    range?.from ? `period_date=gte.${encodeURIComponent(range.from)}` : undefined,
+    range?.to ? `period_date=lte.${encodeURIComponent(range.to)}` : undefined
+  ]
+    .filter(Boolean)
+    .join("&");
+
   const rows = await authenticatedSupabaseFetchAllPages<{
     period_date: string;
     energy_spend: number | string;
@@ -83,7 +93,7 @@ export async function loadDashboardDailyRollups(accessToken: string): Promise<Da
     water_intervals: number | string;
     is_complete: boolean;
   }>(
-    "/energy_day_rollups?select=period_date,energy_spend,water_spend,fixed_spend,topup_amount,total_spend,energy_kwh,water_kl,weighted_tariff,peak_tariff,all_in_rate,balance_end,latest_period,energy_intervals,water_intervals,is_complete&order=period_date.asc",
+    `/energy_day_rollups?select=period_date,energy_spend,water_spend,fixed_spend,topup_amount,total_spend,energy_kwh,water_kl,weighted_tariff,peak_tariff,all_in_rate,balance_end,latest_period,energy_intervals,water_intervals,is_complete${filters ? `&${filters}` : ""}&order=period_date.asc`,
     accessToken
   );
 

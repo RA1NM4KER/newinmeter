@@ -3,7 +3,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { Skeleton } from "./skeleton";
 import type { MetricCardProps } from "./types";
+
+export function MetricCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-line bg-paper p-4">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-3 h-7 w-16" />
+      <Skeleton className="mt-2 h-3 w-32 max-w-full" />
+    </div>
+  );
+}
 
 type PopoverRect = { top: number; left: number; width: number };
 

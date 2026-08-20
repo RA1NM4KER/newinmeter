@@ -1,0 +1,35 @@
+# KiCad generated / backup artifacts — keep source (.kicad_pro/.kicad_sch/.kicad_pcb) only
+
+# Auto-backups
+*-backups/
+*.kicad_pro.lck
+*.kicad_sch.lck
+*.kicad_pcb.lck
+_autosave-*
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.bak
+
+# Netlist / cache
+*.net
+fp-info-cache
+*.kicad_prl
+
+# ERC/DRC reports (regenerate with kicad-cli)
+*-erc.rpt
+*-drc.rpt
+
+# Fabrication outputs — regenerate; not source of truth
+/fab/
+*.zip
+
+# Schematic exports — regenerate with kicad-cli (sch export pdf/svg/bom)
+*.pdf
+*-bom.csv
+
+# OS junk
+.DS_Store
+
+# Board renders/2D exports — regenerate with kicad-cli (pcb render / pcb export svg)
+*.png
+*-top.svg

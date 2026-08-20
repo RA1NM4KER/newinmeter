@@ -1,0 +1,10 @@
+(fp_lib_table
+  (lib (name "NewinMeter")(type "KiCad")(uri "${KIPRJMOD}/libs/footprints/NewinMeter.pretty")(options "")(descr "Project-local footprints: ESP32-C3-MINI-1 (official Espressif), LDR, TEPT4400 (hand-built from datasheets)"))
+  (lib (name "Resistor_SMD")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Resistor_SMD.pretty")(options "")(descr ""))
+  (lib (name "Capacitor_SMD")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Capacitor_SMD.pretty")(options "")(descr ""))
+  (lib (name "LED_SMD")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/LED_SMD.pretty")(options "")(descr ""))
+  (lib (name "Button_Switch_SMD")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Button_Switch_SMD.pretty")(options "")(descr ""))
+  (lib (name "Package_TO_SOT_SMD")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Package_TO_SOT_SMD.pretty")(options "")(descr ""))
+  (lib (name "Connector_USB")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Connector_USB.pretty")(options "")(descr ""))
+  (lib (name "TestPoint")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/TestPoint.pretty")(options "")(descr ""))
+)

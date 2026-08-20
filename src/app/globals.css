@@ -20,10 +20,6 @@
   --color-spend: 1 99 113;
   --color-usage: 76 201 142;
   --color-brand-teal: 1 99 113;
-  /* Fixed (theme-independent) brand green for the signed-out auth pages,
-     whose background is permanently dark regardless of the app's own
-     light/dark toggle. --color-accent above flips with the toggle instead,
-     tuned separately for contrast in each mode. */
   --color-brand-green: 0 255 155;
   --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.08);
   background: rgb(var(--color-canvas));
@@ -65,9 +61,6 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Safari before 18 only supports the prefixed backdrop-filter property.
-   Keep the legacy rgba() color first as a usable fallback for old iOS PWAs;
-   newer browsers override it with the theme-aware color below. */
 .fullscreen-glass {
   /* autoprefixer: off */
   top: 0;

@@ -14,7 +14,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { createAnalytics } from "@/lib/analytics";
 import { fetchActivities } from "@/lib/activity-client";
-import { buildGlobalDomains } from "@/lib/day-breakdown";
+import { buildGlobalDomainsFromSummary } from "@/lib/day-breakdown";
 import { previousComparableScope } from "@/lib/period-comparison";
 import { useFilterUrlState } from "@/lib/use-filter-url-state";
 import { FilterBar } from "./filter-bar";
@@ -59,15 +59,7 @@ export function DashboardShell({
     () => Array.from(new Set(dailyRows.map((row) => row.periodDate))).sort((left, right) => left.localeCompare(right)),
     [dailyRows]
   );
-  const globalDomains =
-    summary.maxIntervalSpend !== undefined && summary.maxIntervalKwh !== undefined
-      ? buildGlobalDomains(
-          summary.maxIntervalSpend,
-          summary.maxIntervalKwh,
-          summary.maxWaterIntervalSpend ?? 0,
-          summary.maxWaterIntervalKl ?? 0
-        )
-      : undefined;
+  const globalDomains = buildGlobalDomainsFromSummary(summary);
   const initialDay = summary.dateEnd ?? dateOptions[dateOptions.length - 1] ?? "";
   const [selectedDate, setSelectedDate] = useState(initialDay);
   const dayDetailRef = useRef<HTMLDivElement>(null);

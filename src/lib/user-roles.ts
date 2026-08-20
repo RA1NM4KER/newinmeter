@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
 import { createSupabaseAdminClient } from "./supabase/admin-client";
 
@@ -36,7 +37,10 @@ function toPermissions(row: UserRoleRow): UserPermissions {
 // Lazily provisions a role row on first authenticated access, so every
 // signed-in user has one without needing a signup-time hook. Defaults to
 // 'user' -- the one seed admin is created by migration instead.
-export async function getOrCreateUserPermissions(userId: string): Promise<UserPermissions> {
+// cache()'d because the layout and every page under it each call this
+// independently -- without it, one navigation reads (or worse, tries to
+// provision) the same user's role row 2+ times.
+export const getOrCreateUserPermissions = cache(async (userId: string): Promise<UserPermissions> => {
   const rows = await adminSupabaseFetch<UserRoleRow[]>(
     `/user_roles?select=${SELECT}&user_id=eq.${encodeURIComponent(userId)}&limit=1`
   );
@@ -53,7 +57,7 @@ export async function getOrCreateUserPermissions(userId: string): Promise<UserPe
   );
 
   return toPermissions(created[0]);
-}
+});
 
 export type LivemopayConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
 

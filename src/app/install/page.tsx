@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Download, MonitorDown, Share, SquarePlus } from "lucide-react";
 import { Wordmark } from "@/components/layout/wordmark";
+import { SUPPORT_MAILTO } from "@/lib/site-config";
 
 export const metadata = {
   title: "Install NewinMeter"
@@ -83,7 +84,7 @@ export default function InstallPage() {
             Back to NewinMeter
           </Link>
           <span className="text-line">·</span>
-          <a className="text-accent hover:underline" href="mailto:kefasa112@gmail.com">
+          <a className="text-accent hover:underline" href={SUPPORT_MAILTO}>
             Feedback
           </a>
         </div>

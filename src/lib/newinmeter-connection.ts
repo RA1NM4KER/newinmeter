@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
 import { createSupabaseAdminClient } from "./supabase/admin-client";
 import { decryptRefreshToken, encryptRefreshToken } from "./token-encryption";
@@ -94,10 +95,14 @@ export async function getConnectionRowForUser(userId: string): Promise<Connectio
   return rows[0] ?? null;
 }
 
-export async function getConnectionForUser(userId: string): Promise<LivemopayConnection | null> {
+// cache()'d because the layout and every page under it each call this
+// independently -- without it, one navigation hits Supabase for the same
+// user's connection 2+ times. Every caller reads this once, before any
+// write, within a given request, so there's no stale-after-write risk.
+export const getConnectionForUser = cache(async (userId: string): Promise<LivemopayConnection | null> => {
   const row = await getConnectionRowForUser(userId);
   return row ? toConnection(row) : null;
-}
+});
 
 export function getDecryptedRefreshToken(
   row: Pick<ConnectionRow, "refresh_token_ciphertext" | "refresh_token_iv" | "refresh_token_auth_tag">

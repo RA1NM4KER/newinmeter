@@ -76,8 +76,12 @@ export function FullscreenDialog({
   return (
     <div aria-modal="true" className="fullscreen-glass fixed z-50 flex flex-col" role="dialog">
       <div className="border-b border-line bg-paper/95 px-4 py-2.5 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
+        {/* On sm+, everything shares one row (title pushed left via mr-auto,
+            headerAction/titleControls/close bunched right) -- same trick the
+            inline chart card headers use. Below sm, headerAction drops to its
+            own full-width row so it can't push the close button off-screen. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="mr-auto min-w-0">
             {eyebrow ? <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted">{eyebrow}</p> : null}
             <div className={`${eyebrow ? "mt-0.5" : ""} flex min-w-0 items-baseline gap-2`}>
               <h2 className="truncate text-base font-semibold text-ink sm:text-lg">{title}</h2>
@@ -86,10 +90,11 @@ export function FullscreenDialog({
               ) : null}
             </div>
           </div>
-          {/* titleControls (zoom) share the title row so a chart with no other
-              controls stays one line. Heavier chart controls go to headerAction
-              below, keeping the close button from being pushed off narrow
-              viewports. */}
+          {headerAction ? (
+            <div className="order-last flex w-full flex-wrap items-center gap-1.5 sm:order-none sm:w-auto">
+              {headerAction}
+            </div>
+          ) : null}
           <div className="flex shrink-0 items-center gap-1.5">
             {titleControls}
             <button
@@ -102,7 +107,6 @@ export function FullscreenDialog({
             </button>
           </div>
         </div>
-        {headerAction ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{headerAction}</div> : null}
       </div>
       <div className={bodyClassName}>
         <div className={`mx-auto flex h-full flex-col ${panelClassName}`.trim()}>

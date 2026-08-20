@@ -2,16 +2,10 @@ import type { Metadata } from "next";
 import type { Viewport } from "next";
 import Script from "next/script";
 import { PwaRegistrar } from "@/components/pwa/pwa-registrar";
+import { BRAND_CANVAS } from "@/lib/site-config";
 import type { RootLayoutProps } from "./types";
 import "./globals.css";
 
-// iOS only reads the web manifest icon for the home-screen icon, not the
-// launch splash screen -- it needs an exact-pixel PNG per device matched by
-// a `(device-width)/(device-height)/(-webkit-device-pixel-ratio)` media
-// query, or it just shows a blank white screen. `/splash` renders the same
-// mark as app-icon.tsx at whatever size is requested. Portrait sizes only,
-// since the manifest locks orientation to portrait. List covers the last
-// several years of iPhone/iPad models -- not exhaustive, but close.
 const appleSplashSizes: Array<{ width: number; height: number; dpr: number }> = [
   { width: 375, height: 667, dpr: 2 },
   { width: 414, height: 736, dpr: 3 },
@@ -58,7 +52,7 @@ export const viewport: Viewport = {
   userScalable: false,
   colorScheme: "light dark",
   themeColor: [
-    { color: "#f6f6f6", media: "(prefers-color-scheme: light)" },
+    { color: BRAND_CANVAS, media: "(prefers-color-scheme: light)" },
     { color: "#121212", media: "(prefers-color-scheme: dark)" }
   ]
 };

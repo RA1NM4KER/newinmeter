@@ -2,10 +2,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const barHeights = [34, 58, 45, 76, 52, 68, 39, 82, 61, 47, 72, 55];
 
-export function TaggedUsageChartSkeleton() {
+export function BarChartSkeleton({ label }: { label: string }) {
   return (
-    <div aria-label="Loading tagged usage chart" className="h-full px-2 pb-1 pt-2" role="status">
-      <span className="sr-only">Loading tagged usage chart...</span>
+    <div aria-label={`Loading ${label}`} className="h-full px-2 pb-1 pt-2" role="status">
+      <span className="sr-only">Loading {label}...</span>
       <div className="flex h-[calc(100%-1.25rem)] gap-2">
         <div aria-hidden="true" className="flex w-7 shrink-0 flex-col justify-between py-1">
           {["w-5", "w-4", "w-5", "w-3", "w-4"].map((width, index) => (

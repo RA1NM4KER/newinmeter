@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BRAND_ACCENT, BRAND_CANVAS } from "@/lib/site-config";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -9,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f6f6f6",
-    theme_color: "#00ff9b",
+    background_color: BRAND_CANVAS,
+    theme_color: BRAND_ACCENT,
     icons: [
       {
         src: "/icon",
