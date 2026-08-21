@@ -99,7 +99,15 @@ export function FullscreenDialog({
             </div>
           </div>
           {headerAction ? (
-            <div className="order-last flex w-full flex-wrap items-center gap-1.5 sm:order-none sm:w-auto">
+            // w-full resolves against the pr-14-padded container, so a plain
+            // w-full row sits 56px off the right edge but only 16px off the
+            // left (pl-4) -- lopsided, even though this row (wrapped below
+            // the title via order-last) never shares a line with the close
+            // button so doesn't need that reserved space. Widening by
+            // exactly pr-14 minus pl-4 (2.5rem) and pulling back the same
+            // amount matches the right gap to the left one instead of
+            // running the row flush to the edge.
+            <div className="order-last -mr-10 flex w-[calc(100%+2.5rem)] flex-wrap items-center gap-1.5 sm:order-none sm:mr-0 sm:w-auto">
               {headerAction}
             </div>
           ) : null}

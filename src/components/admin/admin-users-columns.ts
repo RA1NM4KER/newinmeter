@@ -15,9 +15,9 @@ export type AdminUsersColumn = {
 
 export const adminUsersColumns: AdminUsersColumn[] = [
   { id: "user", label: "User", sortable: false, skeletonClassName: "h-4 w-40" },
-  { id: "joined", label: "Joined", sortable: true, skeletonClassName: "h-4 w-20" },
-  { id: "role", label: "Role", sortable: false, skeletonClassName: "h-8 w-28" },
+  { id: "lastSync", label: "Last sync", shortLabel: "Sync", sortable: true, skeletonClassName: "h-4 w-24" },
   { id: "features", label: "Features", sortable: false, skeletonClassName: "h-6 w-32" },
+  { id: "role", label: "Role", sortable: false, skeletonClassName: "h-8 w-28" },
   { id: "livemopay", label: "LiveMopay", sortable: false, skeletonClassName: "h-4 w-24" },
-  { id: "lastSync", label: "Last sync", shortLabel: "Sync", sortable: true, skeletonClassName: "h-4 w-24" }
+  { id: "joined", label: "Joined", sortable: true, skeletonClassName: "h-4 w-20" }
 ];
