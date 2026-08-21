@@ -228,7 +228,7 @@ export function LivePageClient({ userId }: LivePageClientProps = {}) {
       </Card>
 
       {/* ONE supporting strip -- three columns on desktop, stacked on mobile. */}
-      <div className="mt-4 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-paper/88">
+      <div className="mt-4 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-paper">
         <RecentCell label="Last 5 minutes" value={formatLiveKwh(energy.last5MinutesKwh)} detail="Optical pulse total" />
         <RecentCell label="Last hour" value={formatLiveKwh(energy.lastHourKwh)} detail="Optical pulse total" />
         <RecentCell label="Last pulse" value={agoText ?? "-"} detail="Not a device-online indicator" />

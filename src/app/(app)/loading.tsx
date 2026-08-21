@@ -34,7 +34,7 @@ export default function DashboardLoading() {
           className="snap-rail touch-pan-x touch-pan-y flex snap-x gap-4 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4 xl:grid-cols-5 [&>section]:min-w-max [&>section]:snap-start sm:[&>section]:min-w-0"
         >
           {Array.from({ length: 10 }, (_, index) => (
-            <section key={index} className="rounded-lg border border-line bg-paper/88 p-4">
+            <section key={index} className="rounded-lg border border-line bg-paper p-4">
               <Skeleton className="h-3 w-16" />
               <Skeleton className="mt-3 h-6 w-20" />
             </section>
@@ -44,17 +44,17 @@ export default function DashboardLoading() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <div className="h-64 rounded-lg border border-line bg-paper/88 p-4">
+        <div className="h-64 rounded-lg border border-line bg-paper p-4">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="mt-5 h-40 w-full" />
         </div>
-        <div className="h-64 rounded-lg border border-line bg-paper/88 p-4">
+        <div className="h-64 rounded-lg border border-line bg-paper p-4">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="mt-5 h-40 w-full" />
         </div>
       </div>
 
-      <div className="h-80 rounded-lg border border-line bg-paper/88 p-4">
+      <div className="h-80 rounded-lg border border-line bg-paper p-4">
         <Skeleton className="h-3 w-28" />
         <Skeleton className="mt-5 h-56 w-full" />
       </div>

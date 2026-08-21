@@ -391,7 +391,7 @@ export function DataTable() {
           width (matching FilterBar's own fullBleed breakout) and drops its
           border/radius so it reads as one continuous surface directly under
           the filter bar, restored back to a normal bordered card at lg+. */}
-      <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper/88 sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
+      <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="relative min-h-0 flex-1">
           <div className="h-full overflow-auto" ref={tableScrollRef}>
             <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
@@ -443,29 +443,26 @@ export function DataTable() {
           <ScrollHint containerRef={tableScrollRef} />
         </div>
 
-        {/* Mobile is two explicit rows (page count + refresh / page-size +
-            arrows). The row-1 wrapper uses `sm:contents` to drop out of the
-            box model at sm+ so the page-count text rejoins this element's
-            own sm:flex-row layout directly as a lone item (the mobile-only
-            refresh next to it is invisible there via its own sm:hidden).
-            Row 2 stays a real flex item at desktop -- just switching its
-            *internal* justify-between (spreads page-size left / arrows
-            right on mobile) to justify-start (packed together, the
-            original desktop look). `sm:contents` on row 2 as well would
-            dissolve it into the outer row's justify-between too, which
-            needs exactly two children to split cleanly apart, and would
-            instead spread refresh/page-size/arrows out individually
-            across the whole row. */}
-        <div className="shrink-0 flex flex-col gap-1.5 border-t border-line px-3 pb-3 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-3">
-          <div className="flex items-center justify-between gap-2 sm:contents">
-            <p className="text-sm text-muted">
+        {/* Mobile drops the row count and shortens "Page X of Y" to "X/Y" --
+            short enough that everything now fits back on one row like
+            desktop, no more flex-col split needed. desktopRefreshControl/
+            mobileRefreshControl already self-hide via their own wrapper
+            (hidden sm:block / sm:hidden), so placing one at the front of the
+            button cluster and the other at the back gets the "refresh moves
+            to the far side on mobile" swap for free, no extra responsive
+            logic required. */}
+        <div className="shrink-0 flex items-center justify-between gap-2 border-t border-line px-3 py-3">
+          <p className="text-sm text-muted">
+            <span className="sm:hidden">
+              {Math.min(page, pageCount)} of {pageCount}
+            </span>
+            <span className="hidden sm:inline">
               Page {Math.min(page, pageCount)} of {pageCount}
-              {!isLoading ? ` · ${totalRows} rows` : ""}
+              {!isLoading ? ` \u00b7 ${totalRows} rows` : ""}
               {isFetching && !isLoading ? " \u00b7 updating..." : ""}
-            </p>
-            {mobileRefreshControl}
-          </div>
-          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            </span>
+          </p>
+          <div className="flex items-center gap-2">
             {desktopRefreshControl}
             <DropdownSelect
               ariaLabel="Rows per page"
@@ -475,26 +472,25 @@ export function DataTable() {
               menuPlacement="top"
               className="w-32"
             />
-            <div className="flex items-center gap-2">
-              <button
-                aria-label="Previous page"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!hasPreviousPage}
-                onClick={() => onPageChange(page - 1)}
-                type="button"
-              >
-                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-              </button>
-              <button
-                aria-label="Next page"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!hasNextPage}
-                onClick={() => onPageChange(page + 1)}
-                type="button"
-              >
-                <ChevronRight aria-hidden="true" className="h-4 w-4" />
-              </button>
-            </div>
+            <button
+              aria-label="Previous page"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!hasPreviousPage}
+              onClick={() => onPageChange(page - 1)}
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              aria-label="Next page"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!hasNextPage}
+              onClick={() => onPageChange(page + 1)}
+              type="button"
+            >
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+            {mobileRefreshControl}
           </div>
         </div>
 

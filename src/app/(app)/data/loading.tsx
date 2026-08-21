@@ -5,7 +5,6 @@ import { FilterBar } from "@/components/dashboard/filter-bar";
 import { dataTableColumns } from "@/components/data/columns";
 import { DataExportAction } from "@/components/data/data-export-action";
 import { DataSyncAction } from "@/components/data/data-sync-action";
-import { Card } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDataTableUrlState } from "@/lib/use-data-table-url-state";
@@ -33,7 +32,7 @@ export default function DataLoading() {
   } = useDataTableUrlState();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-0 pt-6 lg:gap-5">
       <FilterBar
         from={from}
         to={to}
@@ -71,7 +70,7 @@ export default function DataLoading() {
         fullBleed
       />
 
-      <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+      <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
             <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
@@ -96,7 +95,18 @@ export default function DataLoading() {
             </tbody>
           </table>
         </div>
-      </Card>
+
+        <div className="shrink-0 flex items-center justify-between gap-2 border-t border-line px-3 py-3">
+          <Skeleton className="h-4 w-16 sm:w-40" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="hidden h-9 w-9 rounded-md sm:block" />
+            <Skeleton className="h-9 w-32 rounded-md" />
+            <Skeleton className="h-9 w-9 rounded-md" />
+            <Skeleton className="h-9 w-9 rounded-md" />
+            <Skeleton className="h-9 w-9 rounded-md sm:hidden" />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

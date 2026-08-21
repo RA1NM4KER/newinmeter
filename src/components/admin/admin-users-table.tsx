@@ -281,10 +281,35 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
         <StatStripSkeleton />
       ) : (
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
-          <StatTile label="Total users" value={total} />
+          <StatTile
+            label={
+              <>
+                <span className="sm:hidden">Users</span>
+                <span className="hidden sm:inline">Total users</span>
+              </>
+            }
+            value={total}
+          />
           <StatTile label="Connected" value={stats.connected} />
-          <StatTile label="Active (7d)" value={stats.active} />
-          <StatTile label="Needs help" value={stats.needsHelp} tone="warning" />
+          <StatTile
+            label={
+              <>
+                <span className="sm:hidden">Active</span>
+                <span className="hidden sm:inline">Active (7d)</span>
+              </>
+            }
+            value={stats.active}
+          />
+          <StatTile
+            label={
+              <>
+                <span className="sm:hidden">Help</span>
+                <span className="hidden sm:inline">Needs help</span>
+              </>
+            }
+            tone="warning"
+            value={stats.needsHelp}
+          />
         </div>
       )}
 

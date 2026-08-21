@@ -73,7 +73,9 @@ export default function ActivitiesLoading() {
             <InfoTooltip label="About activity tags" text={ACTIVITY_TAGS_DISCLAIMER} />
           </span>
         </div>
-        <p className="mt-1 text-sm text-muted">Compare household usage during the periods you tagged.</p>
+        <p className="mt-1 hidden text-sm text-muted sm:block">
+          Compare household usage during the periods you tagged.
+        </p>
       </div>
 
       <UnderlineTabs tabs={activityTabs} activeId={activeTab} onChange={() => undefined} />

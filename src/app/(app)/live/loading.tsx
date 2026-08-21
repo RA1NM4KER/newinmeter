@@ -26,7 +26,7 @@ export default function LiveLoading() {
         </div>
       </Card>
 
-      <div className="mt-4 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-paper/88">
+      <div className="mt-4 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg border border-line bg-paper">
         {Array.from({ length: 3 }, (_, index) => (
           <div key={index} className="px-3 py-4 sm:px-5">
             <Skeleton className="h-3 w-14" />

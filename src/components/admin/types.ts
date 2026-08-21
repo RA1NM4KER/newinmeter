@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AdminUserListItem } from "@/lib/user-roles";
 import type { FeatureDraft } from "./admin-feature-flags";
 
@@ -11,7 +12,7 @@ export type AdminUsersTableProps = {
   initialData: AdminUsersApiResponse;
 };
 
-export type StatTileProps = { label: string; value: number; tone?: "default" | "warning" };
+export type StatTileProps = { label: ReactNode; value: number; tone?: "default" | "warning" };
 
 export type ManageDrawerProps = {
   user: AdminUserListItem;
