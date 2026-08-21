@@ -13,7 +13,7 @@ import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { MetricCardSkeleton } from "@/components/ui/metric-card";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
-import { useFilterUrlState } from "@/lib/use-filter-url-state";
+import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 
 export default function ActivitiesLoading() {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({});

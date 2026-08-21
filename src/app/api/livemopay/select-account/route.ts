@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { finalizeLivemopayAccountSelection } from "@/lib/newinmeter-connection";
+import { finalizeLivemopayAccountSelection } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

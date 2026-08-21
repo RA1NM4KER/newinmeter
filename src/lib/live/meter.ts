@@ -9,9 +9,9 @@ import {
   isEstimateFresh,
   LIVE_WINDOWS,
   recentMedianIntervalMs
-} from "./live-meter-calc";
-import type { EstimateState, LiveOverview, LiveWindow } from "./live-meter-types";
-import { adminSupabaseRequest } from "./supabase-rest";
+} from "./meter-calc";
+import type { EstimateState, LiveOverview, LiveWindow } from "./meter-types";
+import { adminSupabaseRequest } from "../supabase-rest";
 
 // Cap the number of raw pulses pulled for the series query, so a very busy
 // meter over a 6h window can't return an unbounded row set. The result is

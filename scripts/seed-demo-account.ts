@@ -23,10 +23,10 @@
 // NEWINMETER_DEMO_ACCESS_TOKEN), the exact same magic-link mechanism every
 // other NewinMeter account uses -- see the README "Demo account" section.
 
-import { buildDemoDataset } from "../src/lib/demo/dataset";
-import { adminSupabaseRequest } from "../src/lib/supabase-rest";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin-client";
-import { setActivitiesEnabled, setAiAssistantEnabled, setUserRole } from "../src/lib/user-roles";
+import { buildDemoDataset } from "@/lib/demo/dataset";
+import { adminSupabaseRequest } from "@/lib/supabase-rest";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import { setActivitiesEnabled, setAiAssistantEnabled, setUserRole } from "@/lib/user-roles";
 
 const DEMO_LIVEMOPAY_EMAIL = "demo.recruiter@newinmeter.invalid";
 const DEMO_ACCOUNT_ID = "demo-account-001";

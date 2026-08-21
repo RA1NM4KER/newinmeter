@@ -14,8 +14,8 @@
 // connection_id is still null, and reuses an existing legacy connection row
 // instead of creating a duplicate.
 
-import { adminSupabaseCount, adminSupabaseRequest } from "../src/lib/supabase-rest";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin-client";
+import { adminSupabaseCount, adminSupabaseRequest } from "@/lib/supabase-rest";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 
 type ConnectionRow = { id: string; user_id: string; status: string };
 

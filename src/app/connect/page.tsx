@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ConnectForm } from "@/components/connect/connect-form";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 

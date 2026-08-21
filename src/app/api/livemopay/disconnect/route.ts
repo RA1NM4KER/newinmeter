@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { DemoAccountProtectedError, disconnectLivemopayConnection } from "@/lib/newinmeter-connection";
+import { DemoAccountProtectedError, disconnectLivemopayConnection } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

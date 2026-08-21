@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { createLiveSubscription, type LiveRealtimeClient } from "@/lib/live-subscription";
+import { createLiveSubscription, type LiveRealtimeClient } from "@/lib/live/subscription";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 // Thin React wrapper around createLiveSubscription (which holds the testable

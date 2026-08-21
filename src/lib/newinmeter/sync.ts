@@ -1,6 +1,6 @@
 import "server-only";
 
-import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
+import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import {
   currentNewinmeterLocalYear,
   dedupeNewinmeterRows,
@@ -9,7 +9,7 @@ import {
   newinmeterLedgerKey,
   refreshLiveMopaySession,
   type NewinmeterCsvRow
-} from "./newinmeter-web";
+} from "./web";
 
 const BATCH_SIZE = 500;
 

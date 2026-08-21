@@ -20,7 +20,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitIdentifier: (id: string, scope: string) => `${id}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
-vi.mock("@/lib/live-broadcast", () => ({ broadcastPulsesChanged: mocks.broadcastPulsesChanged }));
+vi.mock("@/lib/live/broadcast", () => ({ broadcastPulsesChanged: mocks.broadcastPulsesChanged }));
 
 import { POST } from "./route";
 

@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { assignIntervalLanes, buildIntervalPoints, buildStableAxisDomains, sumRows } from "@/lib/day-breakdown";
-import { fetchActivityReport } from "@/lib/activity-client";
+import { fetchActivityReport } from "@/lib/activity/client";
 import {
   DEFAULT_ACTIVITY_COLOR,
   activityIncludesInterval,
@@ -28,7 +28,7 @@ import {
   activityTimeLabel,
   addDaysToIsoDate,
   displayActivityTag
-} from "@/lib/activity-utils";
+} from "@/lib/activity/utils";
 import { buildDayIntervalsUrl } from "@/lib/endpoints";
 import { formatCurrency, formatCurrencyAxisTick, formatKl, formatKwh } from "@/lib/format";
 import { queryHref } from "@/lib/url-query";

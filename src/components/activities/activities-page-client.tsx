@@ -20,11 +20,11 @@ import { DayBreakdownChart } from "@/components/charts/day-breakdown-chart";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
-import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "@/lib/activity-query-params";
-import { fetchActivityReport, fetchActivityTags } from "@/lib/activity-client";
+import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "@/lib/activity/query-params";
+import { fetchActivityReport, fetchActivityTags } from "@/lib/activity/client";
 import { fetchDailyRollups } from "@/lib/dashboard-client";
 import { buildGlobalDomainsFromSummary } from "@/lib/day-breakdown";
-import { useFilterUrlState } from "@/lib/use-filter-url-state";
+import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 import { queryHref } from "@/lib/url-query";
 import type { ActivityMetric, ActivityReportRow, DashboardSummary, UsageActivity } from "@/lib/types";
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { activityValidationErrors, createActivity, loadActivities, loadActivityTags } from "@/lib/activity-data";
-import { parseActivityQuery } from "@/lib/activity-query-params";
-import { isIsoDate, type ActivityInput } from "@/lib/activity-utils";
+import { activityValidationErrors, createActivity, loadActivities, loadActivityTags } from "@/lib/activity/data";
+import { parseActivityQuery } from "@/lib/activity/query-params";
+import { isIsoDate, type ActivityInput } from "@/lib/activity/utils";
 import { requireActivitiesSession } from "@/lib/auth/session";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 

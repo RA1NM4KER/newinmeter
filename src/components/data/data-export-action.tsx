@@ -1,7 +1,7 @@
 "use client";
 
 import { ExportButton } from "@/components/ui/export-button";
-import { useDataTableUrlState } from "@/lib/use-data-table-url-state";
+import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 
 type DataExportActionProps = {
   iconOnly?: boolean;

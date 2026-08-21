@@ -18,9 +18,9 @@
 // module); direct Node/tsx execution does not, so the flag makes the marker
 // resolve the same harmless way here instead of throwing at import.
 
-import { createMeterDevice, getActiveConnectionForUser } from "../src/lib/meter-devices";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin-client";
-import { getOrCreateUserPermissions } from "../src/lib/user-roles";
+import { createMeterDevice, getActiveConnectionForUser } from "@/lib/meter-devices";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 function parseArgs(argv: string[]): Map<string, string> {
   const args = new Map<string, string>();

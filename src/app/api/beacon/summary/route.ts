@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { loadLiveOverview } from "@/lib/live-meter";
-import type { LiveOverview } from "@/lib/live-meter-types";
+import { loadLiveOverview } from "@/lib/live/meter";
+import type { LiveOverview } from "@/lib/live/meter-types";
 
 /**
  * Beacon-facing surface.

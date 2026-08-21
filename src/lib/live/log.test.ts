@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { logLiveError, redact } from "@/lib/live-log";
+import { logLiveError, redact } from "@/lib/live/log";
 
 // NOTE: all secret-looking values here are assembled from fragments at runtime
 // rather than written as literals, so automated secret scanners (GitGuardian)

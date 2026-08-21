@@ -10,7 +10,7 @@ import { formatActivityMetric } from "./activity-report-model";
 import { Card } from "@/components/ui/card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
-import { activityTimeLabel, formatActivityDuration } from "@/lib/activity-utils";
+import { activityTimeLabel, formatActivityDuration } from "@/lib/activity/utils";
 import { chartDate, formatCurrency, formatKl, formatKwh } from "@/lib/format";
 import type { ActivityReportRow } from "@/lib/types";
 import type { ActivityReportTableProps } from "./types";

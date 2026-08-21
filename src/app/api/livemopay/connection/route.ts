@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 

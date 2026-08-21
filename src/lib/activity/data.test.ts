@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildActivitiesPath, buildActivityTagMetadata, mapActivityRow } from "./activity-data";
+import { buildActivitiesPath, buildActivityTagMetadata, mapActivityRow } from "./data";
 
 describe("activity data queries", () => {
   it("builds connection-safe overlap and case-normalized tag filters", () => {

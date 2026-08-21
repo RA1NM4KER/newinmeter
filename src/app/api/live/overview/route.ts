@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { logLiveError } from "@/lib/live-log";
-import { DEFAULT_LIVE_WINDOW, isLiveWindow } from "@/lib/live-meter-calc";
-import { loadLiveOverview } from "@/lib/live-meter";
+import { logLiveError } from "@/lib/live/log";
+import { DEFAULT_LIVE_WINDOW, isLiveWindow } from "@/lib/live/meter-calc";
+import { loadLiveOverview } from "@/lib/live/meter";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
 

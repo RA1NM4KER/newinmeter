@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Pencil } from "lucide-react";
-import { DEFAULT_ACTIVITY_COLOR, activityTimeLabel, displayActivityTag } from "@/lib/activity-utils";
+import { DEFAULT_ACTIVITY_COLOR, activityTimeLabel, displayActivityTag } from "@/lib/activity/utils";
 import { formatCurrency, formatKl, formatKwh } from "@/lib/format";
 import type { ActivityReportRow } from "@/lib/types";
 import { chartColors } from "./chart-config";

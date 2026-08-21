@@ -1,4 +1,4 @@
-import { DEFAULT_ACTIVITY_COLOR, normalizeActivityTag, type ActivityInput } from "@/lib/activity-utils";
+import { DEFAULT_ACTIVITY_COLOR, normalizeActivityTag, type ActivityInput } from "@/lib/activity/utils";
 import type { UsageActivity } from "@/lib/types";
 
 export const halfHourTimes = Array.from({ length: 48 }, (_, index) => {

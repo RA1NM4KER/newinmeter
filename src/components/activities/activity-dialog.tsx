@@ -6,7 +6,7 @@ import { Check, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog } from "@/components/ui/dialog";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
-import { activityFieldErrors, fetchActivityTags, removeActivity, saveActivity } from "@/lib/activity-client";
+import { activityFieldErrors, fetchActivityTags, removeActivity, saveActivity } from "@/lib/activity/client";
 import {
   ACTIVITY_COLOR_OPTIONS,
   ACTIVITY_MAX_TAGS,
@@ -14,7 +14,7 @@ import {
   displayActivityTag,
   validateActivityInput,
   type ActivityInput
-} from "@/lib/activity-utils";
+} from "@/lib/activity/utils";
 import type { UsageActivity } from "@/lib/types";
 import { ActivityTagChip } from "./tag-chip";
 import {

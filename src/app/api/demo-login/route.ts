@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isValidDemoAccessToken } from "@/lib/demo/access-token";
 import { getNewinmeterDemoEmail } from "@/lib/env";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 

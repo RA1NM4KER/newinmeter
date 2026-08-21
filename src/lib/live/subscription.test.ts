@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createLiveSubscription, type LiveChannelLike, type LiveRealtimeClient } from "@/lib/live-subscription";
+import { createLiveSubscription, type LiveChannelLike, type LiveRealtimeClient } from "@/lib/live/subscription";
 
 // Lets the async subscribe body (getSession -> setAuth -> channel) run to
 // completion before assertions.

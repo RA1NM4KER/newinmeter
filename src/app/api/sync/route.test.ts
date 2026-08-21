@@ -13,15 +13,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireConnectedSession }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
-vi.mock("@/lib/newinmeter-connection", () => ({
+vi.mock("@/lib/newinmeter/connection", () => ({
   getConnectionRowForUser: mocks.getConnectionRowForUser,
   getDecryptedRefreshToken: mocks.getDecryptedRefreshToken,
   markConnectionAuthError: mocks.markConnectionAuthError,
   markConnectionSyncOutcome: mocks.markConnectionSyncOutcome,
   replaceConnectionRefreshToken: mocks.replaceConnectionRefreshToken
 }));
-vi.mock("@/lib/newinmeter-sync", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/newinmeter-sync")>("@/lib/newinmeter-sync");
+vi.mock("@/lib/newinmeter/sync", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/newinmeter/sync")>("@/lib/newinmeter/sync");
   return { ...actual, runLivemopaySync: mocks.runLivemopaySync };
 });
 

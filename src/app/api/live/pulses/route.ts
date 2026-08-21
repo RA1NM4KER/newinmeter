@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { broadcastPulsesChanged } from "@/lib/live-broadcast";
-import { logLiveError } from "@/lib/live-log";
+import { broadcastPulsesChanged } from "@/lib/live/broadcast";
+import { logLiveError } from "@/lib/live/log";
 import {
   authenticateDeviceKey,
   isLiveMeterEnabledForDevice,

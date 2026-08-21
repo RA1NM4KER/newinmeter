@@ -6,7 +6,7 @@ import {
   getNewinmeterWebAppFlavor,
   getNewinmeterWebBaseUrl,
   getNewinmeterWebPortalOrigin
-} from "./env";
+} from "../env";
 
 const ENERGY_LABEL_RE = /^(.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)$/;
 const WATER_LABEL_RE = /^(Water:.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: to \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\)$/;

@@ -10,7 +10,7 @@ import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
 import { apiEndpoints, buildAdminUserPermissionsUrl, buildAdminUserRoleUrl } from "@/lib/endpoints";
 import type { AdminUsersSortKey } from "@/lib/admin-users-query-params";
-import { useAdminUsersUrlState } from "@/lib/use-admin-users-url-state";
+import { useAdminUsersUrlState } from "@/lib/url-state/use-admin-users-url-state";
 import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import { adminUsersColumns } from "./admin-users-columns";
 import { ConnectionStatusBadge } from "./connection-status-badge";

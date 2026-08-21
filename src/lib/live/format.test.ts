@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLiveKwh, formatMinuteChange, formatPulseAgo, pulseAgeMs } from "@/lib/live-format";
+import { formatLiveKwh, formatMinuteChange, formatPulseAgo, pulseAgeMs } from "@/lib/live/format";
 
 describe("formatPulseAgo", () => {
   it("reads 'just now' under a second and clamps negatives", () => {

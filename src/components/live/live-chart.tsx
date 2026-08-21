@@ -12,9 +12,9 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { formatClockTime } from "@/lib/live-format";
-import { formatLoad, niceWattsDomain } from "@/lib/live-meter-calc";
-import type { SeriesPoint } from "@/lib/live-meter-types";
+import { formatClockTime } from "@/lib/live/format";
+import { formatLoad, niceWattsDomain } from "@/lib/live/meter-calc";
+import type { SeriesPoint } from "@/lib/live/meter-types";
 import { chartColors, chartMargin, chartTooltipStyle } from "@/components/charts/chart-config";
 
 type LiveChartProps = {

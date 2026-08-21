@@ -13,8 +13,8 @@ import {
   niceWattsDomain,
   pulseWatts,
   recentMedianIntervalMs
-} from "@/lib/live-meter-calc";
-import type { SeriesPoint } from "@/lib/live-meter-types";
+} from "@/lib/live/meter-calc";
+import type { SeriesPoint } from "@/lib/live/meter-types";
 
 describe("pulseWatts", () => {
   it("uses pulsesPerKwh, not a hard-coded 1000", () => {

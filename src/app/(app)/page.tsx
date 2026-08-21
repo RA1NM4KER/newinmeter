@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { loadDashboardDailyRollups, loadDashboardHourlyRollups, loadDashboardSummary } from "@/lib/dashboard-data";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
 

@@ -7,7 +7,7 @@ import { DeleteAccountCard } from "@/components/settings/delete-account-card";
 import { Button } from "@/components/ui/button";
 import { Avatar, IconTile, SettingsGroup, SettingsRow } from "@/components/ui/settings";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 

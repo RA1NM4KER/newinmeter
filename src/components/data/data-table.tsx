@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type ChargeTypeFilter } from "@/lib/data-table-query-params";
 import { dataTableColumnAlign, dataTableColumnLabel } from "./columns";
 import { inferQuickRange } from "@/lib/filters";
-import { useDataTableUrlState } from "@/lib/use-data-table-url-state";
+import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 import { formatCurrency } from "@/lib/format";
 import { buildEnergyRowsUrl } from "@/lib/endpoints";
 import type { EnergyRow, SyncMetadata } from "@/lib/types";

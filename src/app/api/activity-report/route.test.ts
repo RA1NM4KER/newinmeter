@@ -12,7 +12,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
-vi.mock("@/lib/activity-data", () => ({ loadActivityReport: mocks.loadActivityReport }));
+vi.mock("@/lib/activity/data", () => ({ loadActivityReport: mocks.loadActivityReport }));
 
 import { GET } from "./route";
 

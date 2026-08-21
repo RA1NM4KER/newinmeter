@@ -3,7 +3,7 @@
 // live-meter-calc.test.ts). The DB access + orchestration lives in
 // live-meter.ts.
 
-import type { LiveWindow, SeriesPoint } from "./live-meter-types";
+import type { LiveWindow, SeriesPoint } from "./meter-types";
 
 // A meter LED pulse is 1/pulsesPerKwh kWh of energy. Converting a pulse
 // *interval* to instantaneous power:

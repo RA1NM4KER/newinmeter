@@ -1,8 +1,8 @@
 import "server-only";
 
-import { getSupabaseServiceRoleKey, getSupabaseUrl } from "./env";
-import { logLiveError, logLiveWarning } from "./live-log";
-import { liveMeterTopic, PULSES_CHANGED_EVENT } from "./live-realtime";
+import { getSupabaseServiceRoleKey, getSupabaseUrl } from "../env";
+import { logLiveError, logLiveWarning } from "./log";
+import { liveMeterTopic, PULSES_CHANGED_EVENT } from "./realtime";
 
 // Best-effort Realtime notification, sent AFTER pulses are persisted, telling
 // the owner's browser "new pulse data exists -- refetch the overview". It is

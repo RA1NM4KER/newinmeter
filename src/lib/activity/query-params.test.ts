@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "./activity-query-params";
+import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "./query-params";
 
 describe("activity query parameters", () => {
   it("parses date, tags, metric, and utility safely", () => {

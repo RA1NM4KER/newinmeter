@@ -15,12 +15,12 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
-vi.mock("@/lib/newinmeter-web", () => ({
+vi.mock("@/lib/newinmeter/web", () => ({
   loginWithLiveMopayCredentials: mocks.loginWithLiveMopayCredentials,
   discoverLiveMopayAccounts: mocks.discoverLiveMopayAccounts
 }));
-vi.mock("@/lib/newinmeter-connection", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/newinmeter-connection")>("@/lib/newinmeter-connection");
+vi.mock("@/lib/newinmeter/connection", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/newinmeter/connection")>("@/lib/newinmeter/connection");
   return {
     DemoAccountProtectedError: actual.DemoAccountProtectedError,
     beginLivemopayConnection: mocks.beginLivemopayConnection,

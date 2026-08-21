@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { discoverLiveMopayAccounts, loginWithLiveMopayCredentials } from "@/lib/newinmeter-web";
-import { beginLivemopayConnection, DemoAccountProtectedError, getConnectionForUser } from "@/lib/newinmeter-connection";
+import { discoverLiveMopayAccounts, loginWithLiveMopayCredentials } from "@/lib/newinmeter/web";
+import { beginLivemopayConnection, DemoAccountProtectedError, getConnectionForUser } from "@/lib/newinmeter/connection";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";

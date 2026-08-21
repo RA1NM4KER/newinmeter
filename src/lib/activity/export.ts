@@ -1,5 +1,5 @@
 import { utils, write } from "xlsx";
-import type { ActivityReportRow } from "./types";
+import type { ActivityReportRow } from "../types";
 
 const headers = [
   "Date",

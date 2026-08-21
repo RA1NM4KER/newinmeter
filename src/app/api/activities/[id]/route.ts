@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { activityValidationErrors, deleteActivity, updateActivity } from "@/lib/activity-data";
-import type { ActivityInput } from "@/lib/activity-utils";
+import { activityValidationErrors, deleteActivity, updateActivity } from "@/lib/activity/data";
+import type { ActivityInput } from "@/lib/activity/utils";
 import { requireActivitiesSession } from "@/lib/auth/session";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 

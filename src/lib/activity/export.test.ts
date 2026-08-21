@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { read, utils } from "xlsx";
-import { activityReportToCsv, activityReportToXlsx } from "./activity-export";
-import type { ActivityReportRow } from "./types";
+import { activityReportToCsv, activityReportToXlsx } from "./export";
+import type { ActivityReportRow } from "../types";
 
 const reportRow: ActivityReportRow = {
   id: "a",

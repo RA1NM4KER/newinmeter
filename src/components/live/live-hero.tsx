@@ -1,7 +1,7 @@
 "use client";
 
-import { formatLoad } from "@/lib/live-meter-calc";
-import type { EstimateState } from "@/lib/live-meter-types";
+import { formatLoad } from "@/lib/live/meter-calc";
+import type { EstimateState } from "@/lib/live/meter-types";
 
 type LiveHeroProps = {
   estimatedWatts: number | null;

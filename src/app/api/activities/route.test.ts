@@ -14,7 +14,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
-vi.mock("@/lib/activity-data", () => ({
+vi.mock("@/lib/activity/data", () => ({
   activityValidationErrors: (error: { validationErrors?: Record<string, string> }) => error.validationErrors,
   createActivity: mocks.createActivity,
   loadActivities: mocks.loadActivities,

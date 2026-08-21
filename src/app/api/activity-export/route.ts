@@ -1,7 +1,7 @@
-import { activityReportToCsv, activityReportToXlsx } from "@/lib/activity-export";
-import { loadActivityReport } from "@/lib/activity-data";
-import { parseActivityQuery } from "@/lib/activity-query-params";
-import { isIsoDate } from "@/lib/activity-utils";
+import { activityReportToCsv, activityReportToXlsx } from "@/lib/activity/export";
+import { loadActivityReport } from "@/lib/activity/data";
+import { parseActivityQuery } from "@/lib/activity/query-params";
+import { isIsoDate } from "@/lib/activity/utils";
 import { requireActivitiesSession } from "@/lib/auth/session";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 

@@ -5,7 +5,7 @@ import { DataSyncAction } from "@/components/data/data-sync-action";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollHint } from "@/components/ui/scroll-hint";
-import { useFilterUrlState } from "@/lib/use-filter-url-state";
+import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 import { useRef } from "react";
 
 export default function DashboardLoading() {

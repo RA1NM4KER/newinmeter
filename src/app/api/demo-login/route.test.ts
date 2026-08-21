@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/demo/access-token", () => ({ isValidDemoAccessToken: mocks.isValidDemoAccessToken }));
 vi.mock("@/lib/env", () => ({ getNewinmeterDemoEmail: mocks.getNewinmeterDemoEmail }));
-vi.mock("@/lib/newinmeter-connection", () => ({ getConnectionForUser: mocks.getConnectionForUser }));
+vi.mock("@/lib/newinmeter/connection", () => ({ getConnectionForUser: mocks.getConnectionForUser }));
 vi.mock("@/lib/rate-limit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
   getRateLimitIdentifier: (id: string, scope: string) => `${id}:${scope}`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIVE_FALLBACK_POLL_MS, liveMeterTopic, PULSES_CHANGED_EVENT } from "@/lib/live-realtime";
+import { LIVE_FALLBACK_POLL_MS, liveMeterTopic, PULSES_CHANGED_EVENT } from "@/lib/live/realtime";
 
 describe("live realtime constants", () => {
   it("derives a per-user private topic from the user id", () => {

@@ -6,9 +6,9 @@ import {
   normalizeActivityTags,
   validateActivityInput,
   type ActivityInput
-} from "./activity-utils";
-import { authenticatedSupabaseFetch, authenticatedSupabaseFetchAllPages } from "./supabase-rest";
-import type { ActivityReportRow, ActivityReportSummary, UsageActivity } from "./types";
+} from "./utils";
+import { authenticatedSupabaseFetch, authenticatedSupabaseFetchAllPages } from "../supabase-rest";
+import type { ActivityReportRow, ActivityReportSummary, UsageActivity } from "../types";
 
 type ActivityRow = {
   id: string;

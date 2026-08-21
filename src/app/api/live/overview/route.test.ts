@@ -14,7 +14,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
-vi.mock("@/lib/live-meter", () => ({ loadLiveOverview: mocks.loadLiveOverview }));
+vi.mock("@/lib/live/meter", () => ({ loadLiveOverview: mocks.loadLiveOverview }));
 
 import { GET } from "./route";
 

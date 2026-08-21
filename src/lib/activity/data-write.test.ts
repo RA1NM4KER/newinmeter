@@ -9,7 +9,7 @@ vi.mock("@/lib/supabase-rest", () => ({
   authenticatedSupabaseFetchAllPages: vi.fn()
 }));
 
-import { updateActivity } from "./activity-data";
+import { updateActivity } from "./data";
 
 const crossMidnightRow = {
   id: "activity-a",

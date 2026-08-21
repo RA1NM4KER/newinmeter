@@ -7,7 +7,7 @@ import { DataExportAction } from "@/components/data/data-export-action";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDataTableUrlState } from "@/lib/use-data-table-url-state";
+import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 
 const chargeTypeOptions = [
   { label: "All types", value: "all" },

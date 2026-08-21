@@ -1,5 +1,5 @@
-import { normalizeActivityTags } from "./activity-utils";
-import type { ActivityMetric } from "./types";
+import { normalizeActivityTags } from "./utils";
+import type { ActivityMetric } from "../types";
 
 const metrics = new Set<ActivityMetric>(["electricityKwh", "averageKw", "electricitySpend", "waterKl", "waterSpend"]);
 

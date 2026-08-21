@@ -1,4 +1,4 @@
-import { liveMeterTopic, PULSES_CHANGED_EVENT } from "./live-realtime";
+import { liveMeterTopic, PULSES_CHANGED_EVENT } from "./realtime";
 
 // Minimal structural surface of the Supabase client that the Live subscription
 // uses. Declared here (rather than importing the full SupabaseClient type) so

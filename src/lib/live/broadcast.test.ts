@@ -5,7 +5,7 @@ vi.mock("@/lib/env", () => ({
   getSupabaseServiceRoleKey: () => "service-role-secret"
 }));
 
-import { broadcastPulsesChanged } from "@/lib/live-broadcast";
+import { broadcastPulsesChanged } from "@/lib/live/broadcast";
 
 describe("broadcastPulsesChanged", () => {
   const fetchMock = vi.fn();

@@ -1,5 +1,5 @@
-import { loadActivityReport } from "@/lib/activity-data";
-import { isIsoDate, normalizeActivityTags } from "@/lib/activity-utils";
+import { loadActivityReport } from "@/lib/activity/data";
+import { isIsoDate, normalizeActivityTags } from "@/lib/activity/utils";
 import type { ActivityReportRow } from "@/lib/types";
 import type { AssistantTool } from "../types";
 import { GetActivityReportSchema } from "./schemas";

@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { displayActivityTag } from "@/lib/activity-utils";
+import { displayActivityTag } from "@/lib/activity/utils";
 import { chartDate, formatKwh } from "@/lib/format";
 import { chartColors, chartMargin } from "./chart-config";
 import { ChartShell } from "./chart-shell";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildRefundTopupDeletePath, refundTopupMatchers } from "@/lib/newinmeter-sync";
-import type { NewinmeterCsvRow } from "@/lib/newinmeter-web";
+import { buildRefundTopupDeletePath, refundTopupMatchers } from "@/lib/newinmeter/sync";
+import type { NewinmeterCsvRow } from "@/lib/newinmeter/web";
 
 function row(overrides: Partial<NewinmeterCsvRow>): NewinmeterCsvRow {
   return {

@@ -1,9 +1,9 @@
 "use client";
 
-import { buildActivitySearchParams } from "./activity-query-params";
-import { apiEndpoints, buildActivitiesUrl, buildActivityReportUrl } from "./endpoints";
-import type { ActivityInput } from "./activity-utils";
-import type { ActivityMetric, ActivityReportRow, ActivityReportSummary, UsageActivity } from "./types";
+import { buildActivitySearchParams } from "./query-params";
+import { apiEndpoints, buildActivitiesUrl, buildActivityReportUrl } from "../endpoints";
+import type { ActivityInput } from "./utils";
+import type { ActivityMetric, ActivityReportRow, ActivityReportSummary, UsageActivity } from "../types";
 
 async function responseJson<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null);

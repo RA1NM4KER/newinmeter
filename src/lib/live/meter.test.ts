@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase-rest", () => ({
   adminSupabaseRequest: mocks.adminSupabaseRequest
 }));
 
-import { loadLiveOverview } from "@/lib/live-meter";
+import { loadLiveOverview } from "@/lib/live/meter";
 
 const NOW = Date.parse("2026-08-08T12:00:00.000Z");
 

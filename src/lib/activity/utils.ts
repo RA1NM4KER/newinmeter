@@ -1,4 +1,4 @@
-import type { ActivityReportRow, UsageActivity } from "./types";
+import type { ActivityReportRow, UsageActivity } from "../types";
 
 export const ACTIVITY_MAX_TAGS = 10;
 export const ACTIVITY_MAX_TAG_LENGTH = 30;

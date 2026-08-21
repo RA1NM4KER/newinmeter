@@ -5,7 +5,7 @@ import { BarChartSkeleton } from "@/components/charts/bar-chart-skeleton";
 import { ChartShell } from "@/components/charts/chart-shell";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { MetricCard, MetricCardSkeleton } from "@/components/ui/metric-card";
-import { formatActivityDuration } from "@/lib/activity-utils";
+import { formatActivityDuration } from "@/lib/activity/utils";
 import { formatKwh } from "@/lib/format";
 import type { ActivityMetric } from "@/lib/types";
 import type { ActivityDashboardTabProps } from "./types";

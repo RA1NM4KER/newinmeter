@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
-vi.mock("@/lib/newinmeter-connection", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/newinmeter-connection")>("@/lib/newinmeter-connection");
+vi.mock("@/lib/newinmeter/connection", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/newinmeter/connection")>("@/lib/newinmeter/connection");
   return {
     DemoAccountProtectedError: actual.DemoAccountProtectedError,
     deleteAccountForUser: mocks.deleteAccountForUser
@@ -18,7 +18,7 @@ vi.mock("@/lib/supabase/server-client", () => ({
   createServerSupabaseClient: () => ({ auth: { signOut: mocks.signOut } })
 }));
 
-import { DemoAccountProtectedError } from "@/lib/newinmeter-connection";
+import { DemoAccountProtectedError } from "@/lib/newinmeter/connection";
 import { POST } from "./route";
 
 describe("POST /api/account/delete", () => {

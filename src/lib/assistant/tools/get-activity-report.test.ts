@@ -15,7 +15,7 @@ const { loadActivityReportMock } = vi.hoisted(() => ({
   >()
 }));
 
-vi.mock("@/lib/activity-data", () => ({
+vi.mock("@/lib/activity/data", () => ({
   loadActivityReport: loadActivityReportMock
 }));
 

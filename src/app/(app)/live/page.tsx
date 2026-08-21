@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { LivePageClient } from "@/components/live/live-page-client";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
 import { resolveLiveAccess } from "./access";
 

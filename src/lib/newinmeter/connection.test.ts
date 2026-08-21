@@ -6,14 +6,14 @@ const mocks = vi.hoisted(() => ({
   deleteUser: vi.fn()
 }));
 
-vi.mock("./supabase-rest", () => ({
+vi.mock("../supabase-rest", () => ({
   adminSupabaseFetch: mocks.adminSupabaseFetch,
   adminSupabaseRequest: mocks.adminSupabaseRequest
 }));
-vi.mock("./supabase/admin-client", () => ({
+vi.mock("../supabase/admin-client", () => ({
   createSupabaseAdminClient: () => ({ auth: { admin: { deleteUser: mocks.deleteUser } } })
 }));
-vi.mock("./token-encryption", () => ({
+vi.mock("../token-encryption", () => ({
   encryptRefreshToken: () => ({ ciphertext: "c", iv: "i", authTag: "t" }),
   decryptRefreshToken: () => "plain-refresh-token"
 }));
@@ -24,7 +24,7 @@ import {
   deleteAccountForUser,
   disconnectLivemopayConnection,
   listConnectionsForStaleCheck
-} from "./newinmeter-connection";
+} from "./connection";
 
 const demoRow = {
   id: "conn-demo",

@@ -13,8 +13,8 @@ import {
   isHalfHourTime,
   normalizeActivityTags,
   validateActivityInput
-} from "./activity-utils";
-import type { UsageActivity } from "./types";
+} from "./utils";
+import type { UsageActivity } from "../types";
 
 describe("activity tags", () => {
   it("normalizes, trims, and deduplicates tags case-insensitively", () => {

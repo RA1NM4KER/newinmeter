@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import type { LiveWindow } from "@/lib/live-meter-types";
+import type { LiveWindow } from "@/lib/live/meter-types";
 
 const WINDOWS: Array<{ value: LiveWindow; label: string }> = [
   { value: "15m", label: "15m" },

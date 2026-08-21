@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import { displayActivityTag } from "@/lib/activity-utils";
+import { displayActivityTag } from "@/lib/activity/utils";
 
 export function TagFilter({
   tags,

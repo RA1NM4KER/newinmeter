@@ -1,4 +1,4 @@
-import { displayActivityTag } from "@/lib/activity-utils";
+import { displayActivityTag } from "@/lib/activity/utils";
 
 export function ActivityTagChip({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
   return (

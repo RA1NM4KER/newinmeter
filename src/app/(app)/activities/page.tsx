@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { ActivitiesPageClient } from "@/components/activities/activities-page-client";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { loadDashboardSummary } from "@/lib/dashboard-data";
-import { getConnectionForUser } from "@/lib/newinmeter-connection";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 export const dynamic = "force-dynamic";

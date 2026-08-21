@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeLedgerRow } from "@/lib/newinmeter-web";
+import { normalizeLedgerRow } from "@/lib/newinmeter/web";
 
 // Fixtures mirror the real LiveMopay ledger API response shape.
 const refundRow = {

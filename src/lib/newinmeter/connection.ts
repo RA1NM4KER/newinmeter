@@ -1,10 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
-import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
-import { createSupabaseAdminClient } from "./supabase/admin-client";
-import { decryptRefreshToken, encryptRefreshToken } from "./token-encryption";
-import type { LiveMopayAccountCandidate } from "./newinmeter-web";
+import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
+import { createSupabaseAdminClient } from "../supabase/admin-client";
+import { decryptRefreshToken, encryptRefreshToken } from "../token-encryption";
+import type { LiveMopayAccountCandidate } from "./web";
 
 export type ConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
 
