@@ -49,11 +49,18 @@ def read_dotenv(path: Path):
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-read_dotenv(Path(".env.local"))
+# Resolved from this file's location, not the process cwd -- see the
+# matching comment in capture_livemopay.py / refresh_and_sync.py.
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+DEFAULT_DATA_DIR = SCRIPT_DIR / "data"
+
+read_dotenv(REPO_ROOT / ".env.local")
 
 
-def env_path(name: str, default: str) -> Path:
-    return Path(os.environ.get(name, default))
+def env_path(name: str, default: Path) -> Path:
+    value = os.environ.get(name)
+    return Path(value) if value else default
 
 
 def env_str(name: str, default: str | None = None) -> str | None:
@@ -70,8 +77,8 @@ def require_env(name: str) -> str:
     return value
 
 
-SESSION_PATH = env_path("NEWINMETER_WEB_SESSION_PATH", ".secrets/livemopay_auth.json")
-CSV_PATH = env_path("NEWINMETER_CSV_PATH", "livemopay_energy.csv")
+SESSION_PATH = env_path("NEWINMETER_WEB_SESSION_PATH", REPO_ROOT / ".secrets" / "livemopay_auth.json")
+CSV_PATH = env_path("NEWINMETER_CSV_PATH", DEFAULT_DATA_DIR / "livemopay_energy.csv")
 LOCAL_TZ = ZoneInfo(os.environ.get("NEWINMETER_TIMEZONE", "Africa/Johannesburg"))
 PORTAL_ORIGIN = os.environ.get("NEWINMETER_WEB_PORTAL_ORIGIN", "https://app.livewalletportal.co.za")
 API_BASE_URL = os.environ.get("NEWINMETER_WEB_BASE_URL", "https://app.propertywallet.co.za")

@@ -406,15 +406,25 @@ multi-user support:
 
 ## Legacy Local Setup
 
-`newinmeter_web.py`, `capture_livemopay.py`, and `refresh_and_sync.py` are a standalone Python CLI
-that predates multi-user support. It authenticates against LiveMopay using
-`NEWINMETER_WEB_EMAIL`/`NEWINMETER_WEB_PASSWORD` from `.env.local`, writes `livemopay_energy.csv`
-locally, and syncs it to Supabase with the service-role key -- independent of Supabase Auth and
-the connection flow described above. It is not used by the deployed multi-user app; nothing in
-`src/` calls into it or vice versa.
+`legacy/adb-ingestion/` (`newinmeter_web.py`, `capture_livemopay.py`, `refresh_and_sync.py`) is a
+standalone Python CLI predating multi-user support -- originally this repo's whole ingestion
+path, from back when it was called `livenopay`. It authenticates against LiveMopay directly
+(`NEWINMETER_WEB_EMAIL`/`NEWINMETER_WEB_PASSWORD`, or ADB against an Android device/emulator),
+writes `livemopay_energy.csv` locally, and syncs it to Supabase with the service-role key --
+independent of Supabase Auth and the connection flow described above. It is not used by the
+deployed multi-user app; nothing in `src/` calls into it or vice versa.
 
-Use it only if you're running a personal, single-owner instance and don't need multi-user
-support. See [SETUP.md](./SETUP.md) for the full Android/ADB and web-API setup, and the
-"Legacy local-only setup" section of `.env.example` for its environment variables.
+It still writes into the same `energy_rows`/`capture_runs`/rollup tables as the hosted app (no
+second schema), scoped to one `connection_id` resolved from `NEWINMETER_LEGACY_TARGET_USER_ID`,
+and finishes each run through the same `finish_capture_run` RPC the hosted sync route uses, so
+rollups and `dashboard_summary` update exactly as they would from a real in-app sync. Use it only
+as a legacy/demo path for your own single account -- see
+[legacy/adb-ingestion/README.md](./legacy/adb-ingestion/README.md) for the full setup, safety
+model, and command reference, [SETUP.md](./SETUP.md) for the underlying Android/ADB and web-API
+mechanics, and the "Legacy local-only setup" section of `.env.example` for every environment
+variable.
 
-    python3 refresh_and_sync.py --source web
+    npm run refresh:emulator          # ADB: launch/open the emulator, capture, sync
+    npm run refresh:emulator -- --full
+    npm run refresh:emulator -- --skip-capture
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source web

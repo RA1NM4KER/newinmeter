@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "refresh": "python3 refresh_and_sync.py",
-    "refresh:emulator": "scripts/refresh_with_emulator.sh",
+    "refresh": "python3 legacy/adb-ingestion/refresh_and_sync.py",
+    "refresh:emulator": "legacy/adb-ingestion/refresh_with_emulator.sh",
     "backfill:legacy-owner": "tsx --env-file=.env.local scripts/backfill-legacy-owner.ts",
     "create:meter-device": "tsx --conditions=react-server --env-file=.env.local scripts/create-meter-device.ts",
     "seed:demo-account": "tsx --conditions=react-server --env-file=.env.local scripts/seed-demo-account.ts",

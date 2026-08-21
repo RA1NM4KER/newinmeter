@@ -23,11 +23,21 @@ def read_dotenv(path: Path):
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-read_dotenv(Path(".env.local"))
+# Resolved from this file's location, not the process cwd, so this still
+# finds .env.local and the default data dir whether it's invoked via
+# `npm run refresh:emulator` from the repo root, `python3
+# legacy/adb-ingestion/capture_livemopay.py`, or `cd`'d directly into
+# legacy/adb-ingestion (the old livenopay-repo muscle memory).
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+DEFAULT_DATA_DIR = SCRIPT_DIR / "data"
+
+read_dotenv(REPO_ROOT / ".env.local")
 
 
-def env_path(name: str, default: str) -> Path:
-    return Path(os.environ.get(name, default))
+def env_path(name: str, default: Path) -> Path:
+    value = os.environ.get(name)
+    return Path(value) if value else default
 
 
 def env_int(name: str, default: int) -> int:
@@ -53,10 +63,10 @@ def env_float(name: str, default: float) -> float:
 
 
 ANDROID_STUDIO_ADB = Path.home() / "Library/Android/sdk/platform-tools/adb"
-OUT_DIR = env_path("NEWINMETER_DUMPS_DIR", "livemopay_dumps")
+OUT_DIR = env_path("NEWINMETER_DUMPS_DIR", DEFAULT_DATA_DIR / "livemopay_dumps")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-CSV_PATH = env_path("NEWINMETER_CSV_PATH", "livemopay_energy.csv")
-LOG_PATH = env_path("NEWINMETER_CAPTURE_LOG", "livemopay_capture.log")
+CSV_PATH = env_path("NEWINMETER_CSV_PATH", DEFAULT_DATA_DIR / "livemopay_energy.csv")
+LOG_PATH = env_path("NEWINMETER_CAPTURE_LOG", DEFAULT_DATA_DIR / "livemopay_capture.log")
 CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 REMOTE_DUMP_PATH = os.environ.get("NEWINMETER_REMOTE_DUMP_PATH", "/sdcard/view.xml")

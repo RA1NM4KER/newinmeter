@@ -9,11 +9,17 @@ The ADB path still works, but it is no longer the recommended setup out of the b
 
 If you are setting up the full dashboard, make sure you also apply all Supabase migrations from `README.md`. The local steps here are only for capture and refresh.
 
+Both paths below write into the same multi-user Supabase schema the hosted app uses, scoped to
+one `connection_id`. Set `NEWINMETER_LEGACY_TARGET_USER_ID` in `.env.local` to your own Supabase
+Auth user id before running either -- the sync script refuses to run without it, and refuses to
+guess if it doesn't resolve to exactly one non-demo connection. See
+[legacy/adb-ingestion/README.md](./legacy/adb-ingestion/README.md).
+
 ## Recommended: Web API Refresh
 
 The recommended local refresh path is:
 
-    python3 refresh_and_sync.py --source web
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source web
 
 This path does not need Android Studio, an emulator, or USB debugging.
 
@@ -29,6 +35,7 @@ Add these to `.env.local`:
 
     SUPABASE_URL=...
     SUPABASE_SERVICE_ROLE_KEY=...
+    NEWINMETER_LEGACY_TARGET_USER_ID=uuid-of-your-own-supabase-auth-user
     NEWINMETER_WEB_EMAIL=you@example.com
     NEWINMETER_WEB_PASSWORD=your-livewallet-password
     NEWINMETER_FIREBASE_API_KEY=your-firebase-web-api-key
@@ -50,15 +57,15 @@ Optional overrides:
 
 Run it:
 
-    python3 refresh_and_sync.py --source web
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source web
 
 For a full historical rebuild:
 
-    python3 refresh_and_sync.py --source web --full
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source web --full
 
 To sync the existing CSV without refetching:
 
-    python3 refresh_and_sync.py --skip-capture
+    python3 legacy/adb-ingestion/refresh_and_sync.py --skip-capture
 
 The session file at `NEWINMETER_WEB_SESSION_PATH` stores auth tokens locally so refreshes can reuse them.
 
@@ -89,11 +96,11 @@ To fully rebuild the CSV from the scrollable ledger history:
 
 You can also run the lower-level refresh directly on a local machine with Android/ADB access:
 
-    python3 refresh_and_sync.py --source adb
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source adb
 
 The refresh script runs:
 
-    python3 capture_livemopay.py
+    python3 legacy/adb-ingestion/capture_livemopay.py
 
 This assumes local execution with Android platform tools available. The capture script looks for `adb` in this order:
 
@@ -163,11 +170,11 @@ If you also want the in-app dashboard assistant, add these optional server-side 
 
 The assistant is optional. Capture, sync, and the dashboard itself still work without it.
 
-The capture script also reads `.env.local` directly. These optional values control output locations and scan behavior:
+The capture script also reads `.env.local` directly. These optional values control output locations (defaults live under `legacy/adb-ingestion/data/`) and scan behavior:
 
-    NEWINMETER_CSV_PATH=livemopay_energy.csv
-    NEWINMETER_DUMPS_DIR=livemopay_dumps
-    NEWINMETER_CAPTURE_LOG=livemopay_capture.log
+    NEWINMETER_CSV_PATH=legacy/adb-ingestion/data/livemopay_energy.csv
+    NEWINMETER_DUMPS_DIR=legacy/adb-ingestion/data/livemopay_dumps
+    NEWINMETER_CAPTURE_LOG=legacy/adb-ingestion/data/livemopay_capture.log
     NEWINMETER_MAX_ITERATIONS=500
     NEWINMETER_MAX_STAGNANT_ROUNDS=4
     NEWINMETER_SCREEN_WAIT_ATTEMPTS=15
@@ -185,7 +192,7 @@ Once capture starts, do not touch the emulator until it finishes.
 6. open LiveMopay
 7. tap the bottom `Ledger` tab
 8. leave the app on the Ledger summary page, where the orange `Ledger` button is visible
-9. run `python3 refresh_and_sync.py --source adb`
+9. run `python3 legacy/adb-ingestion/refresh_and_sync.py --source adb`
 
 Once capture starts, do not touch the phone until it finishes. The script is reading and scrolling the Android UI, so manual taps or scrolling can make it capture the wrong screen or miss rows.
 
@@ -206,25 +213,25 @@ The capture script loads the existing CSV before scanning, skips rows that are a
 
 For a full recapture followed by sync, run:
 
-    python3 refresh_and_sync.py --source adb --full
+    python3 legacy/adb-ingestion/refresh_and_sync.py --source adb --full
 
 That passes `--full` to:
 
-    python3 capture_livemopay.py --full
+    python3 legacy/adb-ingestion/capture_livemopay.py --full
 
 Full recapture ignores the existing CSV and rebuilds it from the Android history it can scroll through.
 
 To run capture manually without syncing:
 
-    python3 capture_livemopay.py
+    python3 legacy/adb-ingestion/capture_livemopay.py
 
 To sync the existing CSV without touching Android/ADB:
 
-    python3 refresh_and_sync.py --skip-capture
+    python3 legacy/adb-ingestion/refresh_and_sync.py --skip-capture
 
 To rebuild the CSV from existing XML dumps without connecting to Android:
 
-    python3 capture_livemopay.py --from-dumps
+    python3 legacy/adb-ingestion/capture_livemopay.py --from-dumps
 
 ## How Android Capture Works
 
