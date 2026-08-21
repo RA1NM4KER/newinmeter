@@ -95,6 +95,31 @@ export function DropdownSelect({
     menu.scrollTop = Math.max(0, active.offsetTop - (menu.clientHeight - active.offsetHeight) / 2);
   }, [isOpen, value]);
 
+  // onBlur alone (below) doesn't reliably close this on mobile Chrome: a tap
+  // on a plain, non-focusable element outside the dropdown doesn't move
+  // focus anywhere, so no blur ever fires. A document-level pointerdown
+  // listener is the same fix already used by MetricCard/InfoTooltip/
+  // BottomSheet/ManageDrawer elsewhere in this app -- kept alongside onBlur
+  // rather than replacing it, since onBlur still covers keyboard-driven
+  // focus moves (Tab) that a pointerdown listener wouldn't catch.
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isOpen]);
+
   return (
     <div
       className="relative"

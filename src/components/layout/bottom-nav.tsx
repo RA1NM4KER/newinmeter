@@ -43,7 +43,7 @@ export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, on
         return (
           <Link
             aria-current={isActive ? "page" : undefined}
-            className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[0.6875rem] transition ${
+            className={`flex flex-1 flex-col items-center justify-center gap-1 pt-2 text-[0.6875rem] transition ${
               isActive ? "text-brandTeal" : "text-muted"
             }`}
             href={href}
@@ -56,7 +56,7 @@ export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, on
       })}
       <button
         aria-label="Open menu"
-        className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[0.6875rem] text-muted transition"
+        className="flex flex-1 flex-col items-center justify-center gap-1 pt-2 text-[0.6875rem] text-muted transition"
         onClick={onOpenMenu}
         type="button"
       >

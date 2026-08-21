@@ -112,7 +112,7 @@ export function FullscreenChart({
   action,
   children
 }: {
-  title: string;
+  title: ReactNode;
   titleAdornment?: ReactNode;
   action?: ReactNode;
   children: ReactNode;

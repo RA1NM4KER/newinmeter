@@ -11,7 +11,7 @@ export type CardHeaderProps = {
 };
 
 export type MetricCardProps = {
-  label: string;
+  label: ReactNode;
   value: string;
   detail?: string;
   description?: string;

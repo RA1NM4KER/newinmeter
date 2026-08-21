@@ -40,7 +40,12 @@ export function ActivityDashboardTab({
               detail="Overlaps counted once"
             />
             <MetricCard
-              label="Household electricity"
+              label={
+                <>
+                  <span className="sm:hidden">Electricity</span>
+                  <span className="hidden sm:inline">Household electricity</span>
+                </>
+              }
               value={formatKwh(summary?.electricityKwh ?? 0)}
               detail="Overlapping intervals counted once"
             />
@@ -59,7 +64,12 @@ export function ActivityDashboardTab({
       </div>
 
       <ChartShell
-        title="Tagged usage"
+        title={
+          <>
+            <span className="sm:hidden">Tagged</span>
+            <span className="hidden sm:inline">Tagged usage</span>
+          </>
+        }
         action={
           <DropdownSelect
             ariaLabel="Activity metric"

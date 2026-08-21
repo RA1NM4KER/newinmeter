@@ -93,7 +93,10 @@ export default function ActivitiesLoading() {
 
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5 sm:px-5">
-              <h2 className="text-base font-semibold text-ink">Tagged usage</h2>
+              <h2 className="text-base font-semibold text-ink">
+                <span className="sm:hidden">Tagged</span>
+                <span className="hidden sm:inline">Tagged usage</span>
+              </h2>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <DropdownSelect
                   ariaLabel="Activity metric"

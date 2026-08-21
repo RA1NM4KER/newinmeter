@@ -88,6 +88,11 @@ export function AppShell({
   const pathname = usePathname();
   const lockViewport =
     pathname === "/data" || pathname === "/admin" || (pathname === "/activities" && isActivitiesTableTab);
+  // Of the lockViewport pages, only /data goes edge-to-edge/borderless on
+  // mobile (see data-table.tsx) -- admin's and activities' tables stay a
+  // normal rounded, margined card at every width, so they need the usual
+  // bottom breathing room on mobile too, not just at lg+.
+  const isFullBleedTable = pathname === "/data";
 
   // Mobile header rolls away on scroll-down, back on scroll-up -- only ever
   // fires for pages where <main> itself scrolls (lockViewport pages delegate
@@ -219,8 +224,20 @@ export function AppShell({
             in-flow -- dropped again at lg since the header doesn't render
             there at all. */}
         <main
-          className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pb-5 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
-            lockViewport ? "min-h-0 overflow-hidden" : "overflow-y-auto"
+          className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
+            lockViewport
+              ? isFullBleedTable
+                ? // /data goes full-bleed/edge-to-edge below lg (own internal
+                  // footer row already provides bottom padding there). At lg+
+                  // it's back to a normal rounded, bordered, margined card --
+                  // same "floating" treatment as every other card on the
+                  // page -- so it wants the same bottom breathing room those
+                  // get, restored via lg:pb-5.
+                  "min-h-0 overflow-hidden lg:pb-5"
+                : // Admin/activities' tables stay a margined card at every
+                  // width, so they keep the usual pb-5 throughout.
+                  "min-h-0 overflow-hidden pb-5"
+              : "overflow-y-auto pb-5"
           }`}
           onScroll={handleMainScroll}
           ref={mainRef}

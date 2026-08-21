@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
@@ -8,7 +8,6 @@ import { FilterBar } from "@/components/dashboard/filter-bar";
 import { DataExportAction } from "@/components/data/data-export-action";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { DropdownSelect, type DropdownOption } from "@/components/ui/dropdown-select";
-import { Card } from "@/components/ui/card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type ChargeTypeFilter } from "@/lib/data-table-query-params";
@@ -366,7 +365,7 @@ export function DataTable() {
   }, [data?.bounds.from, data?.bounds.to, from, onDateChange, to]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-0 pt-6 lg:gap-5">
       <FilterBar
         from={displayFrom}
         to={displayTo}
@@ -385,7 +384,14 @@ export function DataTable() {
         fullBleed
       />
 
-      <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Not the shared Card component here -- its rounded-lg/border are
+          hardcoded ahead of any className override, which would fight this
+          section's own mobile-vs-desktop responsive overrides at equal
+          specificity. On mobile the table breaks out to the full screen
+          width (matching FilterBar's own fullBleed breakout) and drops its
+          border/radius so it reads as one continuous surface directly under
+          the filter bar, restored back to a normal bordered card at lg+. */}
+      <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper/88 sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="relative min-h-0 flex-1">
           <div className="h-full overflow-auto" ref={tableScrollRef}>
             <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
@@ -437,13 +443,29 @@ export function DataTable() {
           <ScrollHint containerRef={tableScrollRef} />
         </div>
 
-        <div className="shrink-0 flex flex-col gap-3 border-t border-line px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted">
-            Page {Math.min(page, pageCount)} of {pageCount}
-            {!isLoading ? ` · ${totalRows} rows` : ""}
-            {isFetching && !isLoading ? " \u00b7 updating..." : ""}
-          </p>
-          <div className="flex items-center gap-2">
+        {/* Mobile is two explicit rows (page count + refresh / page-size +
+            arrows). The row-1 wrapper uses `sm:contents` to drop out of the
+            box model at sm+ so the page-count text rejoins this element's
+            own sm:flex-row layout directly as a lone item (the mobile-only
+            refresh next to it is invisible there via its own sm:hidden).
+            Row 2 stays a real flex item at desktop -- just switching its
+            *internal* justify-between (spreads page-size left / arrows
+            right on mobile) to justify-start (packed together, the
+            original desktop look). `sm:contents` on row 2 as well would
+            dissolve it into the outer row's justify-between too, which
+            needs exactly two children to split cleanly apart, and would
+            instead spread refresh/page-size/arrows out individually
+            across the whole row. */}
+        <div className="shrink-0 flex flex-col gap-1.5 border-t border-line px-3 pb-3 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-3">
+          <div className="flex items-center justify-between gap-2 sm:contents">
+            <p className="text-sm text-muted">
+              Page {Math.min(page, pageCount)} of {pageCount}
+              {!isLoading ? ` · ${totalRows} rows` : ""}
+              {isFetching && !isLoading ? " \u00b7 updating..." : ""}
+            </p>
+            {mobileRefreshControl}
+          </div>
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
             {desktopRefreshControl}
             <DropdownSelect
               ariaLabel="Rows per page"
@@ -453,28 +475,31 @@ export function DataTable() {
               menuPlacement="top"
               className="w-32"
             />
-            <button
-              className="inline-flex h-9 items-center rounded-md border border-line bg-paper px-3 text-sm text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!hasPreviousPage}
-              onClick={() => onPageChange(page - 1)}
-              type="button"
-            >
-              Previous
-            </button>
-            <button
-              className="inline-flex h-9 items-center rounded-md border border-line bg-paper px-3 text-sm text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!hasNextPage}
-              onClick={() => onPageChange(page + 1)}
-              type="button"
-            >
-              Next
-            </button>
-            {mobileRefreshControl}
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="Previous page"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!hasPreviousPage}
+                onClick={() => onPageChange(page - 1)}
+                type="button"
+              >
+                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+              </button>
+              <button
+                aria-label="Next page"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-muted transition enabled:hover:bg-canvas enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!hasNextPage}
+                onClick={() => onPageChange(page + 1)}
+                type="button"
+              >
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {error instanceof Error ? <p className="px-3 py-2 text-sm text-red-500">{error.message}</p> : null}
-      </Card>
+      </section>
     </div>
   );
 }

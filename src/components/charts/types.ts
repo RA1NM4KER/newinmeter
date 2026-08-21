@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { DailyPoint, DailyRollupRow, HourlyPoint, TariffPoint, UsageActivity } from "@/lib/types";
 
 export type ChartShellProps = {
-  title: string;
+  title: ReactNode;
   titleAdornment?: ReactNode;
   action?: ReactNode;
   footer?: ReactNode;
