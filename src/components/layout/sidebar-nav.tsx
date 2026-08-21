@@ -5,28 +5,18 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { parseDateRangeQuery, filterQueryParamKeys } from "@/lib/filter-query-params";
 import { queryHref } from "@/lib/url-query";
-import { buildNavItems } from "./nav-items";
+import { buildNavItems, type NavPermissions } from "./nav-items";
 
 const ACTIVITIES_SEEN_KEY = "activities-nav-seen";
 
-type SidebarNavProps = {
-  isAdmin?: boolean;
-  isActivitiesEnabled?: boolean;
-  isLiveMeterEnabled?: boolean;
-  onNavigate?: () => void;
-  size?: "default" | "lg";
-};
-
-// Shared between the desktop sidebar rail and the mobile menu drawer so the
-// two never drift out of sync. `size="lg"` is for the mobile drawer, where
-// touch targets need to be bigger than the compact desktop rail.
+// The desktop sidebar rail. Mobile has its own bottom nav bar (bottom-nav.tsx)
+// plus a compact overflow menu (BottomSheet in app-shell.tsx) instead of a
+// drawer-sized version of this, so this only ever needs the compact styling.
 export function SidebarNav({
   isAdmin = false,
   isActivitiesEnabled = false,
-  isLiveMeterEnabled = false,
-  onNavigate,
-  size = "default"
-}: SidebarNavProps) {
+  isLiveMeterEnabled = false
+}: NavPermissions) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { from, to } = parseDateRangeQuery(new URLSearchParams(searchParams.toString()));
@@ -34,7 +24,6 @@ export function SidebarNav({
   // Gated features (Live, Activities) are opt-in per user -- anyone without
   // the permission simply doesn't see the entry point at all.
   const items = buildNavItems({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled });
-  const isLarge = size === "lg";
   // Defaults to hidden, not shown -- the server has no localStorage to
   // check, so defaulting to "shown" would flash the badge on every refresh
   // for someone who already dismissed it. Starting hidden means a returning
@@ -62,7 +51,7 @@ export function SidebarNav({
   }
 
   return (
-    <nav className={`flex flex-col ${isLarge ? "gap-2" : "gap-1"}`}>
+    <nav className="flex flex-col gap-1">
       {items.map((item) => {
         const href = item.preserveDateRange ? queryHref(item.href, dateParams) : item.href;
         const isActive = pathname === item.href;
@@ -72,18 +61,17 @@ export function SidebarNav({
           <Link
             key={item.href}
             href={href}
-            onClick={onNavigate}
             aria-current={isActive ? "page" : undefined}
-            className={`flex items-center rounded-lg transition ${isLarge ? "gap-3 px-3 py-2 text-base" : "gap-2.5 px-2.5 py-1.5 text-sm"} ${
+            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition ${
               isActive ? "bg-paper font-medium text-ink shadow-sm" : "text-muted hover:bg-paper/60 hover:text-ink"
             }`}
           >
             <span
-              className={`flex shrink-0 items-center justify-center rounded-full transition ${isLarge ? "h-9 w-9" : "h-7 w-7"} ${
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition ${
                 isActive ? "bg-brandTeal text-white" : "text-muted"
               }`}
             >
-              <Icon className={isLarge ? "h-5 w-5" : "h-4 w-4"} aria-hidden="true" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
             </span>
             {item.label}
             {"isNew" in item && item.isNew && showActivitiesBadge ? (

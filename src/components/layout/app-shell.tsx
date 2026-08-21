@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Heart, Menu, Smartphone } from "lucide-react";
-import { FullscreenDialog } from "@/components/ui/fullscreen-dialog";
+import { Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
+import { BottomNav } from "./bottom-nav";
 import { SidebarNav } from "./sidebar-nav";
 import { Wordmark } from "./wordmark";
 import type { AppShellProps } from "./types";
@@ -20,29 +21,35 @@ function SignOutForm() {
   );
 }
 
-function InstallLink() {
+// Shared row style for every plain icon+label link in the sidebar footer and
+// the mobile "More" sheet (Admin, Install app, Buy me a coffee) -- one
+// component instead of three near-identical ones means they can't drift out
+// of alignment with each other the way SidebarNav's circle-badge treatment
+// (built for the main nav list) did when reused here for just Admin.
+function MenuLink({
+  href,
+  icon: Icon,
+  label,
+  external,
+  onClick
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  external?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <Link
       className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
-      href="/install"
+      href={href}
+      onClick={onClick}
+      rel={external ? "noreferrer" : undefined}
+      target={external ? "_blank" : undefined}
     >
-      <Smartphone aria-hidden="true" className="h-4 w-4" />
-      Install app
+      <Icon aria-hidden="true" className="h-4 w-4" />
+      {label}
     </Link>
-  );
-}
-
-function KofiLink() {
-  return (
-    <a
-      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
-      href="https://ko-fi.com/kefasaleck"
-      rel="noreferrer"
-      target="_blank"
-    >
-      <Heart aria-hidden="true" className="h-4 w-4" />
-      Buy me a coffee
-    </a>
   );
 }
 
@@ -77,9 +84,71 @@ export function AppShell({
 }: AppShellProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isActivitiesTableTab, setIsActivitiesTableTab] = useState(false);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const pathname = usePathname();
   const lockViewport =
     pathname === "/data" || pathname === "/admin" || (pathname === "/activities" && isActivitiesTableTab);
+
+  // Mobile header rolls away on scroll-down, back on scroll-up -- only ever
+  // fires for pages where <main> itself scrolls (lockViewport pages delegate
+  // scrolling to their own nested region instead, so main never scrolls
+  // there and the header just stays put, which is the right no-op for them).
+  const mainRef = useRef<HTMLElement>(null);
+  const lastScrollTopRef = useRef(0);
+  const tickingRef = useRef(false);
+
+  // useLayoutEffect, not useEffect: this has to run before paint, or the
+  // new page would flash at the old page's leftover scroll position for a
+  // frame before snapping to 0.
+  useLayoutEffect(() => {
+    // <main> never unmounts across a client-side navigation (only children
+    // does) -- its scrollTop otherwise carries straight over from whatever
+    // page was open before. Resetting the ref without also resetting the
+    // real scroll position left a stale scrollTop that the very next scroll
+    // event would diff against 0, producing a large spurious "scrolled
+    // down" delta that re-hid the header the instant it landed.
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+    setIsHeaderHidden(false);
+    lastScrollTopRef.current = 0;
+  }, [pathname]);
+
+  // Switching the Activities tab doesn't change pathname, so a header
+  // hidden while scrolled down on the Dashboard tab wouldn't otherwise
+  // reset when landing on the Table tab -- which is lockViewport (main
+  // doesn't scroll there), leaving no scroll-up gesture to bring it back.
+  useLayoutEffect(() => {
+    if (lockViewport) {
+      if (mainRef.current) {
+        mainRef.current.scrollTop = 0;
+      }
+      setIsHeaderHidden(false);
+      lastScrollTopRef.current = 0;
+    }
+  }, [lockViewport]);
+
+  const handleMainScroll = () => {
+    if (tickingRef.current) {
+      return;
+    }
+    tickingRef.current = true;
+    requestAnimationFrame(() => {
+      const scrollTop = mainRef.current?.scrollTop ?? 0;
+      const delta = scrollTop - lastScrollTopRef.current;
+
+      if (scrollTop < 16) {
+        setIsHeaderHidden(false);
+      } else if (delta > 8) {
+        setIsHeaderHidden(true);
+      } else if (delta < -8) {
+        setIsHeaderHidden(false);
+      }
+
+      lastScrollTopRef.current = scrollTop;
+      tickingRef.current = false;
+    });
+  };
 
   return (
     <div className="flex h-[100svh] overflow-hidden">
@@ -102,8 +171,8 @@ export function AppShell({
           />
         </div>
         <div className="shrink-0 px-3 pb-3">
-          <InstallLink />
-          <KofiLink />
+          <MenuLink href="/install" icon={Smartphone} label="Install app" />
+          <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
         </div>
         <div className="shrink-0 border-t border-line px-4 py-4">
           {isDemo ? (
@@ -130,52 +199,56 @@ export function AppShell({
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4 lg:hidden">
+        <header
+          className={`fixed inset-x-0 top-0 z-20 flex h-14 items-center border-b border-line bg-canvas px-4 transition-transform duration-200 motion-reduce:transition-none lg:hidden ${
+            isHeaderHidden ? "-translate-y-full" : "translate-y-0"
+          }`}
+        >
           <Link href="/">
             <Wordmark className="text-base" textClassName="text-ink" accentClassName="text-accent" />
           </Link>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsNavOpen(true)}
-              aria-label="Open menu"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition hover:text-ink"
-            >
-              <Menu className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
         </header>
 
         {/* The shell itself never scrolls -- the sidebar must stay put.
             Regular pages scroll their own content here; lockViewport pages
             (data table, admin users table, activities table tab) instead
             delegate scrolling to a nested region so their own
-            header/toolbar/footer can stay pinned too. */}
+            header/toolbar/footer can stay pinned too. The mobile header is
+            `fixed` (out of flow, so it can roll away on scroll without
+            leaving a gap), so pt-14 recreates the space it used to occupy
+            in-flow -- dropped again at lg since the header doesn't render
+            there at all. */}
         <main
-          className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pb-5 sm:px-6 lg:px-8 ${
+          className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pb-5 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
             lockViewport ? "min-h-0 overflow-hidden" : "overflow-y-auto"
           }`}
+          onScroll={handleMainScroll}
+          ref={mainRef}
         >
           {children}
         </main>
-      </div>
 
-      <FullscreenDialog
-        contentClassName="flex h-full flex-col"
-        isOpen={isNavOpen}
-        onClose={() => setIsNavOpen(false)}
-        title="Menu"
-      >
-        <SidebarNav
+        <BottomNav
           isAdmin={isAdmin}
           isActivitiesEnabled={isActivitiesEnabled}
           isLiveMeterEnabled={isLiveMeterEnabled}
-          onNavigate={() => setIsNavOpen(false)}
-          size="lg"
+          onOpenMenu={() => setIsNavOpen(true)}
         />
-        <div className="mt-auto flex flex-col gap-3 pt-6">
-          <InstallLink />
-          <KofiLink />
+      </div>
+
+      <BottomSheet isOpen={isNavOpen} onClose={() => setIsNavOpen(false)} title="Menu">
+        <div className="flex flex-col gap-1">
+          {isAdmin ? (
+            <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
+          ) : null}
+          <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
+          <MenuLink
+            external
+            href="https://ko-fi.com/kefasaleck"
+            icon={Heart}
+            label="Buy me a coffee"
+            onClick={() => setIsNavOpen(false)}
+          />
           <div className="border-t border-line pt-4">
             {isDemo ? (
               <div className="mb-2">
@@ -199,7 +272,7 @@ export function AppShell({
             </div>
           </div>
         </div>
-      </FullscreenDialog>
+      </BottomSheet>
     </div>
   );
 }
