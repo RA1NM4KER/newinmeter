@@ -126,35 +126,33 @@ export default function ActivitiesLoading() {
           </Card>
         </>
       ) : (
-        <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.12em] text-brandTeal dark:text-accent">
-                <tr>
-                  {activityReportColumns.map((column) => (
-                    <th className="px-3 py-3 font-medium" key={column.id}>
-                      {column.shortLabel ? (
-                        <>
-                          <span className="sm:hidden">{column.shortLabel}</span>
-                          <span className="hidden sm:inline">{column.label}</span>
-                        </>
-                      ) : (
-                        column.label
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                <ActivityReportSkeletonRows rowCount={8} />
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex h-11 shrink-0 items-center gap-3 border-t border-line px-3">
-            <p className="text-sm text-muted">Loading activities...</p>
-          </div>
-        </section>
+        <div className="-mt-3 flex min-h-0 flex-1 flex-col sm:mt-0">
+          <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
+                <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.12em] text-brandTeal dark:text-accent">
+                  <tr>
+                    {activityReportColumns.map((column) => (
+                      <th className="px-3 py-3 font-medium" key={column.id}>
+                        {column.shortLabel ? (
+                          <>
+                            <span className="sm:hidden">{column.shortLabel}</span>
+                            <span className="hidden sm:inline">{column.label}</span>
+                          </>
+                        ) : (
+                          column.label
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  <ActivityReportSkeletonRows rowCount={8} />
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

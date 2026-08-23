@@ -155,12 +155,6 @@ export function ActivityReportTable({
         <p className="p-6 text-center text-sm text-muted">Add an activity or adjust the filters to build a report.</p>
       ) : null}
 
-      <div className="flex h-11 shrink-0 items-center gap-3 border-t border-line px-3">
-        <p className="text-sm text-muted">
-          {isLoading ? "Loading activities..." : `${rows.length} ${rows.length === 1 ? "activity" : "activities"}`}
-        </p>
-      </div>
-
       {error ? <p className="px-3 py-2 text-sm text-red-500">{error.message}</p> : null}
     </section>
   );

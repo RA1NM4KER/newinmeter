@@ -203,16 +203,21 @@ export function ActivitiesPageClient({
           onJumpToDay={handleJumpToDay}
         />
       ) : (
-        <ActivityReportTable
-          rows={sortedRows}
-          error={error}
-          isLoading={isLoading}
-          hasNoActivitiesEver={hasNoActivitiesEver}
-          onEdit={setDialogActivity}
-          sortKey={sortKey}
-          sortDirection={sortDirection}
-          onSortChange={onSortChange}
-        />
+        // Pulled up over the gap-5 the parent flex column puts above every
+        // child, so the table sits closer to the tabs on mobile -- desktop
+        // (and the Dashboard tab) keep the normal spacing.
+        <div className="-mt-3 flex min-h-0 flex-1 flex-col sm:mt-0">
+          <ActivityReportTable
+            rows={sortedRows}
+            error={error}
+            isLoading={isLoading}
+            hasNoActivitiesEver={hasNoActivitiesEver}
+            onEdit={setDialogActivity}
+            sortKey={sortKey}
+            sortDirection={sortDirection}
+            onSortChange={onSortChange}
+          />
+        </div>
       )}
 
       <ActivityDialog

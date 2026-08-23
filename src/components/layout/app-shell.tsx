@@ -243,10 +243,12 @@ export function AppShell({
             lockViewport
               ? isFullBleedTable
                 ? // /data and activities' Table tab go full-bleed/edge-to-edge
-                  // below lg (own internal footer row already provides bottom
-                  // padding there). At lg+ each is back to a normal rounded,
-                  // bordered, margined card -- same "floating" treatment as
-                  // every other card on the page -- so it wants the same
+                  // below lg (/data has its own internal footer row for
+                  // bottom padding there; activities' table has none by
+                  // design, running flush to the bottom nav). At lg+ each is
+                  // back to a normal rounded, bordered, margined card -- same
+                  // "floating" treatment as every other card on the page --
+                  // so it wants the same
                   // bottom breathing room those get, restored via lg:pb-5.
                   "min-h-0 overflow-hidden lg:pb-5"
                 : // Admin's table stays a margined card at every width, so it
