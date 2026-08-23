@@ -44,7 +44,9 @@ export function ActivitiesPageClient({
     () => parseActivityQuery(new URLSearchParams(searchParams.toString())).tags,
     [searchParams]
   );
-  const activeTab = searchParams.get("tab") === "table" ? "table" : "dashboard";
+  const [activeTab, setActiveTabState] = useState<"dashboard" | "table">(() =>
+    searchParams.get("tab") === "table" ? "table" : "dashboard"
+  );
   const sortableColumnIds = useMemo(
     () => new Set<string>(activityReportColumns.filter((column) => column.sortable).map((column) => column.id)),
     []
@@ -98,19 +100,31 @@ export function ActivitiesPageClient({
 
   const updateSelectedTags = (tags: string[]) => {
     const next = replaceActivityTagParams(new URLSearchParams(searchParams.toString()), tags);
+    // searchParams here can be stale on "tab" -- setActiveTab updates the
+    // URL directly (bypassing the router) to skip a server round-trip, so
+    // reassert the current tab from local state rather than trusting it.
+    if (activeTab === "dashboard") next.delete("tab");
+    else next.set("tab", activeTab);
     startTagTransition(() => {
       router.replace(queryHref(pathname, next), { scroll: false });
     });
   };
 
+  // Tab switch is purely a client-side view toggle -- the report data is
+  // already cached (see the `activity-report` query above), so this must
+  // never go through router.replace. That would re-run the whole
+  // force-dynamic server tree (auth/connection/permissions/summary) just to
+  // flip a tab. Update the URL directly instead, bypassing Next's router.
   const setActiveTab = (tab: string) => {
+    const nextTab = tab === "table" ? "table" : "dashboard";
     const next = new URLSearchParams(searchParams.toString());
-    if (tab === "dashboard") {
+    if (nextTab === "dashboard") {
       next.delete("tab");
     } else {
-      next.set("tab", tab);
+      next.set("tab", nextTab);
     }
-    router.replace(queryHref(pathname, next), { scroll: false });
+    window.history.replaceState(window.history.state, "", queryHref(pathname, next));
+    setActiveTabState(nextTab);
   };
 
   const onSortChange = (key: ActivityReportSortKey) => {
@@ -121,6 +135,8 @@ export function ActivitiesPageClient({
     else next.set("sort", key);
     if (nextDirection === ACTIVITY_REPORT_DEFAULT_DIRECTION) next.delete("dir");
     else next.set("dir", nextDirection);
+    if (activeTab === "dashboard") next.delete("tab");
+    else next.set("tab", activeTab);
     router.replace(queryHref(pathname, next), { scroll: false });
   };
 
