@@ -156,19 +156,21 @@ export function ActivitiesPageClient({
         sticky
       />
 
-      <div>
-        <div className="flex items-center gap-1.5">
-          <h1 className="text-xl font-semibold text-ink">Activities</h1>
-          <span className="sm:hidden">
-            <InfoTooltip label="About activity tags" text={ACTIVITY_TAGS_DISCLAIMER} />
-          </span>
-        </div>
-        <p className="mt-1 hidden text-sm text-muted sm:block">
-          Compare household usage during the periods you tagged.
-        </p>
+      <div className="hidden sm:block">
+        <h1 className="text-xl font-semibold text-ink">Activities</h1>
+        <p className="mt-1 text-sm text-muted">Compare household usage during the periods you tagged.</p>
       </div>
 
-      <UnderlineTabs tabs={activityTabs} activeId={activeTab} onChange={setActiveTab} />
+      <UnderlineTabs
+        tabs={activityTabs}
+        activeId={activeTab}
+        onChange={setActiveTab}
+        endSlot={
+          <span className="pb-2 sm:hidden">
+            <InfoTooltip label="About activity tags" text={ACTIVITY_TAGS_DISCLAIMER} />
+          </span>
+        }
+      />
 
       {activeTab === "dashboard" ? (
         <ActivityDashboardTab

@@ -26,6 +26,7 @@ export type UnderlineTabsProps = {
   tabs: Array<{ id: string; label: string }>;
   activeId: string;
   onChange: (id: string) => void;
+  endSlot?: ReactNode;
 };
 
 export type SortHeaderButtonProps = {
