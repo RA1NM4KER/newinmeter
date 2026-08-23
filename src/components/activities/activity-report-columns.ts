@@ -16,6 +16,7 @@ export type ActivityReportColumnId =
 export type ActivityReportColumn = {
   id: ActivityReportColumnId;
   label: string;
+  shortLabel?: string;
   cellClassName: string;
   sortable: boolean;
   skeletonClassName: string;
@@ -47,6 +48,7 @@ export const activityReportColumns: ActivityReportColumn[] = [
   {
     id: "electricityUsage",
     label: "Electricity usage",
+    shortLabel: "Elec. usage",
     cellClassName: "whitespace-nowrap",
     sortable: true,
     skeletonClassName: "h-4 w-14"
@@ -54,6 +56,7 @@ export const activityReportColumns: ActivityReportColumn[] = [
   {
     id: "averageDemand",
     label: "Average demand",
+    shortLabel: "Avg demand",
     cellClassName: "whitespace-nowrap",
     sortable: true,
     skeletonClassName: "h-4 w-14"
@@ -61,6 +64,7 @@ export const activityReportColumns: ActivityReportColumn[] = [
   {
     id: "electricitySpend",
     label: "Electricity spend",
+    shortLabel: "Elec. spend",
     cellClassName: "whitespace-nowrap",
     sortable: true,
     skeletonClassName: "h-4 w-14"

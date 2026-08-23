@@ -52,7 +52,8 @@ export function ActivityDashboardTab({
             <MetricCard
               label="Average per activity"
               value={formatKwh(summary?.averageElectricityKwhPerActivity ?? 0)}
-              detail="Average household usage per occurrence"
+              detail="Per occurrence"
+              description="Average household electricity usage per tagged occurrence."
             />
           </>
         )}

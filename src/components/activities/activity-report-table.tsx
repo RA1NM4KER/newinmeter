@@ -7,7 +7,6 @@ import { activityReportColumns, type ActivityReportSortKey } from "./activity-re
 import { ActivityReportSkeletonRows } from "./activity-report-skeleton-rows";
 import { ActivityTagChip } from "./tag-chip";
 import { formatActivityMetric } from "./activity-report-model";
-import { Card } from "@/components/ui/card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
 import { activityTimeLabel, formatActivityDuration } from "@/lib/activity/utils";
@@ -93,7 +92,14 @@ export function ActivityReportTable({
   const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() });
 
   return (
-    <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+    // Not the shared Card component here -- its rounded-lg/border are
+    // hardcoded ahead of any className override, which would fight this
+    // section's own mobile-vs-desktop responsive overrides at equal
+    // specificity. On mobile the table breaks out to the full screen width
+    // (matching FilterBar's own fullBleed breakout) and drops its
+    // border/radius so it reads as one continuous surface, restored back to
+    // a normal bordered card at lg+ -- same treatment as /data's table.
+    <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-auto" ref={tableScrollRef}>
           <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
@@ -104,6 +110,7 @@ export function ActivityReportTable({
                     {column.sortable ? (
                       <SortHeaderButton
                         label={column.label}
+                        shortLabel={column.shortLabel}
                         active={sortKey === column.id}
                         direction={sortDirection}
                         onClick={() => onSortChange(column.id as ActivityReportSortKey)}
@@ -155,6 +162,6 @@ export function ActivityReportTable({
       </div>
 
       {error ? <p className="px-3 py-2 text-sm text-red-500">{error.message}</p> : null}
-    </Card>
+    </section>
   );
 }
