@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { BottomNav } from "./bottom-nav";
 import { SidebarNav } from "./sidebar-nav";
@@ -57,11 +58,24 @@ function MenuLink({
 // tree out of static generation) can't affect callers that render AppShell
 // on a static page, like /offline.
 function ActivitiesTableTabDetector({ onChange }: { onChange: (isTableTab: boolean) => void }) {
+  // Covers a real navigation landing on /activities?tab=table (direct link,
+  // reload, browser back/forward).
   const searchParams = useSearchParams();
 
   useEffect(() => {
     onChange(searchParams.get("tab") === "table");
   }, [searchParams, onChange]);
+
+  // Covers a client-side tab click, which updates the URL via
+  // history.replaceState directly and so never touches useSearchParams --
+  // see ACTIVITIES_TAB_CHANGE_EVENT.
+  useEffect(() => {
+    const handleTabChange = (event: Event) => {
+      onChange((event as CustomEvent<"dashboard" | "table">).detail === "table");
+    };
+    window.addEventListener(ACTIVITIES_TAB_CHANGE_EVENT, handleTabChange);
+    return () => window.removeEventListener(ACTIVITIES_TAB_CHANGE_EVENT, handleTabChange);
+  }, [onChange]);
 
   return null;
 }

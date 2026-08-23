@@ -22,6 +22,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { buildActivitySearchParams, parseActivityQuery, replaceActivityTagParams } from "@/lib/activity/query-params";
 import { fetchActivityReport, fetchActivityTags } from "@/lib/activity/client";
+import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { fetchDailyRollups } from "@/lib/dashboard-client";
 import { buildGlobalDomainsFromSummary } from "@/lib/day-breakdown";
 import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
@@ -124,6 +125,7 @@ export function ActivitiesPageClient({
       next.set("tab", nextTab);
     }
     window.history.replaceState(window.history.state, "", queryHref(pathname, next));
+    window.dispatchEvent(new CustomEvent(ACTIVITIES_TAB_CHANGE_EVENT, { detail: nextTab }));
     setActiveTabState(nextTab);
   };
 

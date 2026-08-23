@@ -47,10 +47,16 @@ export function ActivityDashboardTab({
                 </>
               }
               value={formatKwh(summary?.electricityKwh ?? 0)}
-              detail="Overlapping intervals counted once"
+              detail="Counted once"
+              description="Overlapping intervals are counted once."
             />
             <MetricCard
-              label="Average per activity"
+              label={
+                <>
+                  <span className="sm:hidden">Per activity</span>
+                  <span className="hidden sm:inline">Average per activity</span>
+                </>
+              }
               value={formatKwh(summary?.averageElectricityKwhPerActivity ?? 0)}
               detail="Per occurrence"
               description="Average household electricity usage per tagged occurrence."
