@@ -2,7 +2,7 @@ import type { UnderlineTabsProps } from "./types";
 
 export function UnderlineTabs({ tabs, activeId, onChange, endSlot }: UnderlineTabsProps) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line" role="tablist">
+    <div className="flex items-center gap-6 border-b border-line" role="tablist">
       <div className="flex gap-5">
         {tabs.map((tab) => {
           const isActive = tab.id === activeId;
