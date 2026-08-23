@@ -6,6 +6,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
+// See the identical stub in src/lib/newinmeter/connection.test.ts: this file
+// imports the real connection.ts module (for its named error export), whose
+// getConnectionForUser uses React 19's cache(), unavailable in the installed
+// react@18.3.1 outside Next's own bundler.
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
+  return { ...actual, cache: <T>(fn: T) => fn };
+});
 vi.mock("@/lib/newinmeter/connection", async () => {
   const actual = await vi.importActual<typeof import("@/lib/newinmeter/connection")>("@/lib/newinmeter/connection");
   return {

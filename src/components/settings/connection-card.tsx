@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { IconTile, SettingsGroup } from "@/components/ui/settings";
+import { IconTile, SettingsGroup, Toggle } from "@/components/ui/settings";
 import { SyncButton } from "@/components/ui/sync-button";
 import { isSyncStale } from "@/lib/sync-status";
 
@@ -15,6 +15,8 @@ type ConnectionCardProps = {
   accountLabel: string | null;
   lastSyncedAt: string | null;
   isDemo?: boolean;
+  autoSyncEnabled?: boolean;
+  nextSyncAt?: string | null;
 };
 
 export function ConnectionCard({
@@ -22,11 +24,15 @@ export function ConnectionCard({
   livemopayEmail,
   accountLabel,
   lastSyncedAt,
-  isDemo = false
+  isDemo = false,
+  autoSyncEnabled = true,
+  nextSyncAt = null
 }: ConnectionCardProps) {
   const router = useRouter();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+  const [autoSyncOn, setAutoSyncOn] = useState(autoSyncEnabled);
 
   async function handleDisconnect() {
     setIsDisconnecting(true);
@@ -39,10 +45,32 @@ export function ConnectionCard({
     }
   }
 
+  async function handleAutoSyncToggle(next: boolean) {
+    if (autoSyncBusy) return;
+    setAutoSyncBusy(true);
+    setAutoSyncOn(next);
+    try {
+      const response = await fetch("/api/livemopay/auto-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next })
+      });
+      if (!response.ok) {
+        setAutoSyncOn(!next);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setAutoSyncOn(!next);
+    } finally {
+      setAutoSyncBusy(false);
+    }
+  }
+
   const connected = status === "connected";
 
   return (
-    <SettingsGroup label="Data source">
+    <SettingsGroup label="Data & Sync">
       <div className="p-4 sm:p-5">
         <div className="flex items-center gap-4">
           <IconTile tone={connected ? "accent" : "default"}>
@@ -105,9 +133,29 @@ export function ConnectionCard({
                   {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
                 </dd>
               </div>
+              {autoSyncOn ? (
+                <div className="min-w-0 col-span-2">
+                  <dt className="text-muted">Next scheduled update</dt>
+                  <dd className="mt-1 truncate text-ink">
+                    {nextSyncAt ? new Date(nextSyncAt).toLocaleString() : "Not scheduled yet"}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
 
-            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+            <div className="mt-5 flex items-start justify-between gap-4 border-t border-line pt-4">
+              <div className="min-w-0">
+                <p className="text-[0.9375rem] font-medium text-ink">Automatic updates</p>
+                <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
+                  {autoSyncOn
+                    ? "NewinMeter periodically refreshes your LiveMopay data automatically."
+                    : "Your dashboard will only update when you refresh it manually."}
+                </p>
+              </div>
+              <Toggle checked={autoSyncOn} disabled={autoSyncBusy} onChange={handleAutoSyncToggle} label="Automatic updates" />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
               <SyncButton onSuccess={() => window.location.reload()} showNudge={isSyncStale(lastSyncedAt)} />
               <Button variant="dangerGhost" onClick={() => setConfirming(true)}>
                 Disconnect

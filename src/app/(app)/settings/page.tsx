@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Sun } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { AlertsCard } from "@/components/settings/alerts-card";
 import { BadgePermissionCard } from "@/components/settings/badge-permission-card";
 import { ConnectionCard } from "@/components/settings/connection-card";
 import { DeleteAccountCard } from "@/components/settings/delete-account-card";
@@ -30,15 +31,7 @@ export default async function SettingsPage() {
         <p className="mt-1.5 text-sm text-muted">Manage your data source, appearance, and account.</p>
       </header>
 
-      <ConnectionCard
-        status={connection?.status ?? "not_connected"}
-        livemopayEmail={connection?.livemopayEmail ?? null}
-        accountLabel={connection?.accountLabel ?? null}
-        lastSyncedAt={connection?.lastSyncedAt ?? null}
-        isDemo={connection?.isDemo ?? false}
-      />
-
-      <SettingsGroup label="Preferences">
+      <SettingsGroup label="General">
         <SettingsRow
           leading={
             <IconTile>
@@ -51,6 +44,18 @@ export default async function SettingsPage() {
         />
         <BadgePermissionCard lastSyncedAt={connection?.lastSyncedAt ?? null} />
       </SettingsGroup>
+
+      <ConnectionCard
+        status={connection?.status ?? "not_connected"}
+        livemopayEmail={connection?.livemopayEmail ?? null}
+        accountLabel={connection?.accountLabel ?? null}
+        lastSyncedAt={connection?.lastSyncedAt ?? null}
+        isDemo={connection?.isDemo ?? false}
+        autoSyncEnabled={connection?.autoSyncEnabled ?? true}
+        nextSyncAt={connection?.nextSyncAt ?? null}
+      />
+
+      <AlertsCard />
 
       <SettingsGroup label="Account">
         <SettingsRow

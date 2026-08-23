@@ -1,9 +1,11 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { createSupabaseAdminClient } from "../supabase/admin-client";
 import { decryptRefreshToken, encryptRefreshToken } from "../token-encryption";
+import { computeAutoSyncRetryAt, computeNextAutoSyncAt } from "./schedule";
 import type { LiveMopayAccountCandidate } from "./web";
 
 export type ConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
@@ -39,6 +41,13 @@ type ConnectionRow = {
   last_synced_at: string | null;
   last_error: string | null;
   is_demo: boolean;
+  auto_sync_enabled: boolean;
+  next_sync_at: string | null;
+  last_auto_sync_at: string | null;
+  last_auto_sync_status: "success" | "failed" | null;
+  last_auto_sync_error: string | null;
+  sync_claimed_at: string | null;
+  alerts_enabled: boolean;
 };
 
 export type LivemopayConnection = {
@@ -58,12 +67,19 @@ export type LivemopayConnection = {
   // model, fixed synthetic content, never a real LiveMopay credential. See
   // scripts/seed-demo-account.ts.
   isDemo: boolean;
+  autoSyncEnabled: boolean;
+  nextSyncAt: string | null;
+  lastAutoSyncAt: string | null;
+  lastAutoSyncStatus: "success" | "failed" | null;
+  lastAutoSyncError: string | null;
+  alertsEnabled: boolean;
 };
 
 const CONNECTION_SELECT =
   "id,user_id,livemopay_email,firebase_local_id,account_id,company_id,property_id,account_label," +
   "refresh_token_ciphertext,refresh_token_iv,refresh_token_auth_tag,pending_accounts,status," +
-  "connected_at,updated_at,last_synced_at,last_error,is_demo";
+  "connected_at,updated_at,last_synced_at,last_error,is_demo,auto_sync_enabled,next_sync_at," +
+  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at,alerts_enabled";
 
 function toConnection(row: ConnectionRow): LivemopayConnection {
   return {
@@ -79,7 +95,13 @@ function toConnection(row: ConnectionRow): LivemopayConnection {
     connectedAt: row.connected_at,
     lastSyncedAt: row.last_synced_at,
     lastError: row.last_error,
-    isDemo: row.is_demo
+    isDemo: row.is_demo,
+    autoSyncEnabled: row.auto_sync_enabled,
+    nextSyncAt: row.next_sync_at,
+    lastAutoSyncAt: row.last_auto_sync_at,
+    lastAutoSyncStatus: row.last_auto_sync_status,
+    lastAutoSyncError: row.last_auto_sync_error,
+    alertsEnabled: row.alerts_enabled
   };
 }
 
@@ -141,8 +163,17 @@ export async function beginLivemopayConnection(params: BeginConnectionParams): P
   const encrypted = encryptRefreshToken(params.refreshToken);
   const single = params.candidates.length === 1 ? params.candidates[0] : null;
   const nowIso = new Date().toISOString();
+  // Reconnecting keeps whatever auto-sync preference the user already set
+  // (defaults true for a genuinely new row -- see the connection-level
+  // default). Either way, this call is the "connect/reconnect" transition:
+  // becoming connected with auto-sync on always gets a fresh next_sync_at,
+  // never a stale one left over from before a disconnect.
+  const autoSyncEnabled = existing?.auto_sync_enabled ?? true;
+  const connectionId = existing?.id ?? randomUUID();
+  const nextSyncAt = single && autoSyncEnabled ? computeNextAutoSyncAt(connectionId, new Date()).toISOString() : null;
 
   const payload = {
+    id: connectionId,
     user_id: params.userId,
     livemopay_email: params.livemopayEmail,
     firebase_local_id: params.firebaseLocalId ?? null,
@@ -156,6 +187,11 @@ export async function beginLivemopayConnection(params: BeginConnectionParams): P
     pending_accounts: single ? null : params.candidates,
     status: single ? "connected" : "pending_selection",
     last_error: null,
+    auto_sync_enabled: autoSyncEnabled,
+    next_sync_at: nextSyncAt,
+    last_auto_sync_status: null,
+    last_auto_sync_error: null,
+    sync_claimed_at: null,
     updated_at: nowIso
   };
 
@@ -191,6 +227,11 @@ export async function finalizeLivemopayAccountSelection(userId: string, index: n
     throw new Error("Selected account is not one of the discovered candidates.");
   }
 
+  // This is the "becomes connected" transition for the multi-candidate
+  // flow -- same rule as beginLivemopayConnection's single-candidate path:
+  // a fresh next_sync_at when auto-sync is (still) enabled.
+  const nextSyncAt = row.auto_sync_enabled ? computeNextAutoSyncAt(row.id, new Date()).toISOString() : null;
+
   const rows = await adminSupabaseRequest<ConnectionRow[]>(
     "PATCH",
     `/livemopay_connections?id=eq.${encodeURIComponent(row.id)}`,
@@ -201,6 +242,7 @@ export async function finalizeLivemopayAccountSelection(userId: string, index: n
       account_label: candidate.label,
       status: "connected",
       pending_accounts: null,
+      next_sync_at: nextSyncAt,
       updated_at: new Date().toISOString()
     },
     "return=representation"
@@ -232,6 +274,14 @@ export async function disconnectLivemopayConnection(userId: string): Promise<voi
       refresh_token_iv: null,
       refresh_token_auth_tag: null,
       pending_accounts: null,
+      // auto_sync_enabled itself is left as-is (it's a user preference that
+      // should survive a reconnect), but next_sync_at is cleared so a
+      // disconnected connection is never "due" -- the claim RPC also filters
+      // on status='connected' independently, so this is belt and braces for
+      // the Settings UI reading a stale next-scheduled time more than it is
+      // for claiming itself.
+      next_sync_at: null,
+      sync_claimed_at: null,
       updated_at: new Date().toISOString()
     },
     "return=minimal"
@@ -355,8 +405,198 @@ export async function markConnectionAuthError(connectionId: string): Promise<voi
       refresh_token_ciphertext: null,
       refresh_token_iv: null,
       refresh_token_auth_tag: null,
+      // status leaving 'connected' already excludes this row from
+      // claim_due_auto_sync_connections(), but next_sync_at/sync_claimed_at
+      // are cleared too so Settings/admin never show a stale "next sync"
+      // time for a connection that needs reauth.
+      next_sync_at: null,
+      sync_claimed_at: null,
+      last_auto_sync_status: "failed",
+      last_auto_sync_error: "Reconnect required.",
       updated_at: new Date().toISOString()
     },
+    "return=minimal"
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Automatic sync scheduling
+// ---------------------------------------------------------------------------
+
+// Settings toggle. Ownership is resolved from the authenticated session's
+// userId (the caller), never a connection id supplied by the browser -- see
+// /api/livemopay/auto-sync. Turning automatic updates on assigns a fresh
+// next_sync_at when the connection is actually connected (there's nothing
+// to schedule otherwise -- the claim RPC would exclude it anyway, but a
+// non-null next_sync_at while disconnected would be a misleading thing for
+// Settings to display). Turning them off clears next_sync_at, which is what
+// actually stops future claims (independent of, and in addition to, the
+// claim RPC's own auto_sync_enabled check).
+export async function setAutoSyncEnabled(userId: string, enabled: boolean): Promise<LivemopayConnection> {
+  const row = await getConnectionRowForUser(userId);
+  if (!row) {
+    throw new Error("No LiveMopay connection for this user.");
+  }
+  if (row.is_demo) {
+    throw new DemoAccountProtectedError("automatic sync");
+  }
+
+  const nextSyncAt = enabled && row.status === "connected" ? computeNextAutoSyncAt(row.id, new Date()).toISOString() : null;
+
+  const rows = await adminSupabaseRequest<ConnectionRow[]>(
+    "PATCH",
+    `/livemopay_connections?id=eq.${encodeURIComponent(row.id)}`,
+    {
+      auto_sync_enabled: enabled,
+      next_sync_at: nextSyncAt,
+      updated_at: new Date().toISOString()
+    },
+    "return=representation"
+  );
+
+  return toConnection(rows[0]);
+}
+
+// Minimal scaffolding toggle for the future alert system -- see the
+// alerts_enabled column comment in the auto-sync-schedule migration. No
+// alert evaluation exists yet; this only persists the preference.
+export async function setAlertsEnabled(userId: string, enabled: boolean): Promise<LivemopayConnection> {
+  const row = await getConnectionRowForUser(userId);
+  if (!row) {
+    throw new Error("No LiveMopay connection for this user.");
+  }
+  if (row.is_demo) {
+    throw new DemoAccountProtectedError("alerts");
+  }
+
+  const rows = await adminSupabaseRequest<ConnectionRow[]>(
+    "PATCH",
+    `/livemopay_connections?id=eq.${encodeURIComponent(row.id)}`,
+    { alerts_enabled: enabled, updated_at: new Date().toISOString() },
+    "return=representation"
+  );
+
+  return toConnection(rows[0]);
+}
+
+// What the auto-sync worker needs to actually run a sync for one claimed
+// connection -- deliberately narrow (no email, no account_label, no
+// pending_accounts) since this crosses from trusted server-to-server RPC
+// output straight into runLivemopaySync() territory.
+export type ClaimedAutoSyncConnection = {
+  id: string;
+  userId: string;
+  accountId: string;
+  companyId: string;
+  propertyId: string;
+  refreshTokenCiphertext: string;
+  refreshTokenIv: string;
+  refreshTokenAuthTag: string;
+};
+
+type ClaimRpcRow = {
+  id: string;
+  user_id: string;
+  account_id: string;
+  company_id: string;
+  property_id: string;
+  refresh_token_ciphertext: string;
+  refresh_token_iv: string;
+  refresh_token_auth_tag: string;
+};
+
+// Atomically claims up to `limit` due connections via the
+// claim_due_auto_sync_connections RPC (see the auto-sync-schedule
+// migration) -- the scheduler-claim layer that sits above
+// capture_runs_one_running_per_connection, preventing two overlapping
+// worker invocations from both dispatching the same connection. Demo
+// connections are excluded inside the RPC itself, not here.
+export async function claimDueAutoSyncConnections(
+  limit: number,
+  claimTtlMinutes: number
+): Promise<ClaimedAutoSyncConnection[]> {
+  const rows = await adminSupabaseRequest<ClaimRpcRow[]>("POST", "/rpc/claim_due_auto_sync_connections", {
+    p_limit: limit,
+    p_claim_ttl: `${claimTtlMinutes} minutes`
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    accountId: row.account_id,
+    companyId: row.company_id,
+    propertyId: row.property_id,
+    refreshTokenCiphertext: row.refresh_token_ciphertext,
+    refreshTokenIv: row.refresh_token_iv,
+    refreshTokenAuthTag: row.refresh_token_auth_tag
+  }));
+}
+
+// Successful automatic sync: preserves the general last_synced_at/last_error
+// state (same fields a manual sync updates, and same stale_notified_at
+// reset -- see markConnectionSyncOutcome), sets the automatic-specific
+// success state, clears any stale automatic error, releases the scheduler
+// claim, and computes the next deterministic scheduled window.
+export async function markAutoSyncSuccess(connectionId: string): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const nextSyncAt = computeNextAutoSyncAt(connectionId, new Date()).toISOString();
+
+  await adminSupabaseRequest(
+    "PATCH",
+    `/livemopay_connections?id=eq.${encodeURIComponent(connectionId)}`,
+    {
+      last_synced_at: nowIso,
+      last_error: null,
+      stale_notified_at: null,
+      last_auto_sync_at: nowIso,
+      last_auto_sync_status: "success",
+      last_auto_sync_error: null,
+      sync_claimed_at: null,
+      next_sync_at: nextSyncAt,
+      updated_at: nowIso
+    },
+    "return=minimal"
+  );
+}
+
+// Retryable automatic-sync failure (network error, upstream 5xx, timeout --
+// anything that isn't a permanent auth failure, which goes through
+// markConnectionAuthError instead and leaves the connection out of
+// 'connected' status entirely). Releases the claim and schedules a modest
+// flat-backoff retry rather than hammering LiveMopay again on the very next
+// 5-minute scheduler tick.
+export async function markAutoSyncFailure(connectionId: string, message: string): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const nextSyncAt = computeAutoSyncRetryAt(new Date()).toISOString();
+
+  await adminSupabaseRequest(
+    "PATCH",
+    `/livemopay_connections?id=eq.${encodeURIComponent(connectionId)}`,
+    {
+      last_error: message,
+      last_auto_sync_at: nowIso,
+      last_auto_sync_status: "failed",
+      last_auto_sync_error: message,
+      sync_claimed_at: null,
+      next_sync_at: nextSyncAt,
+      updated_at: nowIso
+    },
+    "return=minimal"
+  );
+}
+
+// Releases a scheduler claim without recording any success/failure state --
+// used only when runLivemopaySync() threw SyncAlreadyRunningError, i.e. a
+// manual refresh (or another automatic attempt) already holds the real
+// capture_runs lock. That's not this connection's fault, so next_sync_at is
+// left exactly as it was (still due) and the next scheduler tick -- or the
+// in-flight sync finishing -- resolves it naturally rather than recording a
+// spurious failure.
+export async function releaseAutoSyncClaim(connectionId: string): Promise<void> {
+  await adminSupabaseRequest(
+    "PATCH",
+    `/livemopay_connections?id=eq.${encodeURIComponent(connectionId)}`,
+    { sync_claimed_at: null, updated_at: new Date().toISOString() },
     "return=minimal"
   );
 }

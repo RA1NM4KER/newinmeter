@@ -71,6 +71,10 @@ export type AdminUserListItem = UserPermissions & {
   lastRunAt: string | null;
   lastRunError: string | null;
   lastRunRowsSynced: number | null;
+  autoSyncEnabled: boolean | null;
+  nextSyncAt: string | null;
+  lastAutoSyncStatus: "success" | "failed" | null;
+  lastAutoSyncAt: string | null;
 };
 
 type ConnectionRow = {
@@ -78,6 +82,10 @@ type ConnectionRow = {
   user_id: string;
   status: LivemopayConnectionStatus;
   updated_at: string;
+  auto_sync_enabled: boolean;
+  next_sync_at: string | null;
+  last_auto_sync_status: "success" | "failed" | null;
+  last_auto_sync_at: string | null;
 };
 
 type CaptureRunRow = {
@@ -110,13 +118,16 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   // updated_at desc and keeping the first hit per user_id gives the current
   // one.
   const connectionRows = await adminSupabaseFetch<ConnectionRow[]>(
-    "/livemopay_connections?select=id,user_id,status,updated_at&order=updated_at.desc"
+    "/livemopay_connections?select=id,user_id,status,updated_at,auto_sync_enabled,next_sync_at," +
+      "last_auto_sync_status,last_auto_sync_at&order=updated_at.desc"
   );
   const connectionStatusByUserId = new Map<string, LivemopayConnectionStatus>();
+  const autoSyncByUserId = new Map<string, Pick<ConnectionRow, "auto_sync_enabled" | "next_sync_at" | "last_auto_sync_status" | "last_auto_sync_at">>();
   const userIdByConnectionId = new Map<string, string>();
   for (const row of connectionRows) {
     if (!connectionStatusByUserId.has(row.user_id)) {
       connectionStatusByUserId.set(row.user_id, row.status);
+      autoSyncByUserId.set(row.user_id, row);
     }
     userIdByConnectionId.set(row.id, row.user_id);
   }
@@ -156,7 +167,11 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
         lastRunStatus: lastRun?.status ?? null,
         lastRunAt: lastRun?.finished_at ?? lastRun?.started_at ?? null,
         lastRunError: lastRun?.error ?? null,
-        lastRunRowsSynced: lastRun?.rows_synced ?? null
+        lastRunRowsSynced: lastRun?.rows_synced ?? null,
+        autoSyncEnabled: autoSyncByUserId.get(user.id)?.auto_sync_enabled ?? null,
+        nextSyncAt: autoSyncByUserId.get(user.id)?.next_sync_at ?? null,
+        lastAutoSyncStatus: autoSyncByUserId.get(user.id)?.last_auto_sync_status ?? null,
+        lastAutoSyncAt: autoSyncByUserId.get(user.id)?.last_auto_sync_at ?? null
       };
     })
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));

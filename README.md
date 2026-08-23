@@ -41,11 +41,19 @@ Supabase Auth sign-in
   -> Postgres trigger recomputes that connection's rollups + dashboard_summary row
   -> dashboard / data table / export / assistant read through Supabase RLS, scoped to auth.uid()
   -> every authenticated API route checks a per-user Upstash rate limit before doing any work
+
+Supabase pg_cron (every 5 minutes)
+  -> pg_net POST -> protected /api/cron/auto-sync (server-to-server, bearer-secret auth)
+  -> atomically claims a small batch of connections whose next_sync_at is due
+  -> runs the same /api/sync pipeline (incremental) for each, bounded concurrency
+  -> records outcome, computes each connection's next deterministic scheduled window
 ```
 
-There are no job queues, polling workers, or remote command systems. The deployed app never
-depends on local files -- no CSV, no session file. See `MULTI_USER_SETUP.md` for the full
-ownership model, migration order, and setup steps.
+There is no generic job queue or remote command system -- automatic LiveMopay syncing is the one
+narrow, purpose-built scheduler described above, not a distributed task framework. The deployed
+app never depends on local files -- no CSV, no session file. See `MULTI_USER_SETUP.md` for the
+full ownership model, migration order, setup steps, and the "Automatic sync scheduling" section
+for how the scheduler itself is configured.
 
 ## Supabase Schema
 
@@ -54,8 +62,11 @@ section 6 for the exact order and where the legacy-owner backfill fits in. The m
 migrations add:
 
 - `livemopay_connections` -- one row per user's LiveMopay connection: discovered account/company/
-  property ids, an encrypted refresh token (AES-256-GCM, nullable when disconnected), status, and
-  `is_demo` (marks the one seeded recruiter/demo connection -- see "Demo account" below).
+  property ids, an encrypted refresh token (AES-256-GCM, nullable when disconnected), status,
+  `is_demo` (marks the one seeded recruiter/demo connection -- see "Demo account" below), and the
+  automatic-sync scheduling columns (`auto_sync_enabled`, `next_sync_at`, `last_auto_sync_at`,
+  `last_auto_sync_status`, `sync_claimed_at`, `alerts_enabled`) -- see "Automatic sync scheduling"
+  in `MULTI_USER_SETUP.md`.
 - `connection_id` ownership on `energy_rows`, `capture_runs`, `energy_day_rollups`,
   `energy_hourly_rollups`, `energy_interval_rollups`, and `dashboard_summary` (one summary row per
   connection, replacing the old single global row). All of these cascade-delete when their

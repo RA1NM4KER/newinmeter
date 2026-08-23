@@ -151,6 +151,19 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
               <InfoRow label="Last sync">
                 <LastSyncCell user={user} />
               </InfoRow>
+              <InfoRow label="Auto-sync">
+                {user.autoSyncEnabled === null ? (
+                  <span className="text-xs text-muted">No connection</span>
+                ) : !user.autoSyncEnabled ? (
+                  <span className="text-xs text-muted">Off</span>
+                ) : (
+                  <span className="text-xs text-ink">
+                    On
+                    {user.nextSyncAt ? ` · next ${new Date(user.nextSyncAt).toLocaleString()}` : " · not scheduled"}
+                    {user.lastAutoSyncStatus === "failed" ? " · last attempt failed" : ""}
+                  </span>
+                )}
+              </InfoRow>
             </div>
           </section>
 

@@ -48,6 +48,7 @@ NEWINMETER_WEB_PORTAL_ORIGIN=https://app.livewalletportal.co.za
 NEWINMETER_WEB_APP_FLAVOR=livemopay
 NEWINMETER_TOKEN_ENCRYPTION_KEY=
 NEXT_PUBLIC_APP_URL=https://your-deployment.vercel.app
+CRON_SECRET=            # shared secret for /api/cron/* routes -- see section 17
 OPENAI_API_KEY=        # optional, enables the assistant
 OPENAI_MODEL=gpt-4.1-mini
 ```
@@ -236,3 +237,49 @@ are never cached). If Firebase returns a different refresh token than the one th
 new one is encrypted and written back to the connection row (`replaceConnectionRefreshToken`)
 before the ledger fetch proceeds, so the old encrypted value is never left stored alongside a
 newer, valid one.
+
+## 17. Automatic sync scheduling
+
+Applied by `20260824000000_newinmeter_auto_sync_schedule.sql`. Each connection gets its own
+deterministic schedule (four daily windows in `Africa/Johannesburg`, jittered per connection --
+see `src/lib/newinmeter/schedule.ts`), claimed atomically via the
+`claim_due_auto_sync_connections` Postgres RPC and dispatched by `/api/cron/auto-sync`, a protected
+internal route -- never called from the browser. The migration also schedules a `pg_cron` job that
+ticks that route every 5 minutes via `pg_net`.
+
+This is a **second Postgres extension setup, not just a migration**: `pg_cron` and `pg_net` need
+to be enabled once per Supabase project, and (deliberately, since committing real credentials is
+not something a migration file should ever do) the worker URL and its bearer secret need to be
+stored in Supabase Vault once per environment. Do this after applying the migration:
+
+1. If the migration's `create extension if not exists pg_cron ...` / `pg_net` lines failed with an
+   insufficient-privilege error, enable both once via Supabase Dashboard -> Database -> Extensions,
+   then re-run the migration.
+2. In the Supabase SQL editor, create the two Vault secrets the migration's
+   `trigger_newinmeter_auto_sync()` function reads (use the same value for the secret as your
+   deployment's `CRON_SECRET` env var -- the worker route checks incoming requests against that
+   same secret):
+
+   ```sql
+   select vault.create_secret('https://your-deployment.vercel.app/api/cron/auto-sync', 'newinmeter_auto_sync_url');
+   select vault.create_secret('<same value as your CRON_SECRET env var>', 'newinmeter_auto_sync_secret');
+   ```
+
+   Until both secrets exist, the pg_cron tick is a safe no-op (it logs and returns rather than
+   erroring) -- nothing breaks in the meantime, automatic syncing just doesn't start yet.
+3. Verify: `select * from cron.job where jobname = 'newinmeter-auto-sync-worker';` should show the
+   scheduled job, and `select * from cron.job_run_details order by start_time desc limit 5;` should
+   show recent runs succeeding once the Vault secrets are in place.
+
+Existing connected accounts are backfilled to an immediately-due `next_sync_at` by the migration
+itself, so automatic syncing starts working for them on the very next tick after setup, without
+anyone needing to visit Settings first. New connections get `auto_sync_enabled = true` by default.
+
+Demo connections (`is_demo = true`) are excluded at the claim RPC itself (`is_demo = false` in its
+`WHERE` clause) -- not only in the UI or the worker route -- so `runLivemopaySync()` is never
+reachable for the shared demo account through this path, matching every other demo protection in
+the app.
+
+See the migration file's own comments for the full design (the scheduler claim vs.
+`capture_runs_one_running_per_connection`, claim expiry/crash recovery, retryable vs.
+authentication failures, and the deterministic per-connection offset).
