@@ -5,7 +5,9 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toggle } from "@/components/ui/settings";
 import type { AlertType } from "@/lib/newinmeter/alert-types";
 import { hasDismissedDeviceNotifications, markDeviceNotificationsDismissed } from "@/lib/push-client";
+import { dismissInstallPromo, isInstallPromoCoolingDown } from "@/lib/pwa-install-prompt";
 import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
+import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 
 type AlertRuleRowProps = {
   type: AlertType;
@@ -62,6 +64,7 @@ export function AlertRuleRow({
   onAutoSyncEnabledChange
 }: AlertRuleRowProps) {
   const { browserPermission, subscriptionActive, enableDeviceNotifications } = useDeviceNotifications();
+  const { isIos, isStandalone, openInstallGuide } = usePwaInstall();
   // null (not 0) when there's genuinely no starting value (e.g.
   // monthly_budget with no history-derived suggestion yet) -- see
   // handleToggle/handleThresholdBlur's own comments for why that distinction
@@ -77,6 +80,7 @@ export function AlertRuleRow({
   // value covers it.
   const [pendingAlsoEnableAutoSync, setPendingAlsoEnableAutoSync] = useState(false);
   const [confirmingPush, setConfirmingPush] = useState(false);
+  const [confirmingIosSetup, setConfirmingIosSetup] = useState(false);
   // Carries an auto-sync confirmation across the deferred-threshold gap
   // below: if the user already confirmed "turn on automatic updates too"
   // before a usable threshold existed, that confirmation must still apply
@@ -164,18 +168,36 @@ export function AlertRuleRow({
   // -- this just decides whether the one-time "Turn on notifications?"
   // dialog is worth showing before saving.
   async function proceedToEnable(alsoEnableAutoSync: boolean) {
-    if (
-      subscriptionActive ||
-      browserPermission === "denied" ||
-      browserPermission === "unsupported" ||
-      hasDismissedDeviceNotifications()
-    ) {
-      // Device push is already on, or asking here couldn't help (blocked/
-      // unsupported), or the user already said "keep notifications off" on
-      // this device once -- don't ask again on every alert toggle. That
-      // dismissal is cleared automatically the moment this device's push
-      // actually turns on (via either General or this dialog elsewhere),
-      // so turning General off again later is treated as a fresh decision.
+    if (subscriptionActive || hasDismissedDeviceNotifications()) {
+      // Device push is already on, or the user already said "keep
+      // notifications off" on this device once -- don't ask again on every
+      // alert toggle. That dismissal is cleared automatically the moment
+      // this device's push actually turns on (via either General or this
+      // dialog elsewhere), so turning General off again later is treated as
+      // a fresh decision.
+      await save(true, threshold, alsoEnableAutoSync);
+      return;
+    }
+
+    if (isIos && !isStandalone) {
+      // iOS Safari before Home Screen install has no Web Push -- asking for
+      // permission here would be pointless (and getPushPermissionState()
+      // reports "unsupported" for exactly this reason). The alert itself
+      // must still save regardless of what the user does next, so this
+      // never calls enableDeviceNotifications()/requestPermission() at all;
+      // it only offers the Home Screen setup as a separate, dismissible
+      // step afterward. A device-local cooldown (not a forever flag) keeps
+      // this from nagging on every alert toggle after one "Not now".
+      const saved = await save(true, threshold, alsoEnableAutoSync);
+      if (saved && !isInstallPromoCoolingDown()) {
+        setConfirmingIosSetup(true);
+      }
+      return;
+    }
+
+    if (browserPermission === "denied" || browserPermission === "unsupported") {
+      // Asking here couldn't help (blocked, or genuinely unsupported on a
+      // non-iOS platform) -- just save.
       await save(true, threshold, alsoEnableAutoSync);
       return;
     }
@@ -228,6 +250,16 @@ export function AlertRuleRow({
     markDeviceNotificationsDismissed();
     setConfirmingPush(false);
     void save(true, threshold, pendingAlsoEnableAutoSync);
+  }
+
+  function handleContinueIosSetup() {
+    setConfirmingIosSetup(false);
+    openInstallGuide();
+  }
+
+  function handleDismissIosSetup() {
+    dismissInstallPromo();
+    setConfirmingIosSetup(false);
   }
 
   function handleThresholdBlur() {
@@ -304,6 +336,17 @@ export function AlertRuleRow({
         busy={busy}
         onConfirm={() => void handleTurnOnNotifications()}
         onCancel={handleKeepNotificationsOff}
+      />
+
+      <ConfirmDialog
+        open={confirmingIosSetup}
+        title="Get alerts on your phone"
+        message={`"${title}" is on. Add NewinMeter to your Home Screen so alerts like this can reach you even when the app is closed.`}
+        confirmLabel="Set up phone alerts"
+        cancelLabel="Not now"
+        confirmVariant="primary"
+        onConfirm={handleContinueIosSetup}
+        onCancel={handleDismissIosSetup}
       />
     </div>
   );

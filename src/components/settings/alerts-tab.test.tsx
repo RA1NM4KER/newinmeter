@@ -52,7 +52,7 @@ describe("AlertsTab", () => {
 
   it("renders the device-notification status section near the top", () => {
     render(<AlertsTab {...baseProps()} />);
-    expect(screen.queryByText("Push notifications are off on this device.")).not.toBeNull();
+    expect(screen.queryByText("Phone notifications are off")).not.toBeNull();
   });
 
   it("omits the device-notification status section once this device is subscribed", () => {

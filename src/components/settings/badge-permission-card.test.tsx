@@ -5,11 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   useDeviceNotifications: vi.fn(),
   enableDeviceNotifications: vi.fn(),
-  disableDeviceNotifications: vi.fn()
+  disableDeviceNotifications: vi.fn(),
+  usePwaInstall: vi.fn(),
+  openInstallGuide: vi.fn()
 }));
 
 vi.mock("@/components/layout/push-notification-provider", () => ({
   useDeviceNotifications: mocks.useDeviceNotifications
+}));
+vi.mock("@/components/pwa/pwa-install-provider", () => ({
+  usePwaInstall: mocks.usePwaInstall
 }));
 
 import { BadgePermissionCard } from "./badge-permission-card";
@@ -26,6 +31,22 @@ function setDeviceNotifications(overrides: Partial<{ browserPermission: string; 
   });
 }
 
+function setPwaInstall(overrides: Partial<{ isIos: boolean; isStandalone: boolean }> = {}) {
+  mocks.usePwaInstall.mockReturnValue({
+    ready: true,
+    isStandalone: false,
+    isIos: false,
+    isMobile: false,
+    platform: "desktop",
+    canPromptInstall: false,
+    promptInstall: vi.fn(),
+    isInstallGuideOpen: false,
+    openInstallGuide: mocks.openInstallGuide,
+    closeInstallGuide: vi.fn(),
+    ...overrides
+  });
+}
+
 describe("BadgePermissionCard", () => {
   afterEach(() => {
     cleanup();
@@ -35,9 +56,27 @@ describe("BadgePermissionCard", () => {
     vi.clearAllMocks();
     mocks.enableDeviceNotifications.mockResolvedValue({ status: "granted" });
     mocks.disableDeviceNotifications.mockResolvedValue(undefined);
+    setPwaInstall();
   });
 
   it("renders nothing when the platform is unsupported", () => {
+    setDeviceNotifications({ browserPermission: "unsupported" });
+    const { container } = render(<BadgePermissionCard />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("iOS browser, not installed: shows a setup action instead of disappearing", () => {
+    setPwaInstall({ isIos: true, isStandalone: false });
+    setDeviceNotifications({ browserPermission: "unsupported" });
+    render(<BadgePermissionCard />);
+
+    expect(screen.getByText("Notifications")).toBeDefined();
+    fireEvent.click(screen.getByText("Set up"));
+    expect(mocks.openInstallGuide).toHaveBeenCalledTimes(1);
+  });
+
+  it("iOS, installed (standalone) but genuinely unsupported: still renders nothing", () => {
+    setPwaInstall({ isIos: true, isStandalone: true });
     setDeviceNotifications({ browserPermission: "unsupported" });
     const { container } = render(<BadgePermissionCard />);
     expect(container.firstChild).toBeNull();

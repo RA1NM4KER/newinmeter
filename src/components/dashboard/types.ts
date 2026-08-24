@@ -8,6 +8,8 @@ export type DashboardShellProps = {
   summary: DashboardSummary;
   isAiAssistantEnabled?: boolean;
   isActivitiesEnabled?: boolean;
+  isAlertsEnabled?: boolean;
+  isDemo?: boolean;
 };
 
 export type InsightsProps = {

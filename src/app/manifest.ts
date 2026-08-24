@@ -6,6 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "NewinMeter",
     short_name: "NewinMeter",
     description: "Track electricity usage, spend, tariffs, and balance from your phone or desktop.",
+    id: "/",
     start_url: "/",
     scope: "/",
     display: "standalone",

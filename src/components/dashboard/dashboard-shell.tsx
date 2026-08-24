@@ -10,6 +10,7 @@ import { DailyKwhChart } from "@/components/charts/daily-kwh-chart";
 import { DailySpendChart } from "@/components/charts/daily-spend-chart";
 import { HourlyChart } from "@/components/charts/hourly-chart";
 import { TariffChart } from "@/components/charts/tariff-chart";
+import { InstallPromoCard } from "./install-promo-card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { createAnalytics } from "@/lib/analytics";
@@ -27,7 +28,9 @@ export function DashboardShell({
   hourlyRows,
   summary,
   isAiAssistantEnabled = true,
-  isActivitiesEnabled = false
+  isActivitiesEnabled = false,
+  isAlertsEnabled = false,
+  isDemo = false
 }: DashboardShellProps) {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({
     from: summary.dateStart,
@@ -101,6 +104,8 @@ export function DashboardShell({
         fullBleed
         sticky
       />
+
+      <InstallPromoCard alertsEnabled={isAlertsEnabled} isDemo={isDemo} />
 
       <div className="relative">
         <section

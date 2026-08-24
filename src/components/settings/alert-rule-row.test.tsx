@@ -7,7 +7,11 @@ const mocks = vi.hoisted(() => ({
   useDeviceNotifications: vi.fn(),
   enableDeviceNotifications: vi.fn(),
   hasDismissedDeviceNotifications: vi.fn(),
-  markDeviceNotificationsDismissed: vi.fn()
+  markDeviceNotificationsDismissed: vi.fn(),
+  usePwaInstall: vi.fn(),
+  openInstallGuide: vi.fn(),
+  isInstallPromoCoolingDown: vi.fn(),
+  dismissInstallPromo: vi.fn()
 }));
 
 vi.mock("@/components/layout/push-notification-provider", () => ({
@@ -16,6 +20,13 @@ vi.mock("@/components/layout/push-notification-provider", () => ({
 vi.mock("@/lib/push-client", () => ({
   hasDismissedDeviceNotifications: mocks.hasDismissedDeviceNotifications,
   markDeviceNotificationsDismissed: mocks.markDeviceNotificationsDismissed
+}));
+vi.mock("@/components/pwa/pwa-install-provider", () => ({
+  usePwaInstall: mocks.usePwaInstall
+}));
+vi.mock("@/lib/pwa-install-prompt", () => ({
+  isInstallPromoCoolingDown: mocks.isInstallPromoCoolingDown,
+  dismissInstallPromo: mocks.dismissInstallPromo
 }));
 
 import { AlertRuleRow } from "./alert-rule-row";
@@ -62,6 +73,22 @@ function setDeviceNotifications(overrides: Partial<{ browserPermission: string; 
   });
 }
 
+function setPwaInstall(overrides: Partial<{ isIos: boolean; isStandalone: boolean }> = {}) {
+  mocks.usePwaInstall.mockReturnValue({
+    ready: true,
+    isStandalone: false,
+    isIos: false,
+    isMobile: false,
+    platform: "desktop",
+    canPromptInstall: false,
+    promptInstall: vi.fn(),
+    isInstallGuideOpen: false,
+    openInstallGuide: mocks.openInstallGuide,
+    closeInstallGuide: vi.fn(),
+    ...overrides
+  });
+}
+
 describe("AlertRuleRow", () => {
   afterEach(() => {
     cleanup();
@@ -72,7 +99,9 @@ describe("AlertRuleRow", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(defaultRuleResponse()));
     mocks.enableDeviceNotifications.mockResolvedValue({ status: "granted" });
     mocks.hasDismissedDeviceNotifications.mockReturnValue(false);
+    mocks.isInstallPromoCoolingDown.mockReturnValue(false);
     setDeviceNotifications();
+    setPwaInstall();
   });
 
   describe("device push already on", () => {
@@ -189,6 +218,64 @@ describe("AlertRuleRow", () => {
       expect(screen.queryByText("Turn on notifications?")).toBeNull();
       expect(mocks.enableDeviceNotifications).not.toHaveBeenCalled();
       await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
+    });
+  });
+
+  describe("iOS browser, not installed", () => {
+    beforeEach(() => {
+      setPwaInstall({ isIos: true, isStandalone: false });
+      // getPushPermissionState() genuinely reports "unsupported" pre-install
+      // -- this must NOT route through the old "just save, no dialog" path.
+      setDeviceNotifications({ browserPermission: "unsupported", subscriptionActive: false });
+    });
+
+    it("saves the alert without ever calling enableDeviceNotifications or requestPermission", async () => {
+      const onEnabledChange = vi.fn();
+      render(<AlertRuleRow {...baseProps({ onEnabledChange })} />);
+
+      fireEvent.click(screen.getByLabelText("Low balance"));
+
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
+      expect(mocks.enableDeviceNotifications).not.toHaveBeenCalled();
+    });
+
+    it("shows a dismissible Home Screen setup prompt after saving, not the generic push dialog", async () => {
+      render(<AlertRuleRow {...baseProps()} />);
+      fireEvent.click(screen.getByLabelText("Low balance"));
+
+      await waitFor(() => expect(screen.getByText("Get alerts on your phone")).toBeDefined());
+      expect(screen.queryByText("Turn on notifications?")).toBeNull();
+    });
+
+    it("Set up phone alerts opens the install guide", async () => {
+      render(<AlertRuleRow {...baseProps()} />);
+      fireEvent.click(screen.getByLabelText("Low balance"));
+      await waitFor(() => expect(screen.getByText("Set up phone alerts")).toBeDefined());
+
+      fireEvent.click(screen.getByText("Set up phone alerts"));
+      expect(mocks.openInstallGuide).toHaveBeenCalledTimes(1);
+    });
+
+    it("Not now dismisses with a cooldown, without undoing the already-saved alert", async () => {
+      const onEnabledChange = vi.fn();
+      render(<AlertRuleRow {...baseProps({ onEnabledChange })} />);
+      fireEvent.click(screen.getByLabelText("Low balance"));
+      await waitFor(() => expect(screen.getByText("Not now")).toBeDefined());
+
+      fireEvent.click(screen.getByText("Not now"));
+
+      expect(mocks.dismissInstallPromo).toHaveBeenCalledTimes(1);
+      expect(onEnabledChange).toHaveBeenLastCalledWith("low_balance", true);
+    });
+
+    it("does not show the prompt again while the dismissal is cooling down", async () => {
+      mocks.isInstallPromoCoolingDown.mockReturnValue(true);
+      const onEnabledChange = vi.fn();
+      render(<AlertRuleRow {...baseProps({ onEnabledChange })} />);
+      fireEvent.click(screen.getByLabelText("Low balance"));
+
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
+      expect(screen.queryByText("Get alerts on your phone")).toBeNull();
     });
   });
 

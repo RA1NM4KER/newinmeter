@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { BottomNav } from "./bottom-nav";
@@ -100,6 +101,7 @@ export function AppShell({
   isDemo = false,
   initialUnreadNotificationCount = 0
 }: AppShellProps) {
+  const { isStandalone } = usePwaInstall();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isActivitiesTableTab, setIsActivitiesTableTab] = useState(false);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
@@ -198,7 +200,7 @@ export function AppShell({
               />
             </div>
             <div className="shrink-0 px-3 pb-3">
-              <MenuLink href="/install" icon={Smartphone} label="Install app" />
+              {isStandalone ? null : <MenuLink href="/install" icon={Smartphone} label="Install app" />}
               <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
             </div>
             <div className="shrink-0 border-t border-line px-4 py-4">
@@ -283,7 +285,9 @@ export function AppShell({
               {isAdmin ? (
                 <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
               ) : null}
-              <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
+              {isStandalone ? null : (
+                <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
+              )}
               <MenuLink
                 external
                 href="https://ko-fi.com/kefasaleck"

@@ -2,9 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { IconTile, SettingsRow, Toggle } from "@/components/ui/settings";
 import { isSyncStale } from "@/lib/sync-status";
 import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
+import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 
 type BadgePermissionCardProps = {
   // The current connection's last sync time, so switching badges on can reflect
@@ -22,6 +24,7 @@ type BadgePermissionCardProps = {
 export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) {
   const { browserPermission, subscriptionActive, checking, enableDeviceNotifications, disableDeviceNotifications } =
     useDeviceNotifications();
+  const { isIos, isStandalone, openInstallGuide } = usePwaInstall();
   const [busy, setBusy] = useState(false);
 
   const applyBadgeNow = useCallback(async () => {
@@ -65,6 +68,29 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
   );
 
   if (browserPermission === "unsupported") {
+    // iOS Safari before Home Screen install always reports "unsupported"
+    // here (no Web Push API exists yet) -- that's not the same as "this
+    // device can never do this", so it gets an actionable row instead of
+    // silently disappearing. Any other genuinely unsupported platform still
+    // renders nothing, same as before.
+    if (isIos && !isStandalone) {
+      return (
+        <SettingsRow
+          leading={
+            <IconTile>
+              <Bell size={18} strokeWidth={2} />
+            </IconTile>
+          }
+          title="Notifications"
+          description="Add NewinMeter to your Home Screen to enable phone notifications."
+          control={
+            <Button variant="secondary" size="sm" onClick={openInstallGuide}>
+              Set up
+            </Button>
+          }
+        />
+      );
+    }
     return null;
   }
 

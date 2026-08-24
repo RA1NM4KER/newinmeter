@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { Viewport } from "next";
 import Script from "next/script";
+import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider";
 import { PwaRegistrar } from "@/components/pwa/pwa-registrar";
 import { BRAND_CANVAS } from "@/lib/site-config";
 import type { RootLayoutProps } from "./types";
@@ -78,7 +79,7 @@ try {
           }}
         />
         <PwaRegistrar />
-        {children}
+        <PwaInstallProvider>{children}</PwaInstallProvider>
       </body>
     </html>
   );

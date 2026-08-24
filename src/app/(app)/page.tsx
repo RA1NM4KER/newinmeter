@@ -34,6 +34,8 @@ export default async function Home() {
       summary={summary}
       isAiAssistantEnabled={features.ai.enabled}
       isActivitiesEnabled={features.activities.enabled}
+      isAlertsEnabled={features.alerts.enabled}
+      isDemo={connection.isDemo}
     />
   );
 }
