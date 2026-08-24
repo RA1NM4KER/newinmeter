@@ -14,7 +14,7 @@ import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 // claim a confident OFF before that's known).
 export function DeviceNotificationStatus() {
   const { browserPermission, subscriptionActive, checking, enableDeviceNotifications } = useDeviceNotifications();
-  const { isIos, isStandalone, openInstallGuide } = usePwaInstall();
+  const { isIos, isMobile, isStandalone, openInstallGuide } = usePwaInstall();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,14 +84,18 @@ export function DeviceNotificationStatus() {
               ? "Notifications are blocked for this device."
               : browserPermission === "unsupported"
                 ? "Push notifications aren't available on this device."
-                : "Phone notifications are off"}
+                : isMobile
+                  ? "Phone notifications are off"
+                  : "Notifications are off on this device."}
           </p>
           <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
             {browserPermission === "denied"
               ? "Alerts will still appear in NewinMeter. Allow notifications for this site in your browser or device settings to turn them back on."
               : browserPermission === "unsupported"
                 ? "Alerts will still appear in NewinMeter."
-                : "Your alerts are active in NewinMeter, but this phone can't receive them yet."}
+                : isMobile
+                  ? "Your alerts are active in NewinMeter, but this phone can't receive them yet."
+                  : "Your alerts are active in NewinMeter, but this device can't receive them yet."}
           </p>
           {error ? <p className="mt-1 text-[0.8125rem] text-red-600">{error}</p> : null}
         </div>

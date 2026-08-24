@@ -52,7 +52,7 @@ describe("AlertsTab", () => {
 
   it("renders the device-notification status section near the top", () => {
     render(<AlertsTab {...baseProps()} />);
-    expect(screen.queryByText("Phone notifications are off")).not.toBeNull();
+    expect(screen.queryByText("Notifications are off on this device.")).not.toBeNull();
   });
 
   it("omits the device-notification status section once this device is subscribed", () => {
@@ -65,7 +65,7 @@ describe("AlertsTab", () => {
       refreshDeviceNotificationState: vi.fn()
     });
     render(<AlertsTab {...baseProps()} />);
-    expect(screen.queryByText("Push notifications are off on this device.")).toBeNull();
+    expect(screen.queryByText("Notifications are off on this device.")).toBeNull();
   });
 
   it("renders every group label, even with zero rules configured", () => {

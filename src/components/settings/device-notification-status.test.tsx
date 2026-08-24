@@ -66,18 +66,30 @@ describe("DeviceNotificationStatus", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("permission default: shows the off-state copy and a working Turn on notifications button", async () => {
+  it("permission default, desktop: shows device-neutral copy (not phone) and a working Turn on notifications button", async () => {
     const enableDeviceNotifications = vi.fn().mockResolvedValue({ status: "granted" });
     setDeviceNotifications({ browserPermission: "default", enableDeviceNotifications });
+    render(<DeviceNotificationStatus />);
+
+    expect(screen.getByText("Notifications are off on this device.")).toBeDefined();
+    expect(
+      screen.getByText("Your alerts are active in NewinMeter, but this device can't receive them yet.")
+    ).toBeDefined();
+    expect(screen.queryByText(/phone/i)).toBeNull();
+
+    fireEvent.click(screen.getByText("Turn on notifications"));
+    await waitFor(() => expect(enableDeviceNotifications).toHaveBeenCalledTimes(1));
+  });
+
+  it("permission default, mobile (Android, installed): shows the phone-specific copy", () => {
+    setPwaInstall({ isMobile: true });
+    setDeviceNotifications({ browserPermission: "default" });
     render(<DeviceNotificationStatus />);
 
     expect(screen.getByText("Phone notifications are off")).toBeDefined();
     expect(
       screen.getByText("Your alerts are active in NewinMeter, but this phone can't receive them yet.")
     ).toBeDefined();
-
-    fireEvent.click(screen.getByText("Turn on notifications"));
-    await waitFor(() => expect(enableDeviceNotifications).toHaveBeenCalledTimes(1));
   });
 
   it("iOS browser, not installed: leads with Home Screen setup instead of claiming push is unavailable", () => {
@@ -94,7 +106,7 @@ describe("DeviceNotificationStatus", () => {
   });
 
   it("iOS, installed (standalone): falls through to the normal off/blocked copy, not the setup card", () => {
-    setPwaInstall({ isIos: true, isStandalone: true });
+    setPwaInstall({ isIos: true, isMobile: true, isStandalone: true });
     setDeviceNotifications({ browserPermission: "default" });
     render(<DeviceNotificationStatus />);
 
