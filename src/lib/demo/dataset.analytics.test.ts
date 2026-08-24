@@ -189,6 +189,8 @@ describe("seeded demo data through the real analytics/assistant path", () => {
   it("get_balance_runout produces a real projection from seeded rollups", async () => {
     const context: DashboardContext = {
       accessToken: "test",
+      userId: "test-user-id",
+      permissions: { activitiesEnabled: false, alertsEnabled: false },
       summary: { latestBalance: daily[daily.length - 1].balanceEnd, dateEnd: dataset.meta.endDate },
       dailyRows: daily,
       hourlyRows: hourly,
@@ -206,6 +208,8 @@ describe("seeded demo data through the real analytics/assistant path", () => {
   it("compare_calendar_months finds two distinct, comparable months in the seeded range", async () => {
     const context: DashboardContext = {
       accessToken: "test",
+      userId: "test-user-id",
+      permissions: { activitiesEnabled: false, alertsEnabled: false },
       summary: { dateStart: dataset.meta.startDate, dateEnd: dataset.meta.endDate },
       dailyRows: daily,
       hourlyRows: hourly,

@@ -50,7 +50,8 @@ NEWINMETER_TOKEN_ENCRYPTION_KEY=
 NEXT_PUBLIC_APP_URL=https://your-deployment.vercel.app
 CRON_SECRET=            # shared secret for /api/cron/* routes -- see section 17
 OPENAI_API_KEY=        # optional, enables the assistant
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.6-terra
+OPENAI_REASONING_EFFORT=low
 ```
 
 Do not set `NEWINMETER_WEB_EMAIL`, `NEWINMETER_WEB_PASSWORD`, `NEWINMETER_ACCOUNT_ID`,

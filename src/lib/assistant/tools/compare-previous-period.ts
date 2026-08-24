@@ -6,12 +6,11 @@ import { EmptySchema } from "./schemas";
 export const comparePreviousPeriodTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "compare_previous_period",
-      description:
-        "Compare the active dashboard date range against the immediately preceding range of equal length (a rolling window, not calendar-month aligned). Use compare_calendar_months instead for questions phrased as 'this month vs last month'.",
-      parameters: EmptySchema
-    }
+    name: "compare_previous_period",
+    description:
+      "Compare the active dashboard date range against the immediately preceding range of equal length (a rolling window, not calendar-month aligned). Use compare_calendar_months instead for questions phrased as 'this month vs last month'.",
+    parameters: EmptySchema,
+    strict: true
   },
   handler: async (_args, getContext) => {
     const context = await getContext();

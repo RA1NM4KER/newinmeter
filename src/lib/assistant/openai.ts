@@ -1,211 +1,236 @@
+import OpenAI from "openai";
+import { getOpenAiApiKey, getOpenAiModel, getOpenAiReasoningEffort } from "@/lib/env";
 import { buildAssistantSystemPrompt } from "./system-prompt";
-import type { AssistantConversationMessage, AssistantPermissions, AssistantScope } from "./types";
+import { AssistantResponseJsonSchema, fallbackAssistantResponse, validateAssistantResponse } from "./response-schema";
 import { createAssistantToolbox } from "./tools/index";
-import { getOpenAiApiKey, getOpenAiModel } from "@/lib/env";
+import type {
+  AssistantContext,
+  AssistantConversationMessage,
+  AssistantPermissions,
+  AssistantResponse,
+  AssistantScope,
+  ResponsesFunctionToolDefinition
+} from "./types";
 
-type ChatMessage =
-  | { role: "system" | "user"; content: string }
-  | {
-      role: "assistant";
-      content: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: "function";
-        function: {
-          name: string;
-          arguments: string;
-        };
-      }>;
-    }
-  | { role: "tool"; tool_call_id: string; content: string };
+// The one tool the model must call to finish a turn. Registered alongside
+// the read tools (see createAssistantToolbox) but handled entirely in this
+// module, not the toolbox -- it has no DashboardContext dependency, and
+// executing it is "validate and return", never a real handler call.
+const SUBMIT_RESPONSE_TOOL_NAME = "submit_response";
 
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: "function";
-        function: {
-          name: string;
-          arguments: string;
-        };
-      }>;
-    };
-  }>;
-};
+// One extra iteration of headroom over the old 6 (Chat Completions, no
+// forced final-answer tool): a turn can now spend one iteration on
+// read-tool calls AND still need a separate iteration for submit_response,
+// plus the identical loop must also tolerate one invalid-arguments retry
+// before giving up.
+const MAX_ITERATIONS = 8;
 
-function openAiConfig() {
+// The Responses API rejects `reasoning.effort` outright (400) for a model
+// that isn't a reasoning model -- verified directly against the live API
+// with gpt-4.1-mini, which is a real, currently-configured OPENAI_MODEL
+// value in this project's own .env.local. Since OPENAI_MODEL is an
+// operator-set override (see env.ts), the assistant must degrade
+// gracefully rather than hard-failing every request when it points at a
+// non-reasoning model -- this is a conservative allowlist-by-pattern, not
+// an exhaustive model registry: o-series (o1, o3, o4, ...) and gpt-5+ are
+// reasoning models; gpt-4.x and earlier are not.
+export function modelSupportsReasoningEffort(model: string): boolean {
+  return /^o\d/.test(model) || /^gpt-([5-9]\b|[1-9]\d)/.test(model);
+}
+
+function getClient(): OpenAI {
   const apiKey = getOpenAiApiKey();
 
   if (!apiKey) {
     throw new Error("Missing OPENAI_API_KEY for assistant access.");
   }
 
-  return { apiKey, model: getOpenAiModel() };
+  return new OpenAI({ apiKey });
 }
 
-async function callChatCompletions(messages: ChatMessage[], tools: ReturnType<typeof createAssistantToolbox>["tools"]) {
-  const { apiKey, model } = openAiConfig();
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages,
-      tools,
-      tool_choice: "auto"
-    })
-  });
+const submitResponseTool: ResponsesFunctionToolDefinition = {
+  type: "function",
+  name: SUBMIT_RESPONSE_TOOL_NAME,
+  description:
+    "Call this exactly once, as your final step, to submit your complete structured answer (answer, evidence, visualizations, actions, suggestions, scope). Never reply with plain assistant text instead of calling this.",
+  parameters: AssistantResponseJsonSchema,
+  strict: true
+};
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`OpenAI chat completion failed (${response.status}): ${detail}`);
+type ParsedJson = { ok: true; value: unknown } | { ok: false };
+
+// Model-generated arguments (for any tool, including submit_response) are
+// untrusted input -- malformed JSON must degrade to a structured retry
+// signal, never an unhandled throw.
+function parseJsonArguments(raw: string): ParsedJson {
+  if (!raw) {
+    return { ok: true, value: {} };
   }
-
-  return (await response.json()) as ChatCompletionResponse;
-}
-
-type ParsedToolArgs = { ok: true; args: Record<string, unknown> } | { ok: false };
-
-// Model-generated function-call arguments are untrusted input: they may be
-// malformed JSON, or valid JSON that isn't a plain object (e.g. an array or
-// a bare string). Either case must degrade to a structured error the model
-// can see and recover from, never an unhandled throw that 500s the request.
-function parseToolArguments(rawArguments: string): ParsedToolArgs {
-  if (!rawArguments) {
-    return { ok: true, args: {} };
-  }
-
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(rawArguments);
+    return { ok: true, value: JSON.parse(raw) };
   } catch {
     return { ok: false };
   }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return { ok: false };
-  }
-
-  return { ok: true, args: parsed as Record<string, unknown> };
 }
 
-type ToolCallOutcome = {
-  toolCallId: string;
-  toolName: string;
-  payload: unknown;
-  used: boolean;
-};
+type ToolCallOutcome = { callId: string; toolName: string; payload: unknown; used: boolean };
 
-// Tool calls returned together in one assistant message are independent:
-// each handler only reads from the single memoized DashboardContext promise
-// (see tools/index.ts's getContext()), none mutate shared state, and none
-// depend on another call's result. Promise.all is therefore safe here and
-// avoids serializing N round trips to Supabase/OpenAI's own backends purely
-// because the model happened to ask for several things at once. Result
-// order from Promise.all matches the input array order regardless of which
-// call resolves first, so each outcome is still pushed against the correct
-// tool_call_id.
 async function runToolCall(
   toolbox: ReturnType<typeof createAssistantToolbox>,
-  toolCall: { id: string; function: { name: string; arguments: string } }
+  call: OpenAI.Responses.ResponseFunctionToolCall
 ): Promise<ToolCallOutcome> {
-  const toolName = toolCall.function.name;
-  const parsed = parseToolArguments(toolCall.function.arguments);
+  const parsed = parseJsonArguments(call.arguments);
+  const args =
+    parsed.ok && typeof parsed.value === "object" && parsed.value !== null && !Array.isArray(parsed.value)
+      ? (parsed.value as Record<string, unknown>)
+      : null;
 
-  if (!parsed.ok) {
+  if (args === null) {
     return {
-      toolCallId: toolCall.id,
-      toolName,
-      payload: { error: "invalid_tool_arguments", tool: toolName },
+      callId: call.call_id,
+      toolName: call.name,
+      payload: { error: "invalid_tool_arguments", tool: call.name },
       used: false
     };
   }
 
   try {
-    const payload = await toolbox.execute(toolName, parsed.args);
-    return { toolCallId: toolCall.id, toolName, payload, used: true };
+    const payload = await toolbox.execute(call.name, args);
+    return { callId: call.call_id, toolName: call.name, payload, used: true };
   } catch (error) {
     const isUnknownTool = error instanceof Error && error.message.startsWith("Unknown assistant tool");
     return {
-      toolCallId: toolCall.id,
-      toolName,
-      payload: { error: isUnknownTool ? "unknown_tool" : "tool_execution_failed", tool: toolName },
+      callId: call.call_id,
+      toolName: call.name,
+      payload: { error: isUnknownTool ? "unknown_tool" : "tool_execution_failed", tool: call.name },
       used: false
     };
   }
+}
+
+function functionCallOutput(callId: string, payload: unknown): OpenAI.Responses.ResponseInputItem.FunctionCallOutput {
+  return { type: "function_call_output", call_id: callId, output: JSON.stringify(payload) };
 }
 
 export async function answerAssistantQuestion(
   accessToken: string,
+  userId: string,
   question: string,
   scope: AssistantScope,
   history: AssistantConversationMessage[] = [],
-  permissions: AssistantPermissions = { activitiesEnabled: false }
-) {
-  const toolbox = createAssistantToolbox(accessToken, scope, permissions);
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content: buildAssistantSystemPrompt(scope, permissions)
-    },
-    ...history.map((message) => ({
-      role: message.role,
-      content: message.content
-    })),
-    {
-      role: "user",
-      content: question.trim()
-    }
+  permissions: AssistantPermissions = { activitiesEnabled: false, alertsEnabled: false },
+  assistantContext: AssistantContext = {}
+): Promise<AssistantResponse> {
+  const client = getClient();
+  const model = getOpenAiModel();
+  const reasoningEffort = getOpenAiReasoningEffort();
+  const toolbox = createAssistantToolbox(accessToken, userId, scope, permissions);
+  const resolvedScope = { from: scope.from ?? "", to: scope.to ?? "" };
+
+  const input: OpenAI.Responses.ResponseInputItem[] = [
+    { role: "system", content: buildAssistantSystemPrompt(scope, permissions, assistantContext) },
+    ...history.map(
+      (message) => ({ role: message.role, content: message.content }) as OpenAI.Responses.ResponseInputItem
+    ),
+    { role: "user", content: question.trim() }
   ];
+
+  const tools = [...toolbox.tools, submitResponseTool] as unknown as OpenAI.Responses.Tool[];
   const toolsUsed = new Set<string>();
+  const includeReasoning = reasoningEffort !== "none" && modelSupportsReasoningEffort(model);
 
-  for (let iteration = 0; iteration < 6; iteration += 1) {
-    const completion = await callChatCompletions(messages, toolbox.tools);
-    const message = completion.choices?.[0]?.message;
+  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    const response = await client.responses.create({
+      model,
+      ...(includeReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
+      store: false,
+      tools,
+      tool_choice: "auto",
+      // Never expose chain-of-thought to the client -- only the model's own
+      // final text/tool-call output is ever read from `response` below;
+      // reasoning content is neither requested via `include` nor forwarded
+      // anywhere in this function's return value.
+      input
+    });
 
-    if (!message) {
-      throw new Error("OpenAI did not return an assistant message.");
+    const functionCalls = response.output.filter(
+      (item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call"
+    );
+
+    if (functionCalls.length === 0) {
+      // Model answered in plain text instead of calling submit_response --
+      // fail gracefully into a minimal, still-valid structured response
+      // rather than surfacing raw model prose as if it were the real
+      // contract (spec: "fail gracefully rather than rendering random
+      // model JSON").
+      console.warn("assistant_skipped_structured_response", { model, iteration });
+      const answer = response.output_text?.trim() || "I couldn't find a clear answer for that -- could you rephrase?";
+      return { ...fallbackAssistantResponse(answer, resolvedScope), toolsUsed: Array.from(toolsUsed) };
     }
 
-    if (message.tool_calls?.length) {
-      messages.push({
-        role: "assistant",
-        content: message.content ?? null,
-        tool_calls: message.tool_calls
-      });
+    // Echo this turn's full output back into input before appending tool
+    // results. This call is intentionally stateless (store: false, no
+    // previous_response_id) so every prior turn's output must be resent
+    // verbatim for the model to see its own history -- Responses API output
+    // items round-trip directly as input items by design.
+    input.push(...(response.output as unknown as OpenAI.Responses.ResponseInputItem[]));
 
-      const outcomes = await Promise.all(message.tool_calls.map((toolCall) => runToolCall(toolbox, toolCall)));
+    const submitCall = functionCalls.find((call) => call.name === SUBMIT_RESPONSE_TOOL_NAME);
 
+    if (submitCall) {
+      const parsed = parseJsonArguments(submitCall.arguments);
+      const validation = parsed.ok ? validateAssistantResponse(parsed.value) : null;
+
+      if (validation?.ok) {
+        return { ...validation.value, toolsUsed: Array.from(toolsUsed) };
+      }
+
+      const isLastIteration = iteration === MAX_ITERATIONS - 1;
+      const issues = !parsed.ok
+        ? ["arguments were not valid JSON"]
+        : validation && !validation.ok
+          ? validation.issues
+          : [];
+
+      if (isLastIteration) {
+        console.error("assistant_structured_response_invalid", issues);
+        return {
+          ...fallbackAssistantResponse(
+            "I couldn't put together a complete answer for that -- could you rephrase?",
+            resolvedScope
+          ),
+          toolsUsed: Array.from(toolsUsed)
+        };
+      }
+
+      // One retry: tell the model exactly what was wrong so it can fix and
+      // resubmit, instead of silently discarding the turn.
+      input.push(functionCallOutput(submitCall.call_id, { error: "invalid_response_shape", issues }));
+
+      // Any other tool calls bundled into the same turn as submit_response
+      // still need a matching function_call_output before the next
+      // request, or the API rejects the whole turn.
+      const otherCalls = functionCalls.filter((call) => call.name !== SUBMIT_RESPONSE_TOOL_NAME);
+      const outcomes = await Promise.all(otherCalls.map((call) => runToolCall(toolbox, call)));
       for (const outcome of outcomes) {
         if (outcome.used) {
           toolsUsed.add(outcome.toolName);
         }
-        messages.push({
-          role: "tool",
-          tool_call_id: outcome.toolCallId,
-          content: JSON.stringify(outcome.payload)
-        });
+        input.push(functionCallOutput(outcome.callId, outcome.payload));
       }
-
       continue;
     }
 
-    const answer = message.content?.trim();
-
-    if (!answer) {
-      throw new Error("OpenAI returned an empty assistant answer.");
+    // Ordinary read-tool calls -- independent, side-effect-free reads over
+    // one memoized DashboardContext, safe to run concurrently (see
+    // tools/index.ts's getContext()).
+    const outcomes = await Promise.all(functionCalls.map((call) => runToolCall(toolbox, call)));
+    for (const outcome of outcomes) {
+      if (outcome.used) {
+        toolsUsed.add(outcome.toolName);
+      }
+      input.push(functionCallOutput(outcome.callId, outcome.payload));
     }
-
-    return {
-      answer,
-      toolsUsed: Array.from(toolsUsed)
-    };
   }
 
   throw new Error("Assistant exceeded the maximum tool-call loop.");

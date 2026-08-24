@@ -19,12 +19,11 @@ function endOfMonth(date: Date) {
 export const getBalanceRunoutTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_balance_runout",
-      description:
-        "Estimate when the current balance runs out at the average daily spend, and whether it covers the end of the month.",
-      parameters: EmptySchema
-    }
+    name: "get_balance_runout",
+    description:
+      "Estimate when the current balance runs out at the average daily spend, and whether it covers the end of the month.",
+    parameters: EmptySchema,
+    strict: true
   },
   handler: async (_args, getContext) => {
     const context = await getContext();

@@ -12,6 +12,15 @@ const RATE_LIMIT_POLICIES = {
     minuteLimit: 5,
     dayLimit: 30
   },
+  // Assistant-proposed mutations (set/update/disable alert, add activity,
+  // sync) confirmed by the user in the UI. Separate from the "assistant"
+  // policy above (which limits questions/turns) so a chatty conversation
+  // never eats into the much smaller budget a user actually needs for
+  // confirming a handful of actions.
+  assistantAction: {
+    minuteLimit: 10,
+    dayLimit: 50
+  },
   // Physical meter devices upload small batches roughly every 5 seconds
   // (~12 req/min, ~17,280 req/day), so the default 1,000/day user policy would
   // break ingestion within the hour. This dedicated policy is keyed by the

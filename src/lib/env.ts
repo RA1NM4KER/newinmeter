@@ -97,5 +97,16 @@ export function getOpenAiApiKey(): string | undefined {
 }
 
 export function getOpenAiModel() {
-  return optional("OPENAI_MODEL", "gpt-4.1-mini");
+  return optional("OPENAI_MODEL", "gpt-5.6-terra");
+}
+
+// Reasoning effort for the assistant's Responses API calls -- "low" by
+// default (fast, cheap, sufficient for grounded tool-driven Q&A over
+// already-computed numbers), overridable per-deployment without a code
+// change for a heavier workload.
+export function getOpenAiReasoningEffort(): "none" | "minimal" | "low" | "medium" | "high" {
+  const value = optional("OPENAI_REASONING_EFFORT", "low");
+  return value === "none" || value === "minimal" || value === "low" || value === "medium" || value === "high"
+    ? value
+    : "low";
 }

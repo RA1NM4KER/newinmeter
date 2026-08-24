@@ -6,6 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
+import { AssistantDialog } from "@/components/assistant/assistant-dialog";
+import { AssistantProvider } from "@/components/assistant/assistant-provider";
 import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { BottomNav } from "./bottom-nav";
@@ -99,6 +101,8 @@ export function AppShell({
   isAdmin = false,
   isActivitiesEnabled = false,
   isLiveMeterEnabled = false,
+  isAiAssistantEnabled = false,
+  isAlertsEnabled = false,
   isDemo = false,
   initialUnreadNotificationCount = 0
 }: AppShellProps) {
@@ -211,9 +215,15 @@ export function AppShell({
   }, []);
 
   return (
-    <NotificationProvider initialUnreadCount={initialUnreadNotificationCount}>
-      <PushNotificationProvider>
-        {/* lockViewport pages keep the original fixed-height, internally-
+    <AssistantProvider
+      isActivitiesEnabled={isActivitiesEnabled}
+      isAlertsEnabled={isAlertsEnabled}
+      isDemo={isDemo}
+      isEnabled={isAiAssistantEnabled}
+    >
+      <NotificationProvider initialUnreadCount={initialUnreadNotificationCount}>
+        <PushNotificationProvider>
+          {/* lockViewport pages keep the original fixed-height, internally-
         scrolling shell (nothing here may scroll except the nested region
         those pages manage themselves) -- sized with 100dvh (the *actual*
         current viewport), not 100svh (the smallest the viewport could get
@@ -234,121 +244,31 @@ export function AppShell({
         viewport, but without overflow-hidden clipping the document's own
         scroll, which is what lets iOS Safari's toolbar/address bar
         collapse on scroll like any normal page. */}
-        <div className={`flex ${lockViewport ? "h-[100dvh] overflow-hidden" : "min-h-[100svh]"}`}>
-          {pathname === "/activities" ? (
-            <Suspense fallback={null}>
-              <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
-            </Suspense>
-          ) : null}
-          <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:self-start">
-            <div className="flex h-16 shrink-0 items-center justify-between px-6">
-              <Link href="/">
-                <Wordmark className="text-2xl" textClassName="text-ink" accentClassName="text-accent" />
-              </Link>
-              <NotificationBell />
-            </div>
-            <div className="min-h-0 flex-1 px-3">
-              <SidebarNav
-                isAdmin={isAdmin}
-                isActivitiesEnabled={isActivitiesEnabled}
-                isLiveMeterEnabled={isLiveMeterEnabled}
-              />
-            </div>
-            <div className="shrink-0 px-3 pb-3">
-              {isStandalone ? null : <MenuLink href="/install" icon={Smartphone} label="Install app" />}
-              <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
-            </div>
-            <div className="shrink-0 border-t border-line px-4 py-4">
-              {isDemo ? (
-                <div className="mb-2">
-                  <DemoBadge />
-                </div>
-              ) : null}
-              <div className="flex items-center gap-2">
-                {userEmail ? <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p> : null}
-                <SignOutForm />
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
-                  Privacy
+          <div className={`flex ${lockViewport ? "h-[100dvh] overflow-hidden" : "min-h-[100svh]"}`}>
+            {pathname === "/activities" ? (
+              <Suspense fallback={null}>
+                <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
+              </Suspense>
+            ) : null}
+            <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:self-start">
+              <div className="flex h-16 shrink-0 items-center justify-between px-6">
+                <Link href="/">
+                  <Wordmark className="text-2xl" textClassName="text-ink" accentClassName="text-accent" />
                 </Link>
-                <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
-                  Terms
-                </Link>
-                <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
-                  Feedback
-                </a>
+                <NotificationBell />
               </div>
-            </div>
-          </aside>
-
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <TopBar className="fixed inset-x-0 top-0 z-20 lg:hidden" hidden={isHeaderHidden} right={<NotificationBell />} />
-
-            {/* lockViewport pages (data table, admin users table, activities
-            table tab) keep the original internal-scroll architecture: main
-            itself stays non-scrolling and those pages delegate scrolling to
-            a nested region so their own header/toolbar/footer can stay
-            pinned too, with BottomNav sized into the fixed-height flex
-            column below (no manual bottom padding needed).
-            Regular pages instead let the document itself scroll (see the
-            outer shell's own comment for why) -- main is just normal block
-            flow here, and BottomNav becomes a fixed viewport overlay
-            instead of a flex sibling, so pb-24 clears it on mobile
-            (dropped at lg, where the bottom nav doesn't render at all).
-            Either way the mobile header is `fixed` (out of flow, so it can
-            roll away on scroll without leaving a gap), so pt-14 recreates
-            the space it used to occupy in-flow -- dropped again at lg
-            since the header doesn't render there at all. */}
-            <main
-              className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
-                lockViewport
-                  ? isFullBleedTable
-                    ? // /data and activities' Table tab go full-bleed/edge-to-edge
-                      // below lg (/data has its own internal footer row for
-                      // bottom padding there; activities' table has none by
-                      // design, running flush to the bottom nav). At lg+ each is
-                      // back to a normal rounded, bordered, margined card -- same
-                      // "floating" treatment as every other card on the page --
-                      // so it wants the same
-                      // bottom breathing room those get, restored via lg:pb-5.
-                      "min-h-0 overflow-hidden lg:pb-5"
-                    : // Admin's table stays a margined card at every width, so it
-                      // keeps the usual pb-5 throughout.
-                      "min-h-0 overflow-hidden pb-5"
-                  : "pb-24 lg:pb-5"
-              }`}
-              onScroll={handleMainScroll}
-              ref={mainRef}
-            >
-              {children}
-            </main>
-
-            <BottomNav
-              isAdmin={isAdmin}
-              isActivitiesEnabled={isActivitiesEnabled}
-              isLiveMeterEnabled={isLiveMeterEnabled}
-              onOpenMenu={() => setIsNavOpen(true)}
-              overlay={!lockViewport}
-            />
-          </div>
-
-          <BottomSheet isOpen={isNavOpen} onClose={() => setIsNavOpen(false)} title="Menu">
-            <div className="flex flex-col gap-1">
-              {isAdmin ? (
-                <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
-              ) : null}
-              {isStandalone ? null : (
-                <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
-              )}
-              <MenuLink
-                external
-                href="https://ko-fi.com/kefasaleck"
-                icon={Heart}
-                label="Buy me a coffee"
-                onClick={() => setIsNavOpen(false)}
-              />
-              <div className="border-t border-line pt-4">
+              <div className="min-h-0 flex-1 px-3">
+                <SidebarNav
+                  isAdmin={isAdmin}
+                  isActivitiesEnabled={isActivitiesEnabled}
+                  isLiveMeterEnabled={isLiveMeterEnabled}
+                />
+              </div>
+              <div className="shrink-0 px-3 pb-3">
+                {isStandalone ? null : <MenuLink href="/install" icon={Smartphone} label="Install app" />}
+                <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
+              </div>
+              <div className="shrink-0 border-t border-line px-4 py-4">
                 {isDemo ? (
                   <div className="mb-2">
                     <DemoBadge />
@@ -370,10 +290,108 @@ export function AppShell({
                   </a>
                 </div>
               </div>
+            </aside>
+
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <TopBar
+                className="fixed inset-x-0 top-0 z-20 lg:hidden"
+                hidden={isHeaderHidden}
+                right={<NotificationBell />}
+              />
+
+              {/* lockViewport pages (data table, admin users table, activities
+            table tab) keep the original internal-scroll architecture: main
+            itself stays non-scrolling and those pages delegate scrolling to
+            a nested region so their own header/toolbar/footer can stay
+            pinned too, with BottomNav sized into the fixed-height flex
+            column below (no manual bottom padding needed).
+            Regular pages instead let the document itself scroll (see the
+            outer shell's own comment for why) -- main is just normal block
+            flow here, and BottomNav becomes a fixed viewport overlay
+            instead of a flex sibling, so pb-24 clears it on mobile
+            (dropped at lg, where the bottom nav doesn't render at all).
+            Either way the mobile header is `fixed` (out of flow, so it can
+            roll away on scroll without leaving a gap), so pt-14 recreates
+            the space it used to occupy in-flow -- dropped again at lg
+            since the header doesn't render there at all. */}
+              <main
+                className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
+                  lockViewport
+                    ? isFullBleedTable
+                      ? // /data and activities' Table tab go full-bleed/edge-to-edge
+                        // below lg (/data has its own internal footer row for
+                        // bottom padding there; activities' table has none by
+                        // design, running flush to the bottom nav). At lg+ each is
+                        // back to a normal rounded, bordered, margined card -- same
+                        // "floating" treatment as every other card on the page --
+                        // so it wants the same
+                        // bottom breathing room those get, restored via lg:pb-5.
+                        "min-h-0 overflow-hidden lg:pb-5"
+                      : // Admin's table stays a margined card at every width, so it
+                        // keeps the usual pb-5 throughout.
+                        "min-h-0 overflow-hidden pb-5"
+                    : "pb-24 lg:pb-5"
+                }`}
+                onScroll={handleMainScroll}
+                ref={mainRef}
+              >
+                {children}
+              </main>
+
+              <BottomNav
+                isAdmin={isAdmin}
+                isActivitiesEnabled={isActivitiesEnabled}
+                isLiveMeterEnabled={isLiveMeterEnabled}
+                onOpenMenu={() => setIsNavOpen(true)}
+                overlay={!lockViewport}
+              />
             </div>
-          </BottomSheet>
-        </div>
-      </PushNotificationProvider>
-    </NotificationProvider>
+
+            <BottomSheet isOpen={isNavOpen} onClose={() => setIsNavOpen(false)} title="Menu">
+              <div className="flex flex-col gap-1">
+                {isAdmin ? (
+                  <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
+                ) : null}
+                {isStandalone ? null : (
+                  <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
+                )}
+                <MenuLink
+                  external
+                  href="https://ko-fi.com/kefasaleck"
+                  icon={Heart}
+                  label="Buy me a coffee"
+                  onClick={() => setIsNavOpen(false)}
+                />
+                <div className="border-t border-line pt-4">
+                  {isDemo ? (
+                    <div className="mb-2">
+                      <DemoBadge />
+                    </div>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {userEmail ? (
+                      <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p>
+                    ) : null}
+                    <SignOutForm />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
+                      Privacy
+                    </Link>
+                    <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
+                      Terms
+                    </Link>
+                    <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
+                      Feedback
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </BottomSheet>
+          </div>
+          {isAiAssistantEnabled ? <AssistantDialog /> : null}
+        </PushNotificationProvider>
+      </NotificationProvider>
+    </AssistantProvider>
   );
 }

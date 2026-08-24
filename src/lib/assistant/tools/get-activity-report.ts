@@ -119,12 +119,11 @@ function resolveDateField(explicitValue: unknown, scopeFallback: string): DateFi
 export const getActivityReportTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_activity_report",
-      description:
-        "List logged activities and tags together with the electricity/water usage recorded during their time windows, or aggregate that usage by tag. Results show correlation only -- usage that happened during the activity's window, never proof the activity caused it. Supports a maximum range of 366 days. Use for activities, tags, notes, and 'what happened on <date>' questions.",
-      parameters: GetActivityReportSchema
-    }
+    name: "get_activity_report",
+    description:
+      "List logged activities and tags together with the electricity/water usage recorded during their time windows, or aggregate that usage by tag. Results show correlation only -- usage that happened during the activity's window, never proof the activity caused it. Supports a maximum range of 366 days. Use for activities, tags, notes, and 'what happened on <date>' questions.",
+    parameters: GetActivityReportSchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

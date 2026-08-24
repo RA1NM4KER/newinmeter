@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useAssistant } from "@/components/assistant/assistant-provider";
 import type { NotificationItem } from "@/lib/newinmeter/alerts";
 import { MarkAllReadButton, NotificationList } from "./notification-list";
 import { useNotificationCentre } from "./notification-provider";
@@ -42,8 +43,14 @@ export function NotificationBell() {
     markAllRead
   } = useNotificationCentre();
 
+  const { open: openAssistant, isEnabled: isAiAssistantEnabled } = useAssistant();
   const [isOpen, setIsOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+
+  function handleAskAi(item: NotificationItem) {
+    setIsOpen(false);
+    openAssistant({ alertEventId: item.id, seedQuestion: "Explain this alert." });
+  }
 
   const handleOpen = useCallback(() => {
     setIsOpen(true);
@@ -160,9 +167,11 @@ export function NotificationBell() {
             >
               <NotificationList
                 hasEnabledAlerts={hasEnabledAlerts}
+                isAiAssistantEnabled={isAiAssistantEnabled}
                 loading={listLoading}
                 markingAllRead={markingAllRead}
                 notifications={notifications}
+                onAskAi={handleAskAi}
                 onGoToSettings={handleGoToSettings}
                 onItemClick={(item) => void handleItemClick(item)}
                 onMarkAllRead={() => void markAllRead()}
@@ -175,7 +184,11 @@ export function NotificationBell() {
       {isOpen && !isDesktop ? (
         <BottomSheet
           headerAction={
-            <MarkAllReadButton markingAllRead={markingAllRead} onMarkAllRead={() => void markAllRead()} unreadCount={unreadCount} />
+            <MarkAllReadButton
+              markingAllRead={markingAllRead}
+              onMarkAllRead={() => void markAllRead()}
+              unreadCount={unreadCount}
+            />
           }
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
@@ -183,9 +196,11 @@ export function NotificationBell() {
         >
           <NotificationList
             hasEnabledAlerts={hasEnabledAlerts}
+            isAiAssistantEnabled={isAiAssistantEnabled}
             loading={listLoading}
             markingAllRead={markingAllRead}
             notifications={notifications}
+            onAskAi={handleAskAi}
             onGoToSettings={handleGoToSettings}
             onItemClick={(item) => void handleItemClick(item)}
             onMarkAllRead={() => void markAllRead()}

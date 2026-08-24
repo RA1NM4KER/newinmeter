@@ -21,11 +21,10 @@ function buildOverview(context: DashboardContext) {
 export const getScopeOverviewTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_scope_overview",
-      description: "Get the main totals, peaks, balance, and generated insights for the active dashboard date range.",
-      parameters: EmptySchema
-    }
+    name: "get_scope_overview",
+    description: "Get the main totals, peaks, balance, and generated insights for the active dashboard date range.",
+    parameters: EmptySchema,
+    strict: true
   },
   handler: async (_args, getContext) => buildOverview(await getContext())
 };

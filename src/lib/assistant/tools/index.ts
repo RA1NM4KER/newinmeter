@@ -4,10 +4,14 @@ import type { DashboardSummary } from "@/lib/types";
 import type { AssistantPermissions, AssistantScope, AssistantToolHandler, DashboardContext } from "../types";
 import { compareCalendarMonthsTool } from "./compare-calendar-months";
 import { comparePreviousPeriodTool } from "./compare-previous-period";
+import { explainAlertTool } from "./explain-alert";
 import { explainDayTool } from "./explain-day";
 import { getActivityReportTool } from "./get-activity-report";
+import { getAlertRecommendationsTool } from "./get-alert-recommendations";
+import { getAlertStatusTool } from "./get-alert-status";
 import { getBalanceRunoutTool } from "./get-balance-runout";
 import { getDataStatusTool } from "./get-data-status";
+import { getRecentAlertsTool } from "./get-recent-alerts";
 import { getRecentTopupsTool } from "./get-recent-topups";
 import { getScopeOverviewTool } from "./get-scope-overview";
 import { getWaterOverviewTool } from "./get-water-overview";
@@ -21,7 +25,12 @@ function pickScope(summary: DashboardSummary, scope: AssistantScope) {
   };
 }
 
-export function createAssistantToolbox(accessToken: string, scope: AssistantScope, permissions: AssistantPermissions) {
+export function createAssistantToolbox(
+  accessToken: string,
+  userId: string,
+  scope: AssistantScope,
+  permissions: AssistantPermissions
+) {
   let contextPromise: Promise<DashboardContext> | null = null;
 
   async function getContext() {
@@ -37,6 +46,8 @@ export function createAssistantToolbox(accessToken: string, scope: AssistantScop
 
         return {
           accessToken,
+          userId,
+          permissions,
           summary,
           dailyRows,
           hourlyRows,
@@ -63,12 +74,18 @@ export function createAssistantToolbox(accessToken: string, scope: AssistantScop
     // Registered only when the account has Activities enabled -- the model
     // must never see this tool exists otherwise, not merely be refused when
     // it tries to call it.
-    ...(permissions.activitiesEnabled ? [getActivityReportTool] : [])
+    ...(permissions.activitiesEnabled ? [getActivityReportTool] : []),
+    // Same posture for Alerts: no alert tool exists in the model's tool
+    // list at all when the Alerts feature is off for this account.
+    ...(permissions.alertsEnabled
+      ? [getAlertStatusTool, getRecentAlertsTool, explainAlertTool, getAlertRecommendationsTool]
+      : [])
   ];
 
-  const toolHandlers = Object.fromEntries(
-    toolSet.map((tool) => [tool.definition.function.name, tool.handler])
-  ) as Record<string, AssistantToolHandler>;
+  const toolHandlers = Object.fromEntries(toolSet.map((tool) => [tool.definition.name, tool.handler])) as Record<
+    string,
+    AssistantToolHandler
+  >;
 
   const tools = toolSet.map((tool) => tool.definition);
 

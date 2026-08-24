@@ -24,11 +24,10 @@ function summarizeTopHour(metric: "spend" | "kwh", row: Analytics["hourly"][numb
 export const getTopHoursTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_top_hours",
-      description: "Get the highest hours in the active range by spend or usage aggregated across the full range.",
-      parameters: GetTopHoursSchema
-    }
+    name: "get_top_hours",
+    description: "Get the highest hours in the active range by spend or usage aggregated across the full range.",
+    parameters: GetTopHoursSchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

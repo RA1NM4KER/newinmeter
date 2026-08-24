@@ -7,6 +7,7 @@ export const apiEndpoints = {
   activityReport: `${apiBase}/activity-report`,
   activityExport: `${apiBase}/activity-export`,
   assistant: `${apiBase}/assistant`,
+  assistantActions: `${apiBase}/assistant/actions`,
   dailyRollups: `${apiBase}/daily-rollups`,
   dayIntervals: `${apiBase}/day-intervals`,
   energyRows: `${apiBase}/energy-rows`,

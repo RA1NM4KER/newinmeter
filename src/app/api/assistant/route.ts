@@ -7,6 +7,7 @@ import { hasFeatureAccess } from "@/lib/features";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const requestSchema = z.object({
   question: z.string().trim().min(1, "Question is required."),
@@ -20,6 +21,14 @@ const requestSchema = z.object({
       })
     )
     .max(12)
+    .optional(),
+  // Trusted, typed UI context -- e.g. the alertEventId behind "Ask AI" on a
+  // notification. Never free text; ownership is verified server-side inside
+  // explain_alert's own tool handler, not here.
+  context: z
+    .object({
+      alertEventId: z.string().trim().min(1).max(200).optional()
+    })
     .optional()
 });
 
@@ -32,9 +41,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const [aiAssistantEnabled, activitiesEnabled] = await Promise.all([
+  const [aiAssistantEnabled, activitiesEnabled, alertsEnabled] = await Promise.all([
     hasFeatureAccess(auth.session.userId, "ai"),
-    hasFeatureAccess(auth.session.userId, "activities")
+    hasFeatureAccess(auth.session.userId, "activities"),
+    hasFeatureAccess(auth.session.userId, "alerts")
   ]);
   if (!aiAssistantEnabled) {
     return NextResponse.json({ message: "The energy assistant is disabled for your account." }, { status: 403 });
@@ -52,31 +62,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = requestSchema.parse(await request.json());
+    const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Invalid request." }, { status: 400, headers: rateHeaders });
+    }
+    const body = parsed.data;
     const result = await answerAssistantQuestion(
       auth.session.accessToken,
+      auth.session.userId,
       body.question,
       {
         from: body.from,
         to: body.to
       },
       (body.history ?? []) as AssistantConversationMessage[],
-      { activitiesEnabled }
+      { activitiesEnabled, alertsEnabled },
+      { alertEventId: body.context?.alertEventId }
     );
 
-    return NextResponse.json(
-      {
-        answer: result.answer,
-        toolsUsed: result.toolsUsed,
-        scope: {
-          from: body.from ?? "",
-          to: body.to ?? ""
-        }
-      },
-      { headers: rateHeaders }
-    );
+    return NextResponse.json(result, { headers: rateHeaders });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to answer assistant question.";
-    return NextResponse.json({ message }, { status: 500 });
+    console.error("newinmeter_assistant_failed", message);
+    return NextResponse.json({ message: "Failed to answer assistant question." }, { status: 500 });
   }
 }

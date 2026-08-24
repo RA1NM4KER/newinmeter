@@ -106,12 +106,11 @@ function buildMonthlyBreakdown(rows: DailyRollupRow[]) {
 export const compareCalendarMonthsTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "compare_calendar_months",
-      description:
-        "Compare the latest calendar month in scope against the previous calendar month in scope (e.g. 'this month vs last month'), including cost-per-kWh rates. Use compare_previous_period instead for an immediately preceding range of equal length that is not calendar-month aligned (e.g. 'the last 7 days vs the 7 days before that').",
-      parameters: EmptySchema
-    }
+    name: "compare_calendar_months",
+    description:
+      "Compare the latest calendar month in scope against the previous calendar month in scope (e.g. 'this month vs last month'), including cost-per-kWh rates. Use compare_previous_period instead for an immediately preceding range of equal length that is not calendar-month aligned (e.g. 'the last 7 days vs the 7 days before that').",
+    parameters: EmptySchema,
+    strict: true
   },
   handler: async (_args, getContext) => {
     const context = await getContext();

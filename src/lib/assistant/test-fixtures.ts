@@ -45,6 +45,8 @@ export function buildTestContext(
 ): DashboardContext {
   return {
     accessToken: "test-token",
+    userId: "test-user-id",
+    permissions: { activitiesEnabled: false, alertsEnabled: false },
     summary: {},
     dailyRows,
     hourlyRows,

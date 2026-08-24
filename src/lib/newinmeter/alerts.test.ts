@@ -24,8 +24,9 @@ vi.mock("../push-notify", () => ({ sendPushToUser: mocks.sendPushToUser }));
 // cares about the gate itself (see "Alerts feature gating" below) overrides
 // this per-call.
 mocks.hasFeatureAccess.mockResolvedValue(true);
-mocks.getFeatureAccessForUsers.mockImplementation(async (userIds: string[]) =>
-  new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
+mocks.getFeatureAccessForUsers.mockImplementation(
+  async (userIds: string[]) =>
+    new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
 );
 vi.mock("../features", () => ({
   hasFeatureAccess: mocks.hasFeatureAccess,
@@ -56,6 +57,7 @@ import {
   disableFreshDataAlertRules,
   evaluateAlertsAfterSync,
   evaluateDataDelayedAlerts,
+  getAlertEventDetail,
   getAlertInsights,
   getRecentNotifications,
   getUnreadNotificationCount,
@@ -196,7 +198,11 @@ describe("upsertAlertRule", () => {
   });
 
   it("turns auto-sync on as part of the same confirmed action and returns the freshly computed next_sync_at", async () => {
-    mocks.getConnectionRowForUser.mockResolvedValue({ ...baseConnectionRow, auto_sync_enabled: false, next_sync_at: null });
+    mocks.getConnectionRowForUser.mockResolvedValue({
+      ...baseConnectionRow,
+      auto_sync_enabled: false,
+      next_sync_at: null
+    });
     mocks.setAutoSyncEnabled.mockResolvedValue({
       id: "conn-1",
       autoSyncEnabled: true,
@@ -269,9 +275,7 @@ function routeFetch(responses: {
       return responses.balance === undefined ? [] : [{ latest_balance: responses.balance }];
     }
     if (path.includes("/energy_day_rollups")) {
-      return responses.todayRollup
-        ? [{ period_date: TODAY, is_complete: true, ...responses.todayRollup }]
-        : [];
+      return responses.todayRollup ? [{ period_date: TODAY, is_complete: true, ...responses.todayRollup }] : [];
     }
     if (path.includes("/alert_events")) {
       return responses.activeEvent ? [responses.activeEvent] : [];
@@ -303,10 +307,7 @@ describe("evaluateAlertsAfterSync -- low balance (active-event dedup)", () => {
       expect.objectContaining({ alert_rule_id: "rule-1", connection_id: "conn-1", trigger_value: 150 }),
       "return=representation"
     );
-    expect(mocks.sendPushToUser).toHaveBeenCalledWith(
-      "user-1",
-      expect.objectContaining({ title: "Low balance" })
-    );
+    expect(mocks.sendPushToUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ title: "Low balance" }));
   });
 
   it("staying below with an already-active event: no duplicate notification", async () => {
@@ -317,7 +318,12 @@ describe("evaluateAlertsAfterSync -- low balance (active-event dedup)", () => {
       dataDelayedRule: null
     });
     await evaluateAlertsAfterSync("conn-1", "user-1");
-    expect(mocks.adminSupabaseRequest).not.toHaveBeenCalledWith("POST", "/alert_events", expect.anything(), expect.anything());
+    expect(mocks.adminSupabaseRequest).not.toHaveBeenCalledWith(
+      "POST",
+      "/alert_events",
+      expect.anything(),
+      expect.anything()
+    );
     expect(mocks.sendPushToUser).not.toHaveBeenCalled();
   });
 
@@ -379,7 +385,9 @@ describe("evaluateAlertsAfterSync -- daily spend / daily kWh (date-scoped dedup)
       todayRollup: { total_spend: 80, energy_kwh: 0 },
       dataDelayedRule: null
     });
-    mocks.adminSupabaseRequest.mockRejectedValue(new Error('duplicate key value violates unique constraint "alert_events_one_per_rule_per_day_idx" (23505)'));
+    mocks.adminSupabaseRequest.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint "alert_events_one_per_rule_per_day_idx" (23505)')
+    );
     await evaluateAlertsAfterSync("conn-1", "user-1");
     expect(mocks.sendPushToUser).not.toHaveBeenCalled();
   });
@@ -392,13 +400,20 @@ describe("evaluateAlertsAfterSync -- daily spend / daily kWh (date-scoped dedup)
     });
     mocks.adminSupabaseRequest.mockResolvedValue([{ id: "event-kwh-1" }]);
     await evaluateAlertsAfterSync("conn-1", "user-1");
-    expect(mocks.sendPushToUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ title: "Electricity usage alert" }));
+    expect(mocks.sendPushToUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ title: "Electricity usage alert" })
+    );
   });
 });
 
 describe("evaluateAlertsAfterSync -- resolves data_delayed on any successful sync", () => {
   it("resolves an active data_delayed event even when no fresh-data alert is enabled", async () => {
-    routeFetch({ rules: [], dataDelayedRule: ruleRow({ id: "rule-delayed", type: "data_delayed", threshold: null }), activeEvent: { id: "event-delayed" } });
+    routeFetch({
+      rules: [],
+      dataDelayedRule: ruleRow({ id: "rule-delayed", type: "data_delayed", threshold: null }),
+      activeEvent: { id: "event-delayed" }
+    });
     mocks.adminSupabaseRequest.mockResolvedValue(undefined);
     await evaluateAlertsAfterSync("conn-1", "user-1");
     expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
@@ -422,10 +437,14 @@ describe("evaluateDataDelayedAlerts", () => {
   });
 
   it("does not notify for a connection within the threshold (one ordinary missed run)", async () => {
-    mocks.adminSupabaseFetch.mockResolvedValue([ruleRow({ id: "rule-a", connection_id: "conn-a", type: "data_delayed", threshold: null })]);
+    mocks.adminSupabaseFetch.mockResolvedValue([
+      ruleRow({ id: "rule-a", connection_id: "conn-a", type: "data_delayed", threshold: null })
+    ]);
     const sevenHoursAgo = new Date(Date.now() - 7 * 3_600_000).toISOString();
 
-    const result = await evaluateDataDelayedAlerts([{ connectionId: "conn-a", userId: "user-a", lastSyncedAt: sevenHoursAgo }]);
+    const result = await evaluateDataDelayedAlerts([
+      { connectionId: "conn-a", userId: "user-a", lastSyncedAt: sevenHoursAgo }
+    ]);
 
     expect(result.notified).toBe(0);
     expect(mocks.sendPushToUser).not.toHaveBeenCalled();
@@ -444,10 +463,15 @@ describe("evaluateDataDelayedAlerts", () => {
     mocks.adminSupabaseRequest.mockResolvedValue([{ id: "event-a" }]);
     const staleAgo = new Date(Date.now() - (DATA_DELAYED_AFTER_HOURS + 1) * 3_600_000).toISOString();
 
-    const result = await evaluateDataDelayedAlerts([{ connectionId: "conn-a", userId: "user-a", lastSyncedAt: staleAgo }]);
+    const result = await evaluateDataDelayedAlerts([
+      { connectionId: "conn-a", userId: "user-a", lastSyncedAt: staleAgo }
+    ]);
 
     expect(result.notified).toBe(1);
-    expect(mocks.sendPushToUser).toHaveBeenCalledWith("user-a", expect.objectContaining({ title: "Meter data delayed" }));
+    expect(mocks.sendPushToUser).toHaveBeenCalledWith(
+      "user-a",
+      expect.objectContaining({ title: "Meter data delayed" })
+    );
   });
 
   it("does not send a duplicate while an event is already active", async () => {
@@ -462,7 +486,9 @@ describe("evaluateDataDelayedAlerts", () => {
     });
     const staleAgo = new Date(Date.now() - (DATA_DELAYED_AFTER_HOURS + 5) * 3_600_000).toISOString();
 
-    const result = await evaluateDataDelayedAlerts([{ connectionId: "conn-a", userId: "user-a", lastSyncedAt: staleAgo }]);
+    const result = await evaluateDataDelayedAlerts([
+      { connectionId: "conn-a", userId: "user-a", lastSyncedAt: staleAgo }
+    ]);
 
     expect(result.notified).toBe(0);
     expect(mocks.sendPushToUser).not.toHaveBeenCalled();
@@ -573,9 +599,7 @@ describe("getUnreadNotificationCount", () => {
     mocks.adminSupabaseCount.mockResolvedValue(3);
 
     await expect(getUnreadNotificationCount("user-1")).resolves.toBe(3);
-    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(
-      expect.stringContaining("connection_id=eq.conn-1")
-    );
+    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("connection_id=eq.conn-1"));
     expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("read_at=is.null"));
   });
 });
@@ -861,14 +885,19 @@ describe("evaluateAlertsAfterSync -- balance_runway (predictive, hysteresis)", (
     // again next sync), just silently, and is written suppressed: true so
     // the Notification Centre never lists it as a second, near-duplicate
     // bell entry.
-    const runwayEvent = createdEvents.find((call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-runway");
+    const runwayEvent = createdEvents.find(
+      (call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-runway"
+    );
     const lowBalanceEvent = createdEvents.find(
       (call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-low-balance"
     );
     expect(runwayEvent?.[2]).toMatchObject({ suppressed: false });
     expect(lowBalanceEvent?.[2]).toMatchObject({ suppressed: true });
     expect(mocks.sendPushToUser).toHaveBeenCalledOnce();
-    expect(mocks.sendPushToUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ title: "Balance running out soon" }));
+    expect(mocks.sendPushToUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ title: "Balance running out soon" })
+    );
   });
 
   it("correlation suppression: the suppressed low_balance sibling does not fire again on the next sync (active-event dedup untouched)", async () => {
@@ -916,7 +945,9 @@ describe("correlation suppression -- monthly_budget / daily_spend pair", () => {
       (call) => call[0] === "POST" && call[1] === "/alert_events"
     );
     expect(createdEvents).toHaveLength(2);
-    const budgetEvent = createdEvents.find((call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-budget");
+    const budgetEvent = createdEvents.find(
+      (call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-budget"
+    );
     const spendEvent = createdEvents.find(
       (call) => (call[2] as Record<string, unknown>).alert_rule_id === "rule-daily-spend"
     );
@@ -1125,7 +1156,9 @@ describe("evaluateAlertsAfterSync -- tariff_changed (observational, server-owned
     // this is asserted directly against the mocked disable call, not
     // inferred, so this test fails loudly if that wiring ever regresses.
     mocks.getConnectionRowForUser.mockResolvedValue(baseConnectionRow);
-    mocks.adminSupabaseRequest.mockResolvedValue([ruleRow({ id: "rule-tariff", type: "tariff_changed", enabled: false })]);
+    mocks.adminSupabaseRequest.mockResolvedValue([
+      ruleRow({ id: "rule-tariff", type: "tariff_changed", enabled: false })
+    ]);
     await upsertAlertRule({ userId: "user-1", type: "tariff_changed", enabled: false, threshold: null });
     expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
       "DELETE",
@@ -1514,7 +1547,12 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
       activities: [{ starts_at: `${TODAY}T18:55:00`, ends_at: `${TODAY}T21:00:00` }]
     });
     await evaluateAlertsAfterSync("conn-1", "user-1");
-    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith("POST", "/alert_events", expect.anything(), "return=representation");
+    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
+      "POST",
+      "/alert_events",
+      expect.anything(),
+      "return=representation"
+    );
   });
 });
 
@@ -1684,8 +1722,9 @@ describe("Alerts feature gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.hasFeatureAccess.mockResolvedValue(true);
-    mocks.getFeatureAccessForUsers.mockImplementation(async (userIds: string[]) =>
-      new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
+    mocks.getFeatureAccessForUsers.mockImplementation(
+      async (userIds: string[]) =>
+        new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
     );
   });
 
@@ -1740,9 +1779,84 @@ describe("Alerts feature gating", () => {
       new Map([["user-no", { alerts: { enabled: false, source: "rollout" as const } }]])
     );
 
-    const result = await evaluateDataDelayedAlerts([{ connectionId: "conn-no", userId: "user-no", lastSyncedAt: null }]);
+    const result = await evaluateDataDelayedAlerts([
+      { connectionId: "conn-no", userId: "user-no", lastSyncedAt: null }
+    ]);
 
     expect(result).toEqual({ checked: 0, notified: 0 });
     expect(mocks.adminSupabaseFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("getAlertEventDetail", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns null without querying alert_events when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+
+    await expect(getAlertEventDetail("user-1", "event-1")).resolves.toBeNull();
+    expect(mocks.adminSupabaseFetch).not.toHaveBeenCalled();
+  });
+
+  it("scopes the event lookup to the caller's own connection_id -- an id belonging to another user's connection resolves to null, not found, same as a bad id", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseFetch.mockResolvedValueOnce([]); // the connection_id filter excludes another user's event
+
+    const result = await getAlertEventDetail("user-1", "someone-elses-event");
+
+    expect(result).toBeNull();
+    expect(mocks.adminSupabaseFetch).toHaveBeenCalledWith(expect.stringContaining("connection_id=eq.conn-1"));
+    expect(mocks.adminSupabaseFetch).toHaveBeenCalledWith(expect.stringContaining("id=eq.someone-elses-event"));
+  });
+
+  it("returns null when the event's rule can no longer be resolved", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseFetch
+      .mockResolvedValueOnce([
+        {
+          id: "event-1",
+          alert_rule_id: "rule-1",
+          triggered_at: "2026-08-20T10:00:00Z",
+          trigger_value: 150,
+          threshold_value: 200,
+          read_at: null,
+          event_context: null,
+          resolved_at: null
+        }
+      ])
+      .mockResolvedValueOnce([]);
+
+    await expect(getAlertEventDetail("user-1", "event-1")).resolves.toBeNull();
+  });
+
+  it("builds title/body via the exact same notifyCopyFor the push notification and centre use, from the event's own snapshot", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseFetch
+      .mockResolvedValueOnce([
+        {
+          id: "event-1",
+          alert_rule_id: "rule-1",
+          triggered_at: "2026-08-20T10:00:00Z",
+          trigger_value: 150,
+          threshold_value: 200,
+          read_at: "2026-08-20T11:00:00Z",
+          event_context: null,
+          resolved_at: "2026-08-20T12:00:00Z"
+        }
+      ])
+      .mockResolvedValueOnce([{ type: "low_balance" }]);
+
+    const result = await getAlertEventDetail("user-1", "event-1");
+
+    expect(result).toMatchObject({
+      id: "event-1",
+      type: "low_balance",
+      triggerValue: 150,
+      thresholdValue: 200,
+      resolvedAt: "2026-08-20T12:00:00Z",
+      isRead: true
+    });
+    expect(result?.body).toContain(formatCurrency(150));
+    expect(result?.body).toContain(formatCurrency(200));
   });
 });

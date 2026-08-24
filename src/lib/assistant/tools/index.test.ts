@@ -14,6 +14,21 @@ vi.mock("@/lib/dashboard-data", () => ({
   loadDashboardHourlyRollups: loadDashboardHourlyRollupsMock
 }));
 
+// The alert tools registered here (get-alert-status.ts etc.) pull in
+// @/lib/newinmeter/alerts, which imports @/lib/features (React 19's
+// cache(), unavailable from the installed react@18.3.1 outside Next's own
+// bundler) -- same shim as alerts.test.ts/connection.test.ts. Registration
+// tests below only check tool names/shape, never actually execute a
+// handler, so a permissive stub is enough.
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
+  return { ...actual, cache: <T>(fn: T) => fn };
+});
+vi.mock("@/lib/features", () => ({
+  hasFeatureAccess: vi.fn().mockResolvedValue(true),
+  getFeatureAccessForUsers: vi.fn().mockResolvedValue(new Map())
+}));
+
 const baseToolNames = [
   "get_scope_overview",
   "get_balance_runout",
@@ -27,52 +42,89 @@ const baseToolNames = [
   "get_data_status"
 ];
 
+const alertToolNames = ["get_alert_status", "get_recent_alerts", "explain_alert", "get_alert_recommendations"];
+
 function toolNames(toolbox: ReturnType<typeof createAssistantToolbox>) {
-  return toolbox.tools.map((tool) => tool.function.name);
+  return toolbox.tools.map((tool) => tool.name);
 }
 
 describe("createAssistantToolbox permission-aware registration", () => {
-  it("registers 10 tools, without get_activity_report, when Activities are disabled", () => {
-    const toolbox = createAssistantToolbox("token", {}, { activitiesEnabled: false });
+  it("registers 10 tools, without get_activity_report or any alert tool, when Activities and Alerts are both disabled", () => {
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: false });
     const names = toolNames(toolbox);
 
     expect(names).toHaveLength(10);
     expect(names).not.toContain("get_activity_report");
+    for (const name of alertToolNames) {
+      expect(names).not.toContain(name);
+    }
     for (const name of baseToolNames) {
       expect(names).toContain(name);
     }
+    // Every registered tool uses the flat Responses API function-tool
+    // shape (no `.function` nesting) and strict mode.
+    for (const tool of toolbox.tools) {
+      expect(tool.type).toBe("function");
+      expect(tool.strict).toBe(true);
+      expect(typeof tool.name).toBe("string");
+    }
   });
 
-  it("registers 11 tools, including get_activity_report, when Activities are enabled", () => {
-    const toolbox = createAssistantToolbox("token", {}, { activitiesEnabled: true });
+  it("registers 11 tools, including get_activity_report, when only Activities is enabled", () => {
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: true, alertsEnabled: false });
     const names = toolNames(toolbox);
 
     expect(names).toHaveLength(11);
     expect(names).toContain("get_activity_report");
-    for (const name of baseToolNames) {
+    for (const name of alertToolNames) {
+      expect(names).not.toContain(name);
+    }
+  });
+
+  it("registers 14 tools, including all 4 alert tools, when only Alerts is enabled", () => {
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: true });
+    const names = toolNames(toolbox);
+
+    expect(names).toHaveLength(14);
+    expect(names).not.toContain("get_activity_report");
+    for (const name of alertToolNames) {
       expect(names).toContain(name);
     }
   });
 
+  it("registers all 15 tools when both Activities and Alerts are enabled", () => {
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: true, alertsEnabled: true });
+    const names = toolNames(toolbox);
+
+    expect(names).toHaveLength(15);
+  });
+
   it("rejects a call to get_activity_report when Activities are disabled, as an unknown tool", async () => {
-    const toolbox = createAssistantToolbox("token", {}, { activitiesEnabled: false });
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: false });
 
     await expect(toolbox.execute("get_activity_report", {})).rejects.toThrow("Unknown assistant tool");
+  });
+
+  it("rejects a call to any alert tool when Alerts are disabled, as an unknown tool", async () => {
+    const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: false });
+
+    await expect(toolbox.execute("get_alert_status", {})).rejects.toThrow("Unknown assistant tool");
+    await expect(toolbox.execute("explain_alert", { alertEventId: "x" })).rejects.toThrow("Unknown assistant tool");
   });
 });
 
 describe("createAssistantToolbox shared dashboard context under concurrent execution", () => {
-  it("loads dashboard summary/daily/hourly data only once, even when multiple tools execute concurrently", async () => {
+  it("loads dashboard summary/daily/hourly data only once, even when multiple tools execute concurrently, and threads userId/permissions into context", async () => {
     loadDashboardSummaryMock.mockReset().mockResolvedValue({ dateStart: "2026-07-01", dateEnd: "2026-07-31" });
     loadDashboardDailyRollupsMock.mockReset().mockResolvedValue([]);
     loadDashboardHourlyRollupsMock.mockReset().mockResolvedValue([]);
 
-    const toolbox = createAssistantToolbox("token", {}, { activitiesEnabled: false });
+    const toolbox = createAssistantToolbox("token", "user-42", {}, { activitiesEnabled: false, alertsEnabled: false });
 
     // Mirrors how openai.ts's Promise.all fires several tool calls from one
-    // assistant message concurrently -- getContext()'s memoized promise
-    // must still resolve to a single underlying fetch, not one per call.
-    await Promise.all([
+    // assistant turn concurrently -- getContext()'s memoized promise must
+    // still resolve to a single underlying fetch, not one per call.
+    const [overview] = await Promise.all([
       toolbox.execute("get_scope_overview", {}),
       toolbox.execute("get_balance_runout", {}),
       toolbox.execute("compare_previous_period", {})
@@ -81,5 +133,6 @@ describe("createAssistantToolbox shared dashboard context under concurrent execu
     expect(loadDashboardSummaryMock).toHaveBeenCalledTimes(1);
     expect(loadDashboardDailyRollupsMock).toHaveBeenCalledTimes(1);
     expect(loadDashboardHourlyRollupsMock).toHaveBeenCalledTimes(1);
+    expect(overview).toMatchObject({ scope: { from: "2026-07-01", to: "2026-07-31" } });
   });
 });

@@ -14,10 +14,13 @@ NewinMeter is a **multi-user MVP**. Each person signs up with Supabase Auth, con
 LiveMopay account with their own email and password, and sees only their own data. It is not a
 finished, fully production-hardened product -- see "Known limitations" in `MULTI_USER_SETUP.md`.
 
-It also includes an in-app assistant that answers grounded questions about the currently selected
-date range: comparisons, top usage periods, top-up activity, spikes, and balance patterns, scoped
-to the signed-in user's own data. Assistant access is a per-user permission an admin can revoke,
-and every assistant call is rate-limited server-side regardless of what the UI shows.
+It also includes an in-app energy copilot ("AI v2") that answers grounded questions about the
+currently selected date range -- comparisons, top usage periods, top-up activity, spikes, balance
+patterns, and (when Alerts is on) the account's alert state -- with structured evidence, a small
+real-data chart, and, where relevant, a proposed next action (add an Activity, set an alert, sync)
+that only runs after the user explicitly confirms it in the UI. See "Assistant" below. Assistant
+access is a per-user permission an admin can revoke, and every assistant call and every confirmed
+action is rate-limited server-side regardless of what the UI shows.
 
 There's a lightweight admin/roles system on top of Supabase Auth (everyone is `role: 'user'` by
 default; one seed admin is set in a migration), and every user can permanently delete their own
@@ -107,9 +110,45 @@ below. The app throws on the first API request without it; there's no in-memory 
 
 ## Assistant
 
-The assistant is a grounded analyst for the active dashboard date range, scoped to the signed-in
-user's own connection. It only answers using the tool results below and never invents numbers or
-dates, and never runs arbitrary SQL.
+The assistant ("AI v2") is a grounded energy copilot for the active dashboard date range, scoped to
+the signed-in user's own connection. It follows one shape on every turn: **data -> explanation ->
+evidence -> action**. It only answers using the tool results below and never invents numbers,
+dates, tariffs, balances, top-ups, alert state, or Activities, and never runs arbitrary SQL.
+
+### Model / API
+
+`src/lib/assistant/openai.ts` calls the OpenAI **Responses API** (`client.responses.create`, via
+the official `openai` npm SDK) in a tool-calling loop, capped at 8 iterations. `OPENAI_MODEL`
+(default `gpt-5.6-terra`) and `OPENAI_REASONING_EFFORT` (default `low`) are both env-overridable;
+`reasoning.effort` is only sent for models the Responses API actually accepts it for (gpt-5+/
+o-series -- verified live: it 400s for older models like gpt-4.1-mini, so
+`modelSupportsReasoningEffort` skips it there rather than breaking every request). Reasoning
+content is never requested via `include` and never appears in the response returned to the client.
+
+### Structured response contract
+
+The model must finish every turn by calling one more tool, `submit_response`, with a strict
+JSON-Schema-validated payload (`src/lib/assistant/response-schema.ts`, cross-checked against its
+own zod validator in a test) -- it never replies with free-form text as the real answer:
+
+```ts
+type AssistantResponse = {
+  answer: string;
+  evidence: AssistantEvidence[];       // day / period / activity / alert / data_status references
+  visualizations: AssistantVisualization[]; // hourly_usage / daily_usage / period_comparison
+  actions: AssistantAction[];          // navigate, or a proposed mutation (see below)
+  suggestions: string[];               // up to 4 follow-up questions
+  scope: { from: string; to: string };
+};
+```
+
+The model chooses *which* visualization and *what to highlight*; the client resolves the actual
+numbers from the app's own existing endpoints (`/api/day-intervals`, `/api/daily-rollups`) --
+the model never supplies chart data itself. If the model skips `submit_response` (plain text) or
+its arguments fail validation (one retry, then give up), the server falls back to a minimal,
+still-valid response rather than rendering raw model output.
+
+### Read tools (registered per-request based on feature access)
 
 1. `get_scope_overview` - totals, peaks, balance, and generated insights for the active range
 2. `get_balance_runout` - estimate when the current balance runs out and whether it covers month-end
@@ -120,6 +159,44 @@ dates, and never runs arbitrary SQL.
 7. `explain_day` - explain a single day with daily rollups plus top half-hour intervals
 8. `get_recent_topups` - list recent top-ups in the active range
 9. `get_water_overview` - summarize water charges in the active range
+10. `get_data_status` - sync freshness/completeness, incomplete days, suspected gaps
+11. `get_activity_report` - **Activities only** - activities/tags with usage recorded during their windows (correlation, never causation)
+12. `get_alert_status` - **Alerts only** - every alert type's enabled state, threshold, current metric, and dedup semantics (why an alert did/didn't fire again)
+13. `get_recent_alerts` - **Alerts only** - recent alert events (mirrors the notification centre; suppressed/duplicate-pair events excluded)
+14. `explain_alert` - **Alerts only** - full detail on one alert event by id, ownership-checked server-side; for a usage spike, includes surrounding hourly context and any overlapping Activity
+15. `get_alert_recommendations` - **Alerts only** - grounded alert suggestions (only types with real supporting data, never every type by default)
+
+### Actions -- never executed by the model
+
+Every mutating action (`add_activity`, `set_alert`, `update_alert`, `disable_alert`, `sync`) is a
+typed **proposal only** -- there is no tool the model can call to mutate anything. The UI renders a
+proposal as a compact confirmation card (editable where it matters: tags for an Activity, threshold
+for an alert); nothing happens until the user clicks Confirm. That POSTs to
+`/api/assistant/actions`, which re-validates every argument with zod (never trusting the LLM's own
+structured-output validation as the only check), resolves ownership from the authenticated
+session, respects the same feature gates and demo-account restrictions as the rest of the app, and
+calls the exact same domain functions the corresponding hand-built UI already uses
+(`createActivity`, `upsertAlertRule`, `runLivemopaySync`) -- no duplicated business logic.
+`navigate` actions run immediately client-side (`src/lib/assistant/navigation.ts` maps a typed
+destination to one of the app's own routes/query params -- never an arbitrary URL).
+
+### Alerts integration
+
+"Ask AI" on a notification (bell icon) opens the assistant with the alert's id passed as **trusted
+UI context** (`{ context: { alertEventId } }` on the request, not text baked into the question),
+which the system prompt uses to call `explain_alert` first. Alert tools are registered only when
+Alerts is enabled for the account, and reuse the evaluator's own semantics/copy
+(`notifyCopyFor`, `event_context` snapshots) rather than re-deriving them, so the assistant's
+explanation of dedup/hysteresis/correlated-suppression behavior can't drift from what actually
+happened.
+
+### Security
+
+- Every tool and action resolves the caller from the authenticated session (`requireConnectedSession`) -- never a client-supplied user/connection id.
+- Alert event ids and Activity ids are ownership-checked server-side before any read or write.
+- Structured output is JSON-Schema-constrained (`strict: true` on every tool, including `submit_response`) and re-validated with zod before ever reaching the client.
+- Feature gates (`ai`, `activities`, `alerts`) are checked server-side on every route, not just hidden in the UI -- revoking access takes effect immediately.
+- The demo account's mutation actions don't render in the UI, and the actions route independently refuses them (`DemoAccountProtectedError` / a dedicated demo check for Activities and sync).
 
 ## Roles and Admin
 
@@ -155,7 +232,9 @@ authenticated user id, never IP, since every one of these routes is already auth
 time rate limiting runs.
 
 The assistant has its own tighter policy (5/minute, 30/day) since it's the one route that costs
-real money per call; everything else defaults to 60/minute, 1000/day.
+real money per call; confirmed assistant actions (`/api/assistant/actions`) get a separate,
+slightly looser policy (10/minute, 50/day) since a conversation confirming a couple of alerts
+shouldn't eat into the question budget; everything else defaults to 60/minute, 1000/day.
 
 Needs one of these env var pairs (see `.env.example`):
 
@@ -352,6 +431,18 @@ are covered. `src/lib/demo/dataset.ts` (the recruiter demo dataset generator) is
 covered, including a check that it produces meaningful output through the real `createAnalytics`
 and assistant tool handlers (`dataset.analytics.test.ts`).
 
+The assistant's Responses API tool loop (`openai.ts`, mocking the `openai` SDK's `responses.create`),
+its structured-response validation and JSON-Schema/zod cross-check (`response-schema.ts`), every
+alert tool (ownership, feature gating, dedup-semantics grounding), and `/api/assistant` +
+`/api/assistant/actions` (auth, feature gates, demo blocking, ownership, arbitrary-type/threshold
+rejection, no-mutation-before-confirmation) are all covered the same way. The assistant's rich UI
+(`src/components/assistant`) is the one component surface with real component tests
+(`@testing-library/react` + `// @vitest-environment jsdom`, same pattern as
+`alert-rule-row.test.tsx`) -- confirm/cancel behavior, demo/feature-flag gating of mutation
+buttons, and that no raw tool name ever renders -- since a proposed mutation not actually staying
+unconfirmed until clicked is a correctness property worth testing directly, not just inferring from
+the domain layer.
+
 ## Legal pages
 
 `/privacy` and `/terms` are static, unauthenticated pages (`src/app/privacy`, `src/app/terms`,
@@ -384,9 +475,10 @@ multi-user support:
 - `src/app/api/livemopay` - LiveMopay connection routes (connect, select-account, disconnect, status)
 - `src/app/api` - sync, assistant, export, energy-rows, day-intervals routes (all authenticated,
   all rate-limited)
+- `src/app/api/assistant/actions` - server-side execution for a user-confirmed assistant-proposed mutation (add Activity, set/disable an alert, sync) -- never called by the model directly
 - `src/components/admin` - admin user list/role/permission table
 - `src/components/auth`, `src/components/connect` - sign-in and LiveMopay connection UI
-- `src/components/assistant` - dashboard assistant launcher and dialog UI
+- `src/components/assistant` - global assistant provider/dialog (mounted once in `app-shell.tsx`), rich response rendering (evidence chips, visualization cards, action confirmation cards), and the dashboard trigger button
 - `src/components/dashboard` - dashboard controls and insight sections
 - `src/components/charts` - Recharts chart components
 - `src/components/data` - Supabase-backed data table (`columns.ts` is the shared column
@@ -398,7 +490,9 @@ multi-user support:
 - `src/lib/auth` - authenticated-session resolution, including `requireAdminSession`
 - `src/lib/user-roles.ts` - role/permission reads and writes (`user_roles` table)
 - `src/lib/rate-limit.ts` - Upstash-backed per-user rate limiting
-- `src/lib/assistant` - assistant prompt, tool loop, and grounded analytics tools
+- `src/lib/assistant` - Responses API tool loop (`openai.ts`), system prompt, structured response
+  contract + validation (`response-schema.ts`), navigation destination resolver, and grounded tools
+  (`tools/`, including the alert tools)
 - `src/lib/newinmeter-web.ts` - LiveMopay Firebase auth, account discovery, ledger fetch (pure, argument-based)
 - `src/lib/newinmeter-connection.ts` - LiveMopay connection persistence (encrypted tokens), account
   deletion, demo-account protections (`DemoAccountProtectedError`)

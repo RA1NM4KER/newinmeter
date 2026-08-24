@@ -44,12 +44,11 @@ function summarizeTopups(rows: EnergyRow[]) {
 export const getRecentTopupsTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_recent_topups",
-      description:
-        "List the latest top-up rows captured within the active dashboard date range, plus aggregates (total, average amount, and average days between top-ups) across all matched top-ups.",
-      parameters: GetRecentTopupsSchema
-    }
+    name: "get_recent_topups",
+    description:
+      "List the latest top-up rows captured within the active dashboard date range, plus aggregates (total, average amount, and average days between top-ups) across all matched top-ups.",
+    parameters: GetRecentTopupsSchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

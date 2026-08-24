@@ -12,12 +12,11 @@ const EXPECTED_ENERGY_INTERVALS_PER_DAY = 48;
 export const getDataStatusTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_data_status",
-      description:
-        "Report data sync freshness and completeness: when data last synced, whether the most recent sync attempt failed, whether the latest day is fully captured, which dates are incomplete, and dates with suspected interval gaps. Use this for questions about data being partial, stale, or missing -- not for usage or spend questions.",
-      parameters: GetDataStatusSchema
-    }
+    name: "get_data_status",
+    description:
+      "Report data sync freshness and completeness: when data last synced, whether the most recent sync attempt failed, whether the latest day is fully captured, which dates are incomplete, and dates with suspected interval gaps. Use this for questions about data being partial, stale, or missing -- not for usage or spend questions.",
+    parameters: GetDataStatusSchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

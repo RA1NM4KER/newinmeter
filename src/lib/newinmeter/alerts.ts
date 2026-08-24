@@ -892,7 +892,11 @@ async function evaluateTariffFamily(
       await adminSupabaseRequest(
         "POST",
         "/alert_rule_state?on_conflict=alert_rule_id",
-        { alert_rule_id: changedRule.id, state: { lastObservedTariff: currentTariff }, updated_at: new Date().toISOString() },
+        {
+          alert_rule_id: changedRule.id,
+          state: { lastObservedTariff: currentTariff },
+          updated_at: new Date().toISOString()
+        },
         "resolution=merge-duplicates,return=minimal"
       );
     } else if (Math.abs(currentTariff - lastObserved) >= 0.005) {
@@ -910,7 +914,11 @@ async function evaluateTariffFamily(
       await adminSupabaseRequest(
         "POST",
         "/alert_rule_state?on_conflict=alert_rule_id",
-        { alert_rule_id: changedRule.id, state: { lastObservedTariff: currentTariff }, updated_at: new Date().toISOString() },
+        {
+          alert_rule_id: changedRule.id,
+          state: { lastObservedTariff: currentTariff },
+          updated_at: new Date().toISOString()
+        },
         "resolution=merge-duplicates,return=minimal"
       );
     }
@@ -1125,7 +1133,11 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     );
     ruleByType = new Map(rules.map((rule) => [rule.type, rule]));
   } catch (error) {
-    console.error("newinmeter_alert_rules_fetch_failed", connectionId, error instanceof Error ? error.message : String(error));
+    console.error(
+      "newinmeter_alert_rules_fetch_failed",
+      connectionId,
+      error instanceof Error ? error.message : String(error)
+    );
   }
 
   try {
@@ -1205,7 +1217,9 @@ export async function getSuggestedMonthlyBudget(userId: string): Promise<number 
   const previousMonthStart = `${previousMonthEnd.slice(0, 7)}-01`;
   const trailingStart = addDaysToDateString(today, -30);
 
-  const rows = await adminSupabaseFetch<Array<{ period_date: string; total_spend: number | string; is_complete: boolean }>>(
+  const rows = await adminSupabaseFetch<
+    Array<{ period_date: string; total_spend: number | string; is_complete: boolean }>
+  >(
     `/energy_day_rollups?select=period_date,total_spend,is_complete&connection_id=eq.${encodeURIComponent(connectionRow.id)}&period_date=gte.${previousMonthStart}&period_date=lt.${today}&order=period_date.asc`
   );
 
@@ -1219,7 +1233,8 @@ export async function getSuggestedMonthlyBudget(userId: string): Promise<number 
 
   const trailingRows = rows.filter((row) => row.is_complete && row.period_date >= trailingStart);
   if (trailingRows.length >= BUDGET_MIN_HISTORY_DAYS) {
-    const dailyAverage = trailingRows.reduce((sum, row) => sum + (toNumber(row.total_spend) ?? 0), 0) / trailingRows.length;
+    const dailyAverage =
+      trailingRows.reduce((sum, row) => sum + (toNumber(row.total_spend) ?? 0), 0) / trailingRows.length;
     return roundToFriendlyRand(dailyAverage * 30);
   }
 
@@ -1575,6 +1590,72 @@ export async function getRecentNotifications(
       }
     ];
   });
+}
+
+export type AlertEventDetail = {
+  id: string;
+  type: AlertType;
+  title: string;
+  body: string;
+  navigateUrl: string;
+  triggeredAt: string;
+  triggerValue: number;
+  thresholdValue: number | null;
+  context: Record<string, unknown> | null;
+  resolvedAt: string | null;
+  isRead: boolean;
+};
+
+// Backs the assistant's explain_alert tool and the "Ask AI" notification
+// deep link -- everything needed to explain one specific alert event.
+// Ownership is enforced by the query itself (connection_id filter resolved
+// from the authenticated userId, never from the caller's eventId): an id
+// belonging to another user's connection matches zero rows and returns
+// null, same "not found" shape as a genuinely bad id, so this never leaks
+// whether the id exists at all. Reuses notifyCopyFor -- the exact same
+// title/body the push notification and notification centre already show --
+// and event_context, which already carries the type-specific numbers the
+// evaluator itself computed at trigger time (see the evaluator families
+// above), so this never recomputes or approximates evaluator semantics.
+export async function getAlertEventDetail(userId: string, eventId: string): Promise<AlertEventDetail | null> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return null;
+  }
+
+  const [event] = await adminSupabaseFetch<Array<AlertEventRow & { resolved_at: string | null }>>(
+    `/alert_events?select=id,alert_rule_id,triggered_at,trigger_value,threshold_value,read_at,event_context,resolved_at&id=eq.${encodeURIComponent(eventId)}&connection_id=eq.${encodeURIComponent(connectionRow.id)}&limit=1`
+  );
+  if (!event) {
+    return null;
+  }
+
+  const [rule] = await adminSupabaseFetch<Array<{ type: AlertType }>>(
+    `/alert_rules?select=type&id=eq.${encodeURIComponent(event.alert_rule_id)}&limit=1`
+  );
+  if (!rule) {
+    return null;
+  }
+
+  const currentValue = toNumber(event.trigger_value) ?? 0;
+  const copy = notifyCopyFor(
+    { type: rule.type, threshold: event.threshold_value, context: event.event_context },
+    currentValue
+  );
+
+  return {
+    id: event.id,
+    type: rule.type,
+    title: copy.title,
+    body: copy.body,
+    navigateUrl: copy.url,
+    triggeredAt: event.triggered_at,
+    triggerValue: currentValue,
+    thresholdValue: toNumber(event.threshold_value),
+    context: event.event_context,
+    resolvedAt: event.resolved_at,
+    isRead: event.read_at !== null
+  };
 }
 
 // Distinguishes "nothing has happened yet" from "nothing is even being

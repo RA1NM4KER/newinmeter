@@ -9,12 +9,11 @@ function hasWaterCharge(day: { waterSpend: number; waterKl: number }) {
 export const getWaterOverviewTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_water_overview",
-      description:
-        "Summarize water charges in the active dashboard range, including when they first appeared and the highest water day.",
-      parameters: EmptySchema
-    }
+    name: "get_water_overview",
+    description:
+      "Summarize water charges in the active dashboard range, including when they first appeared and the highest water day.",
+    parameters: EmptySchema,
+    strict: true
   },
   handler: async (_args, getContext) => {
     const context = await getContext();

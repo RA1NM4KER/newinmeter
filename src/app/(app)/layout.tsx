@@ -37,6 +37,8 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
         isAdmin={permissions.role === "admin"}
         isActivitiesEnabled={features.activities.enabled}
         isLiveMeterEnabled={features.live.enabled}
+        isAiAssistantEnabled={features.ai.enabled}
+        isAlertsEnabled={features.alerts.enabled}
         isDemo={connection?.isDemo ?? false}
         initialUnreadNotificationCount={initialUnreadNotificationCount}
       >

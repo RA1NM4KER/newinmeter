@@ -72,12 +72,11 @@ const validMetrics = new Set<TopDayMetric>(["spend", "kwh", "tariff", "waterKl",
 export const getTopDaysTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "get_top_days",
-      description:
-        "Get the highest days in the active range by spend, electricity usage, average tariff, water usage, or water spend. For water metrics, only days with nonzero water activity are ranked.",
-      parameters: GetTopDaysSchema
-    }
+    name: "get_top_days",
+    description:
+      "Get the highest days in the active range by spend, electricity usage, average tariff, water usage, or water spend. For water metrics, only days with nonzero water activity are ranked.",
+    parameters: GetTopDaysSchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

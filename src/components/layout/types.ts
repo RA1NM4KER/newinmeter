@@ -6,6 +6,8 @@ export type AppShellProps = {
   isAdmin?: boolean;
   isActivitiesEnabled?: boolean;
   isLiveMeterEnabled?: boolean;
+  isAiAssistantEnabled?: boolean;
+  isAlertsEnabled?: boolean;
   isDemo?: boolean;
   initialUnreadNotificationCount?: number;
 };

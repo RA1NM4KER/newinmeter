@@ -5,11 +5,10 @@ import { ExplainDaySchema } from "./schemas";
 export const explainDayTool: AssistantTool = {
   definition: {
     type: "function",
-    function: {
-      name: "explain_day",
-      description: "Explain one specific day using its daily rollup and top half-hour intervals.",
-      parameters: ExplainDaySchema
-    }
+    name: "explain_day",
+    description: "Explain one specific day using its daily rollup and top half-hour intervals.",
+    parameters: ExplainDaySchema,
+    strict: true
   },
   handler: async (args, getContext) => {
     const context = await getContext();

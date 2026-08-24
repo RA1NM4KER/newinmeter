@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing } from "lucide-react";
+import { BellRing, Sparkles } from "lucide-react";
 import { formatNotificationTime } from "@/lib/notifications/format";
 import type { NotificationItem } from "@/lib/newinmeter/alerts";
 
@@ -19,6 +19,11 @@ type NotificationListProps = {
   // Settings prompt a moment later.
   hasEnabledAlerts?: boolean | null;
   onGoToSettings?: () => void;
+  // Ask AI is only rendered when both the AI feature is on for this account
+  // and a handler is supplied -- omit either and the row stays exactly as
+  // before (view/navigate only).
+  isAiAssistantEnabled?: boolean;
+  onAskAi?: (item: NotificationItem) => void;
 };
 
 // Only shown when there's something to mark -- "Mark all as read" has no
@@ -60,9 +65,12 @@ export function NotificationList({
   onMarkAllRead,
   showHeader = true,
   hasEnabledAlerts = null,
-  onGoToSettings
+  onGoToSettings,
+  isAiAssistantEnabled = false,
+  onAskAi
 }: NotificationListProps) {
   const unreadCount = notifications.filter((item) => !item.isRead).length;
+  const showAskAi = isAiAssistantEnabled && Boolean(onAskAi);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -102,11 +110,11 @@ export function NotificationList({
         ) : (
           <ul>
             {notifications.map((item) => (
-              <li key={item.id}>
+              <li className="relative" key={item.id}>
                 <button
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-canvas ${
-                    item.isRead ? "" : "bg-accentSoft/40"
-                  }`}
+                    showAskAi ? "pr-11" : ""
+                  } ${item.isRead ? "" : "bg-accentSoft/40"}`}
                   onClick={() => onItemClick(item)}
                   type="button"
                 >
@@ -120,11 +128,20 @@ export function NotificationList({
                       {!item.isRead ? <span className="sr-only"> (unread)</span> : null}
                     </span>
                     <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted">{item.body}</span>
-                    <span className="mt-1 block text-xs text-muted/80">
-                      {formatNotificationTime(item.triggeredAt)}
-                    </span>
+                    <span className="mt-1 block text-xs text-muted/80">{formatNotificationTime(item.triggeredAt)}</span>
                   </span>
                 </button>
+                {showAskAi ? (
+                  <button
+                    aria-label={`Ask AI about: ${item.title}`}
+                    className="absolute right-2 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-canvas hover:text-accent"
+                    onClick={() => onAskAi?.(item)}
+                    title="Ask AI"
+                    type="button"
+                  >
+                    <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
