@@ -73,11 +73,15 @@ export function ConfirmDialog({
           {title}
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">{message}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+        {/* Stacked full-width on narrow screens -- side-by-side with long
+            labels (e.g. "Keep notifications off" / "Turn on notifications")
+            wrapped to two cramped lines each at this dialog's max-w-sm. Row
+            layout returns once there's room (sm+). */}
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" onClick={onCancel} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant={confirmVariant} onClick={onConfirm} disabled={busy}>
+          <Button className="w-full sm:w-auto" variant={confirmVariant} onClick={onConfirm} disabled={busy}>
             {busy ? "Working…" : confirmLabel}
           </Button>
         </div>
