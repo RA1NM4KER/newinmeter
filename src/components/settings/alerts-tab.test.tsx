@@ -26,6 +26,9 @@ function baseProps(overrides: Partial<ComponentProps<typeof AlertsTab>> = {}) {
     autoSyncEnabled: true,
     isDemo: false,
     latestBalance: null,
+    insights: null,
+    suggestedMonthlyBudget: null,
+    hasTariffProfile: false,
     onEnabledChange: vi.fn(),
     onAutoSyncEnabledChange: vi.fn(),
     ...overrides

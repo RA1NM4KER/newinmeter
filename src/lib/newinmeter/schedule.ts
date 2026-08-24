@@ -82,6 +82,25 @@ export function currentLocalDateString(now: Date): string {
   return localDateStringFormatter.format(now);
 }
 
+// "YYYY-MM" in Africa/Johannesburg -- the dedup scope for monthly_budget and
+// the calendar-month accumulator for tariff_band_approaching. Always SAST,
+// never UTC: a check run in the last ~2 hours of a SAST month must not land
+// on the wrong (UTC) month.
+export function currentLocalMonthString(now: Date): string {
+  return currentLocalDateString(now).slice(0, 7);
+}
+
+// Day-of-month (1-31) and total days in the current SAST calendar month --
+// monthly_budget's projection needs both (days elapsed so far, days
+// remaining to project across).
+export function currentLocalMonthProgress(now: Date): { dayOfMonth: number; daysInMonth: number } {
+  const parts = localDateParts(now, AUTO_SYNC_TIME_ZONE);
+  const dayOfMonth = parts.day;
+  // Day 0 of next month = last day of this month.
+  const daysInMonth = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
+  return { dayOfMonth, daysInMonth };
+}
+
 function localDateParts(date: Date, timeZone: string): LocalDateParts {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone,

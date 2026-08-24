@@ -11,14 +11,25 @@ type AlertRuleRowProps = {
   type: AlertType;
   title: string;
   description: string;
-  // "currency" | "kwh" for the three fresh-data alerts, null for
-  // data_delayed (no user-configurable threshold at all).
-  unit: "currency" | "kwh" | null;
+  // "currency" | "kwh" | "days" for the five threshold alerts, null for the
+  // four with no user-configurable number (data_delayed, tariff_changed,
+  // tariff_band_approaching, usage_anomaly).
+  unit: "currency" | "kwh" | "days" | null;
   defaultThreshold: number | null;
   initialThreshold: number | null;
   // Optional reference point shown under the threshold input (e.g. "Your
   // balance is currently R143.41.") -- so setting a number isn't a guess.
+  // Also doubles as the "learning"/"insufficient history" subtle status
+  // line for the no-threshold v2 types -- same slot, same styling, always
+  // at most one line.
   helperText?: string;
+  // Whether turning this ON requires fresh LiveMopay data (see
+  // FRESH_DATA_ALERT_TYPES) -- explicit rather than derived from `unit`,
+  // since several no-threshold types (tariff_changed,
+  // tariff_band_approaching, usage_anomaly) still need fresh data despite
+  // having nothing for the user to configure; data_delayed is the only
+  // type with unit === null that does NOT need it.
+  needsAutoSync: boolean;
   // Controlled from the parent (SettingsPageClient) -- the single source of
   // truth for "is this alert on", since ConnectionCard's auto-sync-off flow
   // needs to be able to see and react to it (the warning list) without a
@@ -65,6 +76,7 @@ export function AlertRuleRow({
   defaultThreshold,
   initialThreshold,
   helperText,
+  needsAutoSync,
   enabled,
   autoSyncEnabled,
   isDemo,
@@ -72,7 +84,12 @@ export function AlertRuleRow({
   onAutoSyncEnabledChange
 }: AlertRuleRowProps) {
   const { browserPermission, subscriptionActive, enableDeviceNotifications } = useDeviceNotifications();
-  const [threshold, setThreshold] = useState(initialThreshold ?? defaultThreshold ?? 0);
+  // null (not 0) when there's genuinely no starting value (e.g.
+  // monthly_budget with no history-derived suggestion yet) -- see
+  // handleToggle/handleThresholdBlur's own comments for why that distinction
+  // matters: 0 would auto-save as an invalid threshold the instant the row
+  // is turned on, before the user has typed anything.
+  const [threshold, setThreshold] = useState<number | null>(initialThreshold ?? defaultThreshold ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Distinct from `error` -- these are all "the alert saved fine, here's a
@@ -87,14 +104,29 @@ export function AlertRuleRow({
   // value covers it.
   const [pendingAlsoEnableAutoSync, setPendingAlsoEnableAutoSync] = useState(false);
   const [confirmingPush, setConfirmingPush] = useState(false);
-
-  const needsAutoSync = unit !== null;
+  // Carries an auto-sync confirmation across the deferred-threshold gap
+  // below: if the user already confirmed "turn on automatic updates too"
+  // before a usable threshold existed, that confirmation must still apply
+  // once they actually provide one and blur, not get silently dropped.
+  const [deferredAlsoEnableAutoSync, setDeferredAlsoEnableAutoSync] = useState(false);
 
   // Returns whether the save actually succeeded -- callers use this to
   // decide whether a push-outcome message is even meaningful (never show
   // "you'll still see alerts in NewinMeter" over an alert that isn't
   // actually on).
-  async function save(nextEnabled: boolean, nextThreshold: number, alsoEnableAutoSync: boolean): Promise<boolean> {
+  async function save(nextEnabled: boolean, nextThreshold: number | null, alsoEnableAutoSync: boolean): Promise<boolean> {
+    // No usable starting value yet (monthly_budget with no history-derived
+    // suggestion is the only case today -- every other threshold type
+    // always has a real DEFAULT_THRESHOLDS entry). Reveal the input and
+    // wait for the user to actually type a value rather than auto-saving
+    // an invalid 0, which the server would reject with a confusing error
+    // the instant the toggle is touched.
+    if (nextEnabled && unit !== null && nextThreshold === null) {
+      onEnabledChange(type, true);
+      setDeferredAlsoEnableAutoSync(alsoEnableAutoSync);
+      return false;
+    }
+
     const previousEnabled = enabled;
 
     setBusy(true);
@@ -238,8 +270,8 @@ export function AlertRuleRow({
   }
 
   function handleThresholdBlur() {
-    if (!enabled || busy) return;
-    void save(true, threshold, false);
+    if (!enabled || busy || threshold === null) return;
+    void save(true, threshold, deferredAlsoEnableAutoSync);
   }
 
   if (isDemo) {
@@ -269,14 +301,20 @@ export function AlertRuleRow({
           <input
             className="h-9 w-28 rounded-md border border-line bg-canvas px-3 text-sm text-ink outline-none transition focus:border-accent disabled:opacity-60"
             disabled={busy}
-            inputMode="decimal"
-            min={0}
+            inputMode={unit === "days" ? "numeric" : "decimal"}
+            min={unit === "days" ? 1 : 0}
+            max={unit === "days" ? 30 : undefined}
+            step={unit === "days" ? 1 : undefined}
             onBlur={handleThresholdBlur}
-            onChange={(event) => setThreshold(Number(event.target.value))}
+            onChange={(event) =>
+              setThreshold(unit === "days" ? Math.round(Number(event.target.value)) : Number(event.target.value))
+            }
+            placeholder={threshold === null && unit === "currency" ? "e.g. 1500" : undefined}
             type="number"
-            value={threshold}
+            value={threshold ?? ""}
           />
           {unit === "kwh" ? <span className="text-sm text-muted">kWh</span> : null}
+          {unit === "days" ? <span className="text-sm text-muted">days</span> : null}
         </div>
       ) : null}
 

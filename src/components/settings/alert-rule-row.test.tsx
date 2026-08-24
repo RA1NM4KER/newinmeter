@@ -41,6 +41,7 @@ function baseProps(overrides: Partial<ComponentProps<typeof AlertRuleRow>> = {})
     defaultThreshold: 170,
     initialThreshold: null,
     enabled: false,
+    needsAutoSync: true,
     autoSyncEnabled: true,
     isDemo: false,
     onEnabledChange: vi.fn(),
@@ -235,6 +236,123 @@ describe("AlertRuleRow", () => {
 
       const body = JSON.parse((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
       expect(body).toEqual({ enabled: true, threshold: 170, alsoEnableAutoSync: true });
+    });
+  });
+
+  describe("no starting threshold value (monthly_budget with no history-derived suggestion)", () => {
+    function noDefaultProps(overrides: Partial<ComponentProps<typeof AlertRuleRow>> = {}) {
+      return baseProps({
+        type: "monthly_budget",
+        title: "Monthly budget",
+        defaultThreshold: null,
+        initialThreshold: null,
+        ...overrides
+      });
+    }
+
+    // This isolated render harness doesn't loop onEnabledChange back into a
+    // fresh `enabled` prop the way the real parent (SettingsPageClient)
+    // does -- these tests call `rerender` with `enabled: true` after
+    // confirming the callback fired, mirroring that real optimistic-update
+    // round trip explicitly, rather than a real re-render happening
+    // implicitly (which nothing in this harness would drive).
+
+    it("reveals an empty input and does not attempt to save an invalid 0 -- no fetch, no error", async () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      const onEnabledChange = vi.fn();
+      const props = noDefaultProps({ onEnabledChange });
+      const { rerender } = render(<AlertRuleRow {...props} />);
+
+      fireEvent.click(screen.getByLabelText("Monthly budget"));
+
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("monthly_budget", true));
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+
+      rerender(<AlertRuleRow {...props} enabled />);
+      expect(screen.queryByText("Couldn't save this alert.")).toBeNull();
+      expect(screen.queryByText(/must be greater than/i)).toBeNull();
+      expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("");
+    });
+
+    it("saves once the user actually types a value and blurs", async () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            rule: { id: "rule-1", type: "monthly_budget", enabled: true, threshold: 1500 },
+            autoSyncEnabled: true,
+            nextSyncAt: null
+          })
+        )
+      );
+      const onEnabledChange = vi.fn();
+      const props = noDefaultProps({ onEnabledChange });
+      const { rerender } = render(<AlertRuleRow {...props} />);
+
+      fireEvent.click(screen.getByLabelText("Monthly budget"));
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("monthly_budget", true));
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      rerender(<AlertRuleRow {...props} enabled />);
+
+      const input = screen.getByRole("spinbutton");
+      fireEvent.change(input, { target: { value: "1500" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledOnce());
+      const body = JSON.parse((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+      expect(body).toEqual({ enabled: true, threshold: 1500, alsoEnableAutoSync: false });
+    });
+
+    it("blurring an empty input is a no-op -- nothing to save yet", async () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      const onEnabledChange = vi.fn();
+      const props = noDefaultProps({ onEnabledChange });
+      const { rerender } = render(<AlertRuleRow {...props} />);
+
+      fireEvent.click(screen.getByLabelText("Monthly budget"));
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("monthly_budget", true));
+      rerender(<AlertRuleRow {...props} enabled />);
+
+      fireEvent.blur(screen.getByRole("spinbutton"));
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("threads an auto-sync confirmation given before a value existed through to the eventual real save", async () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            rule: { id: "rule-1", type: "monthly_budget", enabled: true, threshold: 1500 },
+            autoSyncEnabled: true,
+            nextSyncAt: "2026-08-25T00:00:00.000Z"
+          })
+        )
+      );
+      const onEnabledChange = vi.fn();
+      const onAutoSyncEnabledChange = vi.fn();
+      const props = noDefaultProps({ autoSyncEnabled: false, onEnabledChange, onAutoSyncEnabledChange });
+      const { rerender } = render(<AlertRuleRow {...props} />);
+
+      fireEvent.click(screen.getByLabelText("Monthly budget"));
+      fireEvent.click(screen.getByText("Turn both on"));
+
+      // Deferred: reveals the input, but nothing is actually saved yet.
+      await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("monthly_budget", true));
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      rerender(<AlertRuleRow {...props} enabled />);
+
+      const input = screen.getByRole("spinbutton");
+      fireEvent.change(input, { target: { value: "1500" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledOnce());
+      const body = JSON.parse((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+      // alsoEnableAutoSync: true survives from the earlier confirmation,
+      // not silently dropped by the deferred-threshold gap.
+      expect(body).toEqual({ enabled: true, threshold: 1500, alsoEnableAutoSync: true });
+      expect(onAutoSyncEnabledChange).toHaveBeenCalledWith(true, "2026-08-25T00:00:00.000Z");
     });
   });
 });

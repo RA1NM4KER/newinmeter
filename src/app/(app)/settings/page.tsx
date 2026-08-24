@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getAlertRulesForUser, getLatestBalanceForUser } from "@/lib/newinmeter/alerts";
+import {
+  getAlertInsights,
+  getAlertRulesForUser,
+  getLatestBalanceForUser,
+  getSuggestedMonthlyBudget
+} from "@/lib/newinmeter/alerts";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +20,7 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const [connection, alertRules, latestBalance] = await Promise.all([
+  const [connection, alertRules, latestBalance, insights, suggestedMonthlyBudget] = await Promise.all([
     getConnectionForUser(session.userId),
     // Alert rules are a genuinely optional part of this page -- General,
     // Data & Sync, and Account all render fine with none. Falling back to
@@ -31,6 +36,16 @@ export default async function SettingsPage() {
     // the page over.
     getLatestBalanceForUser(session.userId).catch((error) => {
       console.error("newinmeter_get_latest_balance_failed", error instanceof Error ? error.message : error);
+      return null;
+    }),
+    // Backs every v2 row's secondary insight line -- same "never fail the
+    // page" tolerance as the reads above.
+    getAlertInsights(session.userId).catch((error) => {
+      console.error("newinmeter_get_alert_insights_failed", error instanceof Error ? error.message : error);
+      return null;
+    }),
+    getSuggestedMonthlyBudget(session.userId).catch((error) => {
+      console.error("newinmeter_get_suggested_monthly_budget_failed", error instanceof Error ? error.message : error);
       return null;
     })
   ]);
@@ -52,6 +67,9 @@ export default async function SettingsPage() {
       }}
       alertRules={alertRules}
       latestBalance={latestBalance}
+      insights={insights}
+      suggestedMonthlyBudget={suggestedMonthlyBudget}
+      hasTariffProfile={connection?.tariffProfile != null}
     />
   );
 }

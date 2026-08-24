@@ -41,7 +41,8 @@ export function activityToday(date = new Date()) {
 export function activityDialogInitialForm(
   activity?: UsageActivity,
   defaultDate?: string,
-  defaultStartTime?: string
+  defaultStartTime?: string,
+  defaultEndTime?: string
 ): ActivityInput {
   return activity
     ? {
@@ -57,7 +58,9 @@ export function activityDialogInitialForm(
         date: defaultDate ?? activityToday(),
         allDay: false,
         startTime: defaultStartTime ?? "18:00",
-        endTime: defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30",
+        // An explicit defaultEndTime (e.g. from a usage_anomaly prompt's
+        // exact window) always wins over the auto-derived +2h default.
+        endTime: defaultEndTime ?? (defaultStartTime ? defaultActivityEndTime(defaultStartTime) : "20:30"),
         tags: [],
         color: DEFAULT_ACTIVITY_COLOR,
         note: ""

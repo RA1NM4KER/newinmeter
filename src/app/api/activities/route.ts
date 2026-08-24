@@ -4,6 +4,7 @@ import { parseActivityQuery } from "@/lib/activity/query-params";
 import { isIsoDate, type ActivityInput } from "@/lib/activity/utils";
 import { requireActivitiesSession } from "@/lib/auth/session";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
+import { resolveOverlappingUsageAnomalyEvents } from "@/lib/newinmeter/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,21 @@ export async function POST(request: Request) {
       note: typeof body.note === "string" || body.note === null ? body.note : undefined
     };
     const activity = await createActivity(access.session.accessToken, access.session.connection.id, input);
+
+    // Best-effort: a new activity may explain an already-open usage_anomaly
+    // event. Awaited (not fire-and-forget) so it actually completes before
+    // the serverless function returns, but wrapped in its own try/catch so
+    // a failure here never fails the activity creation itself -- the
+    // activity is already saved at this point regardless.
+    try {
+      await resolveOverlappingUsageAnomalyEvents(access.session.connection.id, activity.startsAt, activity.endsAt);
+    } catch (error) {
+      console.error(
+        "newinmeter_resolve_usage_anomaly_on_activity_failed",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
     return NextResponse.json({ activity }, { status: 201, headers: access.headers });
   } catch (error) {
     const errors = activityValidationErrors(error);

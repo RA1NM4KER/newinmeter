@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ACTIVITY_TAGS_DISCLAIMER, activityTabs } from "./activity-tabs";
@@ -59,7 +59,40 @@ export function ActivitiesPageClient({
   const sortDirection = searchParams.get("dir") === "asc" ? "asc" : ACTIVITY_REPORT_DEFAULT_DIRECTION;
   const [metric, setMetric] = useState<ActivityMetric>("electricityKwh");
   const [dialogActivity, setDialogActivity] = useState<UsageActivity | null | undefined>(undefined);
+  // Prefill from a usage_anomaly notification's deep link
+  // (/activities?new=1&date=...&start=...&end=...&source=usage-alert) --
+  // consumed once on mount, then stripped from the URL so a later manual
+  // "+ Add activity" click doesn't silently reuse a stale time range.
+  const [deepLinkPrefill, setDeepLinkPrefill] = useState<{ date?: string; startTime?: string; endTime?: string } | null>(
+    null
+  );
+  const handledDeepLinkRef = useRef(false);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (handledDeepLinkRef.current) return;
+    handledDeepLinkRef.current = true;
+    if (searchParams.get("new") !== "1") return;
+
+    setDeepLinkPrefill({
+      date: searchParams.get("date") ?? undefined,
+      startTime: searchParams.get("start") ?? undefined,
+      endTime: searchParams.get("end") ?? undefined
+    });
+    setDialogActivity(null);
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("new");
+    next.delete("date");
+    next.delete("start");
+    next.delete("end");
+    next.delete("source");
+    window.history.replaceState(window.history.state, "", queryHref(pathname, next));
+    // Deliberately run once on mount only -- searchParams/pathname are read
+    // from their values at that instant, not re-run as the URL changes
+    // (including from the replaceState call inside this very effect).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Lazy: only fetched once "Jump to day detail" is actually clicked, scoped
   // to the same range already on screen rather than the account's full
   // history (that's what the main dashboard needs it for; this dialog only
@@ -223,7 +256,13 @@ export function ActivitiesPageClient({
       <ActivityDialog
         activity={dialogActivity ?? undefined}
         isOpen={dialogActivity !== undefined}
-        onClose={() => setDialogActivity(undefined)}
+        onClose={() => {
+          setDialogActivity(undefined);
+          setDeepLinkPrefill(null);
+        }}
+        defaultDate={dialogActivity === null ? deepLinkPrefill?.date : undefined}
+        defaultStartTime={dialogActivity === null ? deepLinkPrefill?.startTime : undefined}
+        defaultEndTime={dialogActivity === null ? deepLinkPrefill?.endTime : undefined}
       />
 
       {dayDetailDate ? (

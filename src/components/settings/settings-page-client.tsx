@@ -8,8 +8,8 @@ import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Avatar, IconTile, SettingsGroup, SettingsRow } from "@/components/ui/settings";
 import { Button } from "@/components/ui/button";
 import { useNotificationCentre } from "@/components/layout/notification-provider";
-import type { AlertType } from "@/lib/newinmeter/alert-types";
-import type { AlertRule } from "@/lib/newinmeter/alerts";
+import { FRESH_DATA_ALERT_TYPES, type AlertType } from "@/lib/newinmeter/alert-types";
+import type { AlertInsights, AlertRule } from "@/lib/newinmeter/alerts";
 import { queryHref } from "@/lib/url-query";
 import { AlertsTab } from "./alerts-tab";
 import { BadgePermissionCard } from "./badge-permission-card";
@@ -27,10 +27,15 @@ type ConnectionProps = {
   nextSyncAt: string | null;
 };
 
-const ALERT_LABELS: Record<Exclude<AlertType, never>, string> = {
+const ALERT_LABELS: Record<AlertType, string> = {
   low_balance: "Low balance",
+  balance_runway: "Running out soon",
   daily_spend: "Daily spending",
+  monthly_budget: "Monthly budget",
   daily_kwh: "Daily electricity",
+  tariff_changed: "Tariff changes",
+  tariff_band_approaching: "Approaching a higher tariff band",
+  usage_anomaly: "Unusual usage",
   data_delayed: "Delayed data"
 };
 
@@ -40,6 +45,9 @@ type SettingsPageClientProps = {
   connection: ConnectionProps;
   alertRules: AlertRule[];
   latestBalance: number | null;
+  insights: AlertInsights | null;
+  suggestedMonthlyBudget: number | null;
+  hasTariffProfile: boolean;
 };
 
 // All four tab panels are mounted at once, toggled with a CSS class rather
@@ -55,7 +63,10 @@ export function SettingsPageClient({
   avatarInitial,
   connection,
   alertRules,
-  latestBalance
+  latestBalance,
+  insights,
+  suggestedMonthlyBudget,
+  hasTariffProfile
 }: SettingsPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -102,9 +113,9 @@ export function SettingsPageClient({
     refreshNotificationCentre();
   }
 
-  const freshDataAlertsEnabled = (["low_balance", "daily_spend", "daily_kwh"] as const)
-    .filter((type) => alertEnabledByType[type])
-    .map((type) => ALERT_LABELS[type]);
+  const freshDataAlertsEnabled = FRESH_DATA_ALERT_TYPES.filter((type) => alertEnabledByType[type]).map(
+    (type) => ALERT_LABELS[type]
+  );
 
   function handleAutoSyncEnabledChange(next: boolean, nextSyncAtValue?: string | null) {
     setAutoSyncEnabled(next);
@@ -121,12 +132,13 @@ export function SettingsPageClient({
       // (disableFreshDataAlertRules) -- kept in sync here so the Alerts tab
       // reflects it immediately rather than waiting for ConnectionCard's
       // router.refresh() to round-trip.
-      setAlertEnabledByType((prev) => ({
-        ...prev,
-        low_balance: false,
-        daily_spend: false,
-        daily_kwh: false
-      }));
+      setAlertEnabledByType((prev) => {
+        const updated = { ...prev };
+        for (const type of FRESH_DATA_ALERT_TYPES) {
+          updated[type] = false;
+        }
+        return updated;
+      });
     }
   }
 
@@ -176,6 +188,9 @@ export function SettingsPageClient({
           autoSyncEnabled={autoSyncEnabled}
           isDemo={connection.isDemo}
           latestBalance={latestBalance}
+          insights={insights}
+          suggestedMonthlyBudget={suggestedMonthlyBudget}
+          hasTariffProfile={hasTariffProfile}
           onEnabledChange={handleAlertEnabledChange}
           onAutoSyncEnabledChange={handleAutoSyncEnabledChange}
         />

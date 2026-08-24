@@ -5,7 +5,7 @@ import { getAlertRulesForUser } from "@/lib/newinmeter/alerts";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Returns only the rules the user has actually configured (0-4 rows) --
+// Returns only the rules the user has actually configured (0-9 rows) --
 // the client fills gaps with DEFAULT_THRESHOLDS and enabled: false, so an
 // untouched alert never gets a row written just from viewing Settings.
 export async function GET() {

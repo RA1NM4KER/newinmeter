@@ -48,6 +48,11 @@ type ConnectionRow = {
   last_auto_sync_error: string | null;
   sync_claimed_at: string | null;
   alerts_enabled: boolean;
+  // Nullable versioned tariff-profile key (see tariff-profiles.ts) -- null
+  // for any connection with no known tariff structure. Display-only from
+  // here: never user-writable, and there is no authenticated RLS write path
+  // to it (see 20260824050000's own comment on this column).
+  tariff_profile: string | null;
 };
 
 export type LivemopayConnection = {
@@ -73,13 +78,14 @@ export type LivemopayConnection = {
   lastAutoSyncStatus: "success" | "failed" | null;
   lastAutoSyncError: string | null;
   alertsEnabled: boolean;
+  tariffProfile: string | null;
 };
 
 const CONNECTION_SELECT =
   "id,user_id,livemopay_email,firebase_local_id,account_id,company_id,property_id,account_label," +
   "refresh_token_ciphertext,refresh_token_iv,refresh_token_auth_tag,pending_accounts,status," +
   "connected_at,updated_at,last_synced_at,last_error,is_demo,auto_sync_enabled,next_sync_at," +
-  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at,alerts_enabled";
+  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at,alerts_enabled,tariff_profile";
 
 function toConnection(row: ConnectionRow): LivemopayConnection {
   return {
@@ -101,7 +107,8 @@ function toConnection(row: ConnectionRow): LivemopayConnection {
     lastAutoSyncAt: row.last_auto_sync_at,
     lastAutoSyncStatus: row.last_auto_sync_status,
     lastAutoSyncError: row.last_auto_sync_error,
-    alertsEnabled: row.alerts_enabled
+    alertsEnabled: row.alerts_enabled,
+    tariffProfile: row.tariff_profile
   };
 }
 

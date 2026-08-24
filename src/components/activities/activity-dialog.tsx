@@ -32,12 +32,20 @@ type ActivityDialogProps = {
   activity?: UsageActivity;
   defaultDate?: string;
   defaultStartTime?: string;
+  defaultEndTime?: string;
 };
 
-export function ActivityDialog({ isOpen, onClose, activity, defaultDate, defaultStartTime }: ActivityDialogProps) {
+export function ActivityDialog({
+  isOpen,
+  onClose,
+  activity,
+  defaultDate,
+  defaultStartTime,
+  defaultEndTime
+}: ActivityDialogProps) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ActivityInput>(() =>
-    activityDialogInitialForm(activity, defaultDate, defaultStartTime)
+    activityDialogInitialForm(activity, defaultDate, defaultStartTime, defaultEndTime)
   );
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -69,13 +77,13 @@ export function ActivityDialog({ isOpen, onClose, activity, defaultDate, default
 
   useEffect(() => {
     if (isOpen) {
-      setForm(activityDialogInitialForm(activity, defaultDate, defaultStartTime));
+      setForm(activityDialogInitialForm(activity, defaultDate, defaultStartTime, defaultEndTime));
       setTagInput("");
       setErrors({});
       setTagNotice(null);
       setIsConfirmingDelete(false);
     }
-  }, [activity, defaultDate, defaultStartTime, isOpen]);
+  }, [activity, defaultDate, defaultStartTime, defaultEndTime, isOpen]);
 
   function addTag(value: string) {
     const outcome = resolveAddTag(form.tags, value, ACTIVITY_MAX_TAGS);

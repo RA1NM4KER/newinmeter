@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   enforceRateLimit: vi.fn(),
   loadActivities: vi.fn(),
   loadActivityTags: vi.fn(),
-  createActivity: vi.fn()
+  createActivity: vi.fn(),
+  resolveOverlappingUsageAnomalyEvents: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireActivitiesSession: mocks.requireActivitiesSession }));
@@ -20,6 +21,13 @@ vi.mock("@/lib/activity/data", () => ({
   loadActivities: mocks.loadActivities,
   loadActivityTags: mocks.loadActivityTags
 }));
+// Real alerts.ts pulls in connection.ts's React 19 cache() (unsupported by
+// this test's react@18.3.1 outside Next's own bundler, same reason
+// alerts.test.ts shims it) -- mocked here since this route only needs the
+// one best-effort resolve function, not the real alert-evaluation stack.
+vi.mock("@/lib/newinmeter/alerts", () => ({
+  resolveOverlappingUsageAnomalyEvents: mocks.resolveOverlappingUsageAnomalyEvents
+}));
 
 import { GET, POST } from "./route";
 
@@ -32,6 +40,7 @@ describe("activities API", () => {
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
     mocks.loadActivities.mockResolvedValue([]);
     mocks.loadActivityTags.mockResolvedValue({ tags: [], colors: {} });
+    mocks.resolveOverlappingUsageAnomalyEvents.mockResolvedValue(undefined);
   });
 
   it("rejects unauthenticated access", async () => {
@@ -59,7 +68,11 @@ describe("activities API", () => {
   });
 
   it("resolves connection ownership server-side and ignores a browser connection id", async () => {
-    mocks.createActivity.mockResolvedValue({ id: "activity-a" });
+    mocks.createActivity.mockResolvedValue({
+      id: "activity-a",
+      startsAt: "2026-08-04T18:00:00",
+      endsAt: "2026-08-04T20:00:00"
+    });
     const response = await POST(
       new Request("http://localhost/api/activities", {
         method: "POST",
@@ -79,6 +92,29 @@ describe("activities API", () => {
       "connection-a",
       expect.objectContaining({ tags: ["Guests"], color: "#2563eb" })
     );
+    // Best-effort usage_anomaly resolution runs after every create, scoped
+    // to the server-resolved connection (never the browser-supplied one).
+    expect(mocks.resolveOverlappingUsageAnomalyEvents).toHaveBeenCalledWith(
+      "connection-a",
+      "2026-08-04T18:00:00",
+      "2026-08-04T20:00:00"
+    );
+  });
+
+  it("still returns 201 when resolving usage_anomaly overlap fails -- never fails activity creation", async () => {
+    mocks.createActivity.mockResolvedValue({
+      id: "activity-a",
+      startsAt: "2026-08-04T18:00:00",
+      endsAt: "2026-08-04T20:00:00"
+    });
+    mocks.resolveOverlappingUsageAnomalyEvents.mockRejectedValue(new Error("boom"));
+    const response = await POST(
+      new Request("http://localhost/api/activities", {
+        method: "POST",
+        body: JSON.stringify({ date: "2026-08-04", allDay: true, tags: ["Guests"] })
+      })
+    );
+    expect(response.status).toBe(201);
   });
 
   it("blocks activity creation for the shared demo connection", async () => {
