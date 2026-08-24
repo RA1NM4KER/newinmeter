@@ -207,8 +207,8 @@ export function AlertsTab({
         ) : null}
         <AlertRuleRow
           type="usage_anomaly"
-          title="Unusual usage"
-          description="Ask me what happened when electricity use looks unusually high."
+          title="Activity prompts"
+          description="Ask me what happened when electricity use looks unusual."
           unit={null}
           defaultThreshold={null}
           initialThreshold={null}

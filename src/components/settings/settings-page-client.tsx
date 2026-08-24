@@ -35,7 +35,7 @@ const ALERT_LABELS: Record<AlertType, string> = {
   daily_kwh: "Daily electricity",
   tariff_changed: "Tariff changes",
   tariff_band_approaching: "Approaching a higher tariff band",
-  usage_anomaly: "Unusual usage",
+  usage_anomaly: "Activity prompts",
   data_delayed: "Delayed data"
 };
 
