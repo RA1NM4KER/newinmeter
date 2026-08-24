@@ -4,13 +4,8 @@ import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toggle } from "@/components/ui/settings";
 import type { AlertType } from "@/lib/newinmeter/alert-types";
-import {
-  ensurePushNotificationsEnabled,
-  getPushPermissionState,
-  hasDismissedPushPrompt,
-  markPushPromptDismissed,
-  type PushEnableResult
-} from "@/lib/push-client";
+import { hasDismissedDeviceNotifications, markDeviceNotificationsDismissed } from "@/lib/push-client";
+import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
 
 type AlertRuleRowProps = {
   type: AlertType;
@@ -40,21 +35,23 @@ type AlertRuleRowProps = {
   onAutoSyncEnabledChange: (enabled: boolean, nextSyncAt?: string | null) => void;
 };
 
+type PushOutcome = "on" | "denied" | "unsupported" | "subscription_failed" | "dismissed";
+
 // Copy for every non-error outcome of turning an alert ON, once the save
 // itself has actually succeeded -- the alert is on in every one of these
 // cases, this is purely "how will you find out". Centralised here (one
 // small map, not four near-identical template strings scattered through the
 // handlers below).
-function pushOutcomeMessage(title: string, outcome: PushEnableResult["status"] | "dismissed"): string | null {
+function pushOutcomeMessage(title: string, outcome: PushOutcome): string | null {
   switch (outcome) {
-    case "granted":
+    case "on":
       return null;
     case "denied":
-      return `${title} alert is on, but notifications are blocked on this device. You'll still see alerts in NewinMeter.`;
+      return `${title} is on, but notifications are blocked on this device. You'll still see alerts in NewinMeter.`;
     case "dismissed":
-      return `${title} alert is on. You'll still see alerts in NewinMeter, but this device won't notify you when the app is closed.`;
+      return `${title} is on. You'll see alerts in NewinMeter, but this device won't send push notifications.`;
     case "unsupported":
-      return `${title} alert is on. Push notifications aren't available on this device, but you'll still see alerts in NewinMeter.`;
+      return `${title} is on. Push notifications aren't available on this device, but you'll still see alerts in NewinMeter.`;
     case "subscription_failed":
       return "Your alert is on, but this device couldn't be registered for push notifications. You can try again from General.";
   }
@@ -74,6 +71,7 @@ export function AlertRuleRow({
   onEnabledChange,
   onAutoSyncEnabledChange
 }: AlertRuleRowProps) {
+  const { browserPermission, subscriptionActive, enableDeviceNotifications } = useDeviceNotifications();
   const [threshold, setThreshold] = useState(initialThreshold ?? defaultThreshold ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,9 +82,9 @@ export function AlertRuleRow({
   const [info, setInfo] = useState<string | null>(null);
   const [confirmingAutoSync, setConfirmingAutoSync] = useState(false);
   // Holds the alsoEnableAutoSync decision between the auto-sync confirm
-  // step and the (possible) push-permission step that follows it -- the two
-  // dialogs are sequential, never simultaneous, so one pending value covers
-  // it.
+  // step and the (possible) device-notifications step that follows it --
+  // the two dialogs are sequential, never simultaneous, so one pending
+  // value covers it.
   const [pendingAlsoEnableAutoSync, setPendingAlsoEnableAutoSync] = useState(false);
   const [confirmingPush, setConfirmingPush] = useState(false);
 
@@ -150,41 +148,51 @@ export function AlertRuleRow({
     }
   }
 
-  // The push-permission step of enabling an alert. Three ways in:
-  //  - permission already "granted" -> silently (re)confirm a subscription
-  //    exists (covers a device that granted permission once but lost its
-  //    subscription, e.g. cleared site data) -- no dialog, this is Case 1.
-  //  - permission "denied" -> never prompt again, just note it.
-  //  - permission "default" and not previously dismissed on this device ->
-  //    hand off to the explainer dialog instead of saving yet (see
-  //    proceedToEnable).
-  //  - permission "default" but already dismissed once, or the platform
-  //    doesn't support push at all -> save without any push attempt.
-  async function saveWithPushOutcome(alsoEnableAutoSync: boolean, outcome: PushEnableResult["status"] | "dismissed") {
+  async function saveWithPushOutcome(alsoEnableAutoSync: boolean, outcome: PushOutcome) {
     const saved = await save(true, threshold, alsoEnableAutoSync);
     setInfo(saved ? pushOutcomeMessage(title, outcome) : null);
   }
 
+  // The device-notifications step of enabling an alert. Checks
+  // subscriptionActive -- the real "is this device currently receiving
+  // NewinMeter push" state -- never browserPermission alone. That was the
+  // bug: permission can be "granted" while the user explicitly turned
+  // General's Notifications off, and the old flow silently re-subscribed
+  // on the next alert enable because it only ever looked at permission.
   async function proceedToEnable(alsoEnableAutoSync: boolean) {
-    const permissionState = getPushPermissionState();
-
-    if (permissionState === "granted") {
-      const result = await ensurePushNotificationsEnabled();
-      await saveWithPushOutcome(alsoEnableAutoSync, result.status);
+    if (subscriptionActive) {
+      // Device push already on -- enable the alert, nothing else to ask.
+      await saveWithPushOutcome(alsoEnableAutoSync, "on");
       return;
     }
 
-    if (permissionState === "default" && !hasDismissedPushPrompt()) {
-      setPendingAlsoEnableAutoSync(alsoEnableAutoSync);
-      setConfirmingPush(true);
+    if (browserPermission === "denied") {
+      // Permission is blocked at the browser level -- offering a "turn on
+      // notifications" choice here would be a button that can't work.
+      // Never re-prompts; just saves and explains.
+      await saveWithPushOutcome(alsoEnableAutoSync, "denied");
       return;
     }
 
-    // "denied", "unsupported", or "default"-but-already-dismissed: no
-    // browser prompt, no dialog -- just save and (for denied/unsupported)
-    // note it once.
-    const outcome = permissionState === "default" ? "dismissed" : permissionState;
-    await saveWithPushOutcome(alsoEnableAutoSync, outcome);
+    if (browserPermission === "unsupported") {
+      await saveWithPushOutcome(alsoEnableAutoSync, "unsupported");
+      return;
+    }
+
+    if (hasDismissedDeviceNotifications()) {
+      // Already asked once on this device and the user chose to keep
+      // notifications off -- don't ask again on every alert toggle. Cleared
+      // automatically the moment this device's push actually turns on
+      // (via either General or this same dialog elsewhere), so turning
+      // General off again later is treated as a fresh decision.
+      await saveWithPushOutcome(alsoEnableAutoSync, "dismissed");
+      return;
+    }
+
+    // Permission is "granted" (but this device is unsubscribed) or
+    // "default" -- either way, device push is off and asking is worthwhile.
+    setPendingAlsoEnableAutoSync(alsoEnableAutoSync);
+    setConfirmingPush(true);
   }
 
   function handleToggle(next: boolean) {
@@ -209,19 +217,22 @@ export function AlertRuleRow({
     void proceedToEnable(true);
   }
 
-  async function handlePushEnable() {
+  async function handleTurnOnNotifications() {
     setConfirmingPush(false);
     setBusy(true);
     try {
-      const result = await ensurePushNotificationsEnabled();
-      await saveWithPushOutcome(pendingAlsoEnableAutoSync, result.status);
+      // May call Notification.requestPermission() internally (only when
+      // permission is still "default") -- fine here, this is a direct
+      // response to the user's own "Turn on notifications" click.
+      const result = await enableDeviceNotifications();
+      await saveWithPushOutcome(pendingAlsoEnableAutoSync, result.status === "granted" ? "on" : result.status);
     } finally {
       setBusy(false);
     }
   }
 
-  function handlePushNotNow() {
-    markPushPromptDismissed();
+  function handleKeepNotificationsOff() {
+    markDeviceNotificationsDismissed();
     setConfirmingPush(false);
     void saveWithPushOutcome(pendingAlsoEnableAutoSync, "dismissed");
   }
@@ -288,14 +299,14 @@ export function AlertRuleRow({
 
       <ConfirmDialog
         open={confirmingPush}
-        title={`Get ${title.toLowerCase()} notifications`}
-        message="NewinMeter needs permission to notify you on this device when your alert is triggered."
-        confirmLabel="Enable notifications"
-        cancelLabel="Not now"
+        title="Turn on notifications?"
+        message={`${title} alerts are active in NewinMeter, but notifications are off on this device. Turn them on so NewinMeter can notify you when it happens?`}
+        confirmLabel="Turn on notifications"
+        cancelLabel="Keep notifications off"
         confirmVariant="primary"
         busy={busy}
-        onConfirm={() => void handlePushEnable()}
-        onCancel={handlePushNotNow}
+        onConfirm={() => void handleTurnOnNotifications()}
+        onCancel={handleKeepNotificationsOff}
       />
     </div>
   );

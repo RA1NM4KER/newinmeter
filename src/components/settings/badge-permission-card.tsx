@@ -1,16 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Bell } from "lucide-react";
 import { IconTile, SettingsRow, Toggle } from "@/components/ui/settings";
 import { isSyncStale } from "@/lib/sync-status";
-import {
-  ensurePushNotificationsEnabled,
-  getPushPermissionState,
-  hasActiveSubscription,
-  unsubscribeFromPush,
-  type PushPermissionState
-} from "@/lib/push-client";
+import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
 
 type BadgePermissionCardProps = {
   // The current connection's last sync time, so switching badges on can reflect
@@ -18,28 +12,17 @@ type BadgePermissionCardProps = {
   lastSyncedAt?: string | null;
 };
 
-// The "Home screen badge" switch. On iOS the icon badge is driven by
-// notification permission + a delivered push, so turning it on requests
-// permission and subscribes this device; turning it off unsubscribes and
-// clears the badge. Rendered as a row inside the Preferences group. This is
-// the device-level management/status surface for notifications -- Alerts'
-// AlertRuleRow is the *first-ask* surface (see its own comments); both
-// share the same underlying capability via ../../lib/push-client.
+// General's device-notifications management row -- always shows the real
+// subscriptionActive state from the shared PushNotificationProvider (never
+// derives ON/OFF from browserPermission alone; see that module's own
+// comment on why that distinction is the whole point of this refactor).
+// This is the one place a user can explicitly turn this device's push back
+// on after having turned it off, regardless of whatever Alerts' own
+// dismissal flag currently says.
 export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) {
-  const [permission, setPermission] = useState<PushPermissionState>("unsupported");
-  const [enabled, setEnabled] = useState(false);
+  const { browserPermission, subscriptionActive, checking, enableDeviceNotifications, disableDeviceNotifications } =
+    useDeviceNotifications();
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const state = getPushPermissionState();
-    setPermission(state);
-    if (state === "unsupported") {
-      return;
-    }
-    hasActiveSubscription()
-      .then(setEnabled)
-      .catch(() => setEnabled(false));
-  }, []);
 
   const applyBadgeNow = useCallback(async () => {
     if (typeof navigator === "undefined" || !("setAppBadge" in navigator)) {
@@ -62,39 +45,35 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
       setBusy(true);
       try {
         if (next) {
-          const result = await ensurePushNotificationsEnabled();
-          setPermission(getPushPermissionState());
-          const ok = result.status === "granted";
-          setEnabled(ok);
-          if (ok) {
+          const result = await enableDeviceNotifications();
+          if (result.status === "granted") {
             await applyBadgeNow();
           }
         } else {
-          await unsubscribeFromPush();
+          await disableDeviceNotifications();
           if ("clearAppBadge" in navigator) {
             await navigator.clearAppBadge().catch(() => undefined);
           }
-          setEnabled(false);
         }
       } catch (error) {
-        console.error("Failed to update badge preference", error);
+        console.error("Failed to update notification preference", error);
       } finally {
         setBusy(false);
       }
     },
-    [busy, applyBadgeNow]
+    [busy, enableDeviceNotifications, disableDeviceNotifications, applyBadgeNow]
   );
 
-  if (permission === "unsupported") {
+  if (browserPermission === "unsupported") {
     return null;
   }
 
   const description =
-    permission === "denied"
-      ? "Alerts still appear in NewinMeter, but notifications are blocked for this device. Re-enable them in your browser or device settings to change that."
-      : enabled
-        ? "Receiving NewinMeter alerts on this device."
-        : "Alerts still appear in NewinMeter, but this device won't notify you outside the app.";
+    browserPermission === "denied"
+      ? "Notifications are blocked by this device or browser. Alerts still appear in NewinMeter."
+      : subscriptionActive
+        ? "Receiving NewinMeter notifications on this device."
+        : "Push notifications are off on this device. Alerts still appear in NewinMeter.";
 
   return (
     <SettingsRow
@@ -107,8 +86,8 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
       description={description}
       control={
         <Toggle
-          checked={enabled}
-          disabled={busy || permission === "denied"}
+          checked={subscriptionActive}
+          disabled={busy || checking || browserPermission === "denied"}
           onChange={handleToggle}
           label="Notifications"
         />

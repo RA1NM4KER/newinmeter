@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { BellOff } from "lucide-react";
 import { SettingsGroup } from "@/components/ui/settings";
 import { formatCurrency } from "@/lib/format";
-import { getPushPermissionState } from "@/lib/push-client";
+import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
 import { DEFAULT_THRESHOLDS, type AlertType } from "@/lib/newinmeter/alert-types";
 import type { AlertRule } from "@/lib/newinmeter/alerts";
 import { AlertRuleRow } from "./alert-rule-row";
@@ -44,22 +43,22 @@ export function AlertsTab({
   const dailySpend = ruleFor(rules, "daily_spend");
   const dailyKwh = ruleFor(rules, "daily_kwh");
 
-  // Alert rules and notification permission are separate concepts: a rule
-  // can be enabled with no way to deliver it outside the app. This is
-  // read-only awareness (no permission prompt triggered here -- that's
-  // AlertRuleRow's job, on the actual enable action), just a light heads up.
-  // Only relevant once something is actually enabled -- an unconfigured
-  // Alerts tab has nothing to be delivered, so nothing to flag.
-  const [pushGranted, setPushGranted] = useState(true);
-  useEffect(() => {
-    setPushGranted(getPushPermissionState() === "granted");
-  }, []);
-
+  // Alert rules and device push are separate concepts: a rule can be
+  // enabled with no way to deliver it outside the app -- including when
+  // browser permission is "granted" but the user explicitly turned this
+  // device's notifications off in General (subscriptionActive, not
+  // browserPermission, is the correct read here; conflating the two was
+  // the underlying bug this whole provider exists to fix). Read-only
+  // awareness (no dialog triggered here -- that's AlertRuleRow's job, on
+  // the actual enable action), just a light heads up. Only relevant once
+  // something is actually enabled -- an unconfigured Alerts tab has
+  // nothing to be delivered, so nothing to flag.
+  const { subscriptionActive } = useDeviceNotifications();
   const hasAnyEnabled = Object.values(enabledByType).some(Boolean);
 
   return (
     <div className="flex flex-col gap-6">
-      {hasAnyEnabled && !pushGranted ? (
+      {hasAnyEnabled && !subscriptionActive ? (
         <div className="flex items-start gap-2.5 rounded-xl border border-line bg-canvas px-4 py-3 text-sm text-muted">
           <BellOff aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Alerts are active, but this device isn&apos;t sending push notifications. Manage this in General.</p>

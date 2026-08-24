@@ -176,17 +176,92 @@ describe("push-client", () => {
     });
   });
 
-  describe("push prompt dismissal", () => {
+  describe("unsubscribeFromPush", () => {
+    it("unsubscribes the browser and removes only this exact endpoint server-side", async () => {
+      const subscription = {
+        endpoint: "https://push.example.com/this-device-only",
+        unsubscribe: vi.fn().mockResolvedValue(true)
+      };
+      installServiceWorkerAndPushManager({ getSubscription: vi.fn().mockResolvedValue(subscription) });
+      const { unsubscribeFromPush } = await import("./push-client");
+
+      await unsubscribeFromPush();
+
+      expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/push/unsubscribe",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ endpoint: "https://push.example.com/this-device-only" })
+        })
+      );
+    });
+
+    it("is a no-op when there is no subscription to remove", async () => {
+      installServiceWorkerAndPushManager({ getSubscription: vi.fn().mockResolvedValue(null) });
+      const { unsubscribeFromPush } = await import("./push-client");
+
+      await unsubscribeFromPush();
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("device-notifications dismissal", () => {
     it("is not dismissed by default", async () => {
-      const { hasDismissedPushPrompt } = await import("./push-client");
-      expect(hasDismissedPushPrompt()).toBe(false);
+      const { hasDismissedDeviceNotifications } = await import("./push-client");
+      expect(hasDismissedDeviceNotifications()).toBe(false);
     });
 
     it("persists across calls once marked dismissed, via localStorage", async () => {
-      const { hasDismissedPushPrompt, markPushPromptDismissed } = await import("./push-client");
-      markPushPromptDismissed();
-      expect(hasDismissedPushPrompt()).toBe(true);
-      expect(window.localStorage.getItem("newinmeter:push-prompt-dismissed")).toBe("1");
+      const { hasDismissedDeviceNotifications, markDeviceNotificationsDismissed } = await import("./push-client");
+      markDeviceNotificationsDismissed();
+      expect(hasDismissedDeviceNotifications()).toBe(true);
+      expect(window.localStorage.getItem("newinmeter:device-notifications-dismissed")).toBe("1");
+    });
+
+    it("clears the dismissal so it no longer suppresses anything", async () => {
+      const { hasDismissedDeviceNotifications, markDeviceNotificationsDismissed, clearDeviceNotificationsDismissed } =
+        await import("./push-client");
+      markDeviceNotificationsDismissed();
+      expect(hasDismissedDeviceNotifications()).toBe(true);
+
+      clearDeviceNotificationsDismissed();
+      expect(hasDismissedDeviceNotifications()).toBe(false);
+    });
+  });
+
+  describe("repairExistingSubscription", () => {
+    it("is a no-op (never creates a subscription) when none currently exists", async () => {
+      installServiceWorkerAndPushManager({ getSubscription: vi.fn().mockResolvedValue(null) });
+      const { repairExistingSubscription } = await import("./push-client");
+
+      await expect(repairExistingSubscription()).resolves.toBe(false);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("re-registers an existing subscription with the server without creating a new one", async () => {
+      const existing = { toJSON: () => ({ endpoint: "https://existing", keys: {} }) };
+      const { pushManager } = installServiceWorkerAndPushManager({
+        getSubscription: vi.fn().mockResolvedValue(existing)
+      });
+      const { repairExistingSubscription } = await import("./push-client");
+
+      await expect(repairExistingSubscription()).resolves.toBe(true);
+      expect(pushManager.subscribe).not.toHaveBeenCalled();
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/push/subscribe",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    it("returns false rather than throwing when the server round trip fails", async () => {
+      const existing = { toJSON: () => ({ endpoint: "https://existing", keys: {} }) };
+      installServiceWorkerAndPushManager({ getSubscription: vi.fn().mockResolvedValue(existing) });
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: false });
+      const { repairExistingSubscription } = await import("./push-client");
+
+      await expect(repairExistingSubscription()).resolves.toBe(false);
     });
   });
 });

@@ -9,7 +9,13 @@
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
-const DISMISSED_PROMPT_STORAGE_KEY = "newinmeter:push-prompt-dismissed";
+// Renamed from the earlier "push-prompt-dismissed" flag when its meaning
+// changed: it no longer means "dismissed the browser-permission education",
+// it means "chose Keep notifications off for this device" -- a real product
+// preference, not a permission-prompt annoyance. Deliberately not reusing
+// the old key/semantics; see push-notification-provider.tsx for how this
+// gets cleared the moment the device's push actually turns on again.
+const DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY = "newinmeter:device-notifications-dismissed";
 
 export type PushPermissionState = "unsupported" | "default" | "granted" | "denied";
 
@@ -109,6 +115,39 @@ async function subscribeToPush(): Promise<boolean> {
   }
 }
 
+// Re-registers an ALREADY-EXISTING browser subscription with the server --
+// never creates one. Distinct from subscribeToPush (which will create a new
+// subscription if none exists): this is purely a repair for "browser still
+// has a live subscription but the server's push_subscriptions row might be
+// stale or missing" (e.g. wiped server-side, VAPID rotated), called
+// opportunistically whenever the provider confirms the device is already
+// on. If no subscription exists, this is a no-op -- it must never be the
+// thing that flips a device from off to on, or "General OFF" would keep
+// getting silently overridden the same way the original bug did.
+export async function repairExistingSubscription(): Promise<boolean> {
+  if (!("serviceWorker" in navigator)) {
+    return false;
+  }
+  try {
+    const registration = await getReadyRegistration();
+    if (!registration) {
+      return false;
+    }
+    const existing = await registration.pushManager.getSubscription();
+    if (!existing) {
+      return false;
+    }
+    const response = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(existing.toJSON())
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function unsubscribeFromPush(): Promise<void> {
   if (!("serviceWorker" in navigator)) {
     return;
@@ -155,28 +194,39 @@ export async function ensurePushNotificationsEnabled(): Promise<PushEnableResult
   return ok ? { status: "granted" } : { status: "subscription_failed" };
 }
 
-// Device-level "the user already said not now" flag -- localStorage (not
-// sessionStorage), so it survives reloads/relaunches on this device, per
-// the product decision to never nag on every alert enable once dismissed
-// once. Not persisted server-side: this is purely "should THIS device's UI
-// bother asking again", not account state. Notification.permission itself
-// already becomes the durable signal once the user actually grants or
-// denies via the browser's own prompt -- this flag only covers the gap
-// where they saw our own explainer and chose not to engage with the
-// browser prompt at all.
-export function hasDismissedPushPrompt(): boolean {
+// Device-level "the user chose to keep device notifications off" flag --
+// localStorage (not sessionStorage), so the choice survives reloads/
+// relaunches on this device. Not persisted server-side: this is purely
+// "should Alerts' enable flow bother asking again on this device", not
+// account state. Set only by AlertRuleRow's "Keep notifications off";
+// cleared automatically by PushNotificationProvider the moment this
+// device's push actually turns on (via either General or Alerts) -- so
+// turning it off again later via General is treated as a fresh decision,
+// not something still being suppressed by a stale dismissal from before.
+// General itself never reads this flag: it is always the explicit,
+// always-available management surface regardless of what Alerts' dialog
+// history looks like.
+export function hasDismissedDeviceNotifications(): boolean {
   try {
-    return window.localStorage.getItem(DISMISSED_PROMPT_STORAGE_KEY) === "1";
+    return window.localStorage.getItem(DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
 }
 
-export function markPushPromptDismissed(): void {
+export function markDeviceNotificationsDismissed(): void {
   try {
-    window.localStorage.setItem(DISMISSED_PROMPT_STORAGE_KEY, "1");
+    window.localStorage.setItem(DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY, "1");
   } catch {
     // Best-effort -- private browsing / storage disabled shouldn't block
     // the alert itself from saving.
+  }
+}
+
+export function clearDeviceNotificationsDismissed(): void {
+  try {
+    window.localStorage.removeItem(DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY);
+  } catch {
+    // Best-effort.
   }
 }
