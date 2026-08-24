@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BellOff } from "lucide-react";
 import { SettingsGroup } from "@/components/ui/settings";
 import { formatCurrency } from "@/lib/format";
+import { getPushPermissionState } from "@/lib/push-client";
 import { DEFAULT_THRESHOLDS, type AlertType } from "@/lib/newinmeter/alert-types";
 import type { AlertRule } from "@/lib/newinmeter/alerts";
 import { AlertRuleRow } from "./alert-rule-row";
@@ -44,25 +45,24 @@ export function AlertsTab({
   const dailyKwh = ruleFor(rules, "daily_kwh");
 
   // Alert rules and notification permission are separate concepts: a rule
-  // can be enabled with no way to deliver it. This is read-only awareness
-  // (no permission prompt triggered here -- that stays user-initiated, in
-  // General), just a non-scary heads up pointing at where to fix it.
-  const [pushDenied, setPushDenied] = useState(false);
+  // can be enabled with no way to deliver it outside the app. This is
+  // read-only awareness (no permission prompt triggered here -- that's
+  // AlertRuleRow's job, on the actual enable action), just a light heads up.
+  // Only relevant once something is actually enabled -- an unconfigured
+  // Alerts tab has nothing to be delivered, so nothing to flag.
+  const [pushGranted, setPushGranted] = useState(true);
   useEffect(() => {
-    if (typeof Notification !== "undefined") {
-      setPushDenied(Notification.permission === "denied");
-    }
+    setPushGranted(getPushPermissionState() === "granted");
   }, []);
+
+  const hasAnyEnabled = Object.values(enabledByType).some(Boolean);
 
   return (
     <div className="flex flex-col gap-6">
-      {pushDenied ? (
+      {hasAnyEnabled && !pushGranted ? (
         <div className="flex items-start gap-2.5 rounded-xl border border-line bg-canvas px-4 py-3 text-sm text-muted">
           <BellOff aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Notifications are blocked on this device, so alerts below won&apos;t be delivered here until you
-            re-enable them (General tab). Your alert settings are still saved.
-          </p>
+          <p>Alerts are active, but this device isn&apos;t sending push notifications. Manage this in General.</p>
         </div>
       ) : null}
 
