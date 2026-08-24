@@ -1,8 +1,8 @@
 import type { AdminUserListItem } from "@/lib/user-roles";
-import { FEATURES } from "./admin-feature-flags";
+import { FEATURES } from "@/lib/newinmeter/features-shared";
 
 export function FeatureChips({ user }: { user: AdminUserListItem }) {
-  const enabled = FEATURES.filter((feature) => user[feature.key]);
+  const enabled = FEATURES.filter((feature) => user.features[feature.key].enabled);
 
   if (enabled.length === 0) {
     return (

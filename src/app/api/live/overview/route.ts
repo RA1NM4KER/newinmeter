@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { hasFeatureAccess } from "@/lib/features";
 import { logLiveError } from "@/lib/live/log";
 import { DEFAULT_LIVE_WINDOW, isLiveWindow } from "@/lib/live/meter-calc";
 import { loadLiveOverview } from "@/lib/live/meter";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
-import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,8 +19,8 @@ export async function GET(request: Request) {
   // Feature invisibility: a user without the permission gets the same 404 the
   // page itself returns, so the endpoint appears not to exist rather than
   // "forbidden". Never expose live data to a feature-disabled user.
-  const permissions = await getOrCreateUserPermissions(session.userId);
-  if (!permissions.liveMeterEnabled) {
+  const liveMeterEnabled = await hasFeatureAccess(session.userId, "live");
+  if (!liveMeterEnabled) {
     return NextResponse.json({ message: "Not found." }, { status: 404 });
   }
 

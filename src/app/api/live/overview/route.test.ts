@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAuthenticatedSession: vi.fn(),
-  getOrCreateUserPermissions: vi.fn(),
+  hasFeatureAccess: vi.fn(),
   enforceRateLimit: vi.fn(),
   loadLiveOverview: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
-vi.mock("@/lib/user-roles", () => ({ getOrCreateUserPermissions: mocks.getOrCreateUserPermissions }));
+vi.mock("@/lib/features", () => ({ hasFeatureAccess: mocks.hasFeatureAccess }));
 vi.mock("@/lib/rate-limit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
@@ -35,7 +35,7 @@ describe("GET /api/live/overview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAuthenticatedSession.mockResolvedValue({ userId: "user-a", email: "a@x.com", accessToken: "t" });
-    mocks.getOrCreateUserPermissions.mockResolvedValue({ liveMeterEnabled: true });
+    mocks.hasFeatureAccess.mockResolvedValue(true);
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
     mocks.loadLiveOverview.mockResolvedValue(emptyOverview);
   });
@@ -48,7 +48,7 @@ describe("GET /api/live/overview", () => {
   });
 
   it("returns 404 (not 403) for a feature-disabled user, exposing no live data", async () => {
-    mocks.getOrCreateUserPermissions.mockResolvedValue({ liveMeterEnabled: false });
+    mocks.hasFeatureAccess.mockResolvedValue(false);
     const response = await get("http://localhost/api/live/overview?window=30m");
     expect(response.status).toBe(404);
     expect(mocks.loadLiveOverview).not.toHaveBeenCalled();

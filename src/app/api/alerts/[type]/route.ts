@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { hasFeatureAccess } from "@/lib/features";
 import { DemoAccountProtectedError } from "@/lib/newinmeter/connection";
 import {
   ALERT_TYPES,
@@ -35,6 +36,10 @@ export async function POST(request: Request, { params }: { params: { type: strin
 
   if (!isAlertType(params.type)) {
     return NextResponse.json({ message: "Unknown alert type." }, { status: 404 });
+  }
+
+  if (!(await hasFeatureAccess(session.userId, "alerts"))) {
+    return NextResponse.json({ message: "Alerts are disabled for your account." }, { status: 403 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { answerAssistantQuestion } from "@/lib/assistant/openai";
 import { requireConnectedSession } from "@/lib/auth/session";
+import { hasFeatureAccess } from "@/lib/features";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
-import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +32,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const permissions = await getOrCreateUserPermissions(auth.session.userId);
-  if (!permissions.aiAssistantEnabled) {
+  const [aiAssistantEnabled, activitiesEnabled] = await Promise.all([
+    hasFeatureAccess(auth.session.userId, "ai"),
+    hasFeatureAccess(auth.session.userId, "activities")
+  ]);
+  if (!aiAssistantEnabled) {
     return NextResponse.json({ message: "The energy assistant is disabled for your account." }, { status: 403 });
   }
 
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
         to: body.to
       },
       (body.history ?? []) as AssistantConversationMessage[],
-      { activitiesEnabled: permissions.activitiesEnabled }
+      { activitiesEnabled }
     );
 
     return NextResponse.json(

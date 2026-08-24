@@ -3,34 +3,27 @@ import "server-only";
 import { cache } from "react";
 import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
 import { createSupabaseAdminClient } from "./supabase/admin-client";
+import { getFeatureAccessForUsers, type FeatureAccessDetail } from "./features";
+import type { FeatureKey } from "./newinmeter/features-shared";
 
 export type UserRole = "admin" | "user";
 
 export type UserPermissions = {
   userId: string;
   role: UserRole;
-  aiAssistantEnabled: boolean;
-  activitiesEnabled: boolean;
-  liveMeterEnabled: boolean;
 };
 
 type UserRoleRow = {
   user_id: string;
   role: UserRole;
-  ai_assistant_enabled: boolean;
-  activities_enabled: boolean;
-  live_meter_enabled: boolean;
 };
 
-const SELECT = "user_id,role,ai_assistant_enabled,activities_enabled,live_meter_enabled";
+const SELECT = "user_id,role";
 
 function toPermissions(row: UserRoleRow): UserPermissions {
   return {
     userId: row.user_id,
-    role: row.role,
-    aiAssistantEnabled: row.ai_assistant_enabled,
-    activitiesEnabled: row.activities_enabled,
-    liveMeterEnabled: row.live_meter_enabled
+    role: row.role
   };
 }
 
@@ -66,6 +59,7 @@ export type CaptureRunStatus = "running" | "success" | "failed";
 export type AdminUserListItem = UserPermissions & {
   email: string | null;
   createdAt: string;
+  features: Record<FeatureKey, FeatureAccessDetail>;
   connectionStatus: LivemopayConnectionStatus | null;
   lastRunStatus: CaptureRunStatus | null;
   lastRunAt: string | null;
@@ -98,6 +92,22 @@ type CaptureRunRow = {
 };
 
 // Admin's user list: role/permission rows joined against Supabase Auth's
+// Every NewinMeter user's id + email, resolved from Supabase Auth (not
+// exposed over PostgREST). Shared by anything that needs to enumerate users
+// without the rest of listAllUserPermissions's connection/sync joins -- the
+// Features tab's rollout counts and per-feature override lists, in
+// particular.
+export async function listAllAuthUsers(): Promise<Array<{ userId: string; email: string | null }>> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data.users.map((user) => ({ userId: user.id, email: user.email ?? null }));
+}
+
 // user list (for email), since auth.users isn't exposed over PostgREST.
 // Anyone who has never triggered getOrCreateUserPermissions (signed in but
 // never loaded a page that resolves it) still gets a synthesized 'user' row
@@ -150,6 +160,8 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
     }
   }
 
+  const featureAccessByUserId = await getFeatureAccessForUsers(data.users.map((user) => user.id));
+
   return data.users
     .map((user) => {
       const permissions = roleByUserId.get(user.id);
@@ -160,9 +172,7 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
         email: user.email ?? null,
         createdAt: user.created_at,
         role: permissions?.role ?? "user",
-        aiAssistantEnabled: permissions?.aiAssistantEnabled ?? true,
-        activitiesEnabled: permissions?.activitiesEnabled ?? false,
-        liveMeterEnabled: permissions?.liveMeterEnabled ?? false,
+        features: featureAccessByUserId.get(user.id)!,
         connectionStatus: connectionStatusByUserId.get(user.id) ?? null,
         lastRunStatus: lastRun?.status ?? null,
         lastRunAt: lastRun?.finished_at ?? lastRun?.started_at ?? null,
@@ -188,35 +198,3 @@ export async function setUserRole(userId: string, role: UserRole): Promise<void>
   );
 }
 
-export async function setAiAssistantEnabled(userId: string, enabled: boolean): Promise<void> {
-  await getOrCreateUserPermissions(userId);
-
-  await adminSupabaseRequest(
-    "PATCH",
-    `/user_roles?user_id=eq.${encodeURIComponent(userId)}`,
-    { ai_assistant_enabled: enabled, updated_at: new Date().toISOString() },
-    "return=minimal"
-  );
-}
-
-export async function setActivitiesEnabled(userId: string, enabled: boolean): Promise<void> {
-  await getOrCreateUserPermissions(userId);
-
-  await adminSupabaseRequest(
-    "PATCH",
-    `/user_roles?user_id=eq.${encodeURIComponent(userId)}`,
-    { activities_enabled: enabled, updated_at: new Date().toISOString() },
-    "return=minimal"
-  );
-}
-
-export async function setLiveMeterEnabled(userId: string, enabled: boolean): Promise<void> {
-  await getOrCreateUserPermissions(userId);
-
-  await adminSupabaseRequest(
-    "PATCH",
-    `/user_roles?user_id=eq.${encodeURIComponent(userId)}`,
-    { live_meter_enabled: enabled, updated_at: new Date().toISOString() },
-    "return=minimal"
-  );
-}

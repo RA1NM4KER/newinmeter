@@ -1,26 +1,27 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
-import { setActivitiesEnabled, setAiAssistantEnabled, setLiveMeterEnabled } from "@/lib/user-roles";
+import { setUserFeatureOverride } from "@/lib/features";
+import { FEATURE_KEYS } from "@/lib/newinmeter/features-shared";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Every value here is an explicit per-user override -- toggling a feature
+// for a user in the admin UI is always a deliberate decision, never an
+// attempt to "revert to inherited". Writing succeeds regardless of the
+// feature's current rollout mode (including "off"): the override is stored
+// and takes effect the moment the feature returns to "everyone"/"selected".
 const bodySchema = z
   .object({
-    aiAssistantEnabled: z.boolean().optional(),
-    activitiesEnabled: z.boolean().optional(),
-    liveMeterEnabled: z.boolean().optional()
+    ai: z.boolean().optional(),
+    activities: z.boolean().optional(),
+    live: z.boolean().optional(),
+    alerts: z.boolean().optional()
   })
-  .refine(
-    (body) =>
-      body.aiAssistantEnabled !== undefined ||
-      body.activitiesEnabled !== undefined ||
-      body.liveMeterEnabled !== undefined,
-    {
-      message: "Provide at least one permission to update."
-    }
-  );
+  .refine((body) => FEATURE_KEYS.some((key) => body[key] !== undefined), {
+    message: "Provide at least one feature to update."
+  });
 
 export async function PATCH(request: Request, { params }: { params: { userId: string } }) {
   const auth = await requireAdminSession();
@@ -31,18 +32,13 @@ export async function PATCH(request: Request, { params }: { params: { userId: st
     );
   }
 
-  const { aiAssistantEnabled, activitiesEnabled, liveMeterEnabled } = bodySchema.parse(await request.json());
+  const body = bodySchema.parse(await request.json());
 
-  if (aiAssistantEnabled !== undefined) {
-    await setAiAssistantEnabled(params.userId, aiAssistantEnabled);
-  }
-
-  if (activitiesEnabled !== undefined) {
-    await setActivitiesEnabled(params.userId, activitiesEnabled);
-  }
-
-  if (liveMeterEnabled !== undefined) {
-    await setLiveMeterEnabled(params.userId, liveMeterEnabled);
+  for (const key of FEATURE_KEYS) {
+    const value = body[key];
+    if (value !== undefined) {
+      await setUserFeatureOverride(params.userId, key, value);
+    }
   }
 
   return NextResponse.json({ status: "updated" });

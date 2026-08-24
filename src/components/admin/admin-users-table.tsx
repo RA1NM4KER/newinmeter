@@ -10,6 +10,7 @@ import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
 import { apiEndpoints, buildAdminUserPermissionsUrl, buildAdminUserRoleUrl } from "@/lib/endpoints";
 import type { AdminUsersSortKey } from "@/lib/admin-users-query-params";
+import type { FeatureKey } from "@/lib/newinmeter/features-shared";
 import { useAdminUsersUrlState } from "@/lib/url-state/use-admin-users-url-state";
 import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import { adminUsersColumns } from "./admin-users-columns";
@@ -19,8 +20,7 @@ import { LastSyncCell } from "./last-sync-cell";
 import { ManageDrawer } from "./manage-drawer";
 import { StatStripSkeleton, StatTile } from "./stat-tile";
 import { TableSkeletonRows } from "./table-skeleton-rows";
-import type { FeatureDraft, FeatureKey } from "./admin-feature-flags";
-import type { AdminUsersApiResponse, AdminUsersTableProps } from "./types";
+import type { AdminUsersApiResponse, AdminUsersTableProps, FeatureDraft } from "./types";
 
 const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -161,6 +161,31 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
     }
   }
 
+  // Every change here becomes an explicit per-user override -- optimistic
+  // patch marks the source as "override" immediately (matches what the
+  // write actually does), reverted to the pre-save detail (value + source)
+  // on failure.
+  function patchLocalUserFeatures(userId: string, changes: Partial<FeatureDraft>) {
+    queryClient.setQueryData<AdminUsersApiResponse | undefined>(queryKey, (current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        rows: current.rows.map((user) => {
+          if (user.userId !== userId) {
+            return user;
+          }
+          const features = { ...user.features };
+          for (const key of Object.keys(changes) as FeatureKey[]) {
+            features[key] = { enabled: changes[key]!, source: "override" };
+          }
+          return { ...user, features };
+        })
+      };
+    });
+  }
+
   async function handleSaveFeatures(userId: string, changes: Partial<FeatureDraft>): Promise<boolean> {
     if (Object.keys(changes).length === 0) {
       return true; // nothing changed; let the drawer animate closed
@@ -170,14 +195,14 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
     if (!target) {
       return false;
     }
-    const previous: Partial<AdminUserListItem> = {};
+    const previous: Partial<AdminUserListItem["features"]> = {};
     for (const key of Object.keys(changes) as FeatureKey[]) {
-      previous[key] = target[key];
+      previous[key] = target.features[key];
     }
 
     setDrawerError("");
     setDrawerSaving(true);
-    patchLocalUser(userId, changes);
+    patchLocalUserFeatures(userId, changes);
 
     try {
       const response = await fetch(buildAdminUserPermissionsUrl(userId), {
@@ -194,7 +219,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
       setDrawerSaving(false);
       return true;
     } catch (caught) {
-      patchLocalUser(userId, previous);
+      patchLocalUser(userId, { features: { ...target.features, ...previous } });
       setDrawerSaving(false);
       setDrawerError(caught instanceof Error ? caught.message : "Couldn't update features.");
       return false;

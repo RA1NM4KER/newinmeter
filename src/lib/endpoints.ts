@@ -2,6 +2,7 @@ const apiBase = "/api";
 
 export const apiEndpoints = {
   adminUsers: `${apiBase}/admin/users`,
+  adminFeatures: `${apiBase}/admin/features`,
   activities: `${apiBase}/activities`,
   activityReport: `${apiBase}/activity-report`,
   activityExport: `${apiBase}/activity-export`,
@@ -51,4 +52,12 @@ export function buildAdminUserRoleUrl(userId: string) {
 
 export function buildAdminUserPermissionsUrl(userId: string) {
   return `${apiEndpoints.adminUsers}/${userId}/permissions`;
+}
+
+export function buildAdminFeatureUrl(featureKey: string) {
+  return `${apiEndpoints.adminFeatures}/${featureKey}`;
+}
+
+export function buildAdminFeatureUsersUrl(featureKey: string) {
+  return `${apiEndpoints.adminFeatures}/${featureKey}/users`;
 }

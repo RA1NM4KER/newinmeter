@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { LivePageClient } from "@/components/live/live-page-client";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { hasFeatureAccess } from "@/lib/features";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
-import { getOrCreateUserPermissions } from "@/lib/user-roles";
 import { resolveLiveAccess } from "./access";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,12 @@ export default async function LivePage() {
 
   // Resolve permission + connection only when there is a session, then let the
   // pure resolver decide the outcome (kept in access.ts for testability).
-  const permissions = session ? await getOrCreateUserPermissions(session.userId) : null;
+  const liveMeterEnabled = session ? await hasFeatureAccess(session.userId, "live") : false;
   const connection = session ? await getConnectionForUser(session.userId) : null;
 
   const access = resolveLiveAccess({
     hasSession: Boolean(session),
-    liveMeterEnabled: Boolean(permissions?.liveMeterEnabled),
+    liveMeterEnabled,
     isConnected: connection?.status === "connected"
   });
 

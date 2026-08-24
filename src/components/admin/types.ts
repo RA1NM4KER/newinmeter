@@ -1,10 +1,30 @@
 import type { ReactNode } from "react";
 import type { AdminUserListItem } from "@/lib/user-roles";
-import type { FeatureDraft } from "./admin-feature-flags";
+import type { FeatureKey, RolloutMode } from "@/lib/newinmeter/features-shared";
 
 export type AdminUsersApiResponse = {
   rows: AdminUserListItem[];
   total: number;
+};
+
+export type FeatureRow = {
+  key: FeatureKey;
+  name: string;
+  short: string;
+  description: string;
+  mode: RolloutMode;
+  enabledCount: number;
+  totalCount: number;
+};
+
+export type AdminFeaturesApiResponse = {
+  features: FeatureRow[];
+};
+
+export type AdminPageClientProps = {
+  currentUserId: string;
+  initialUsers: AdminUsersApiResponse;
+  initialFeatures: AdminFeaturesApiResponse;
 };
 
 export type AdminUsersTableProps = {
@@ -12,7 +32,15 @@ export type AdminUsersTableProps = {
   initialData: AdminUsersApiResponse;
 };
 
+export type AdminFeaturesPanelProps = {
+  initialData: AdminFeaturesApiResponse;
+};
+
 export type StatTileProps = { label: ReactNode; value: number; tone?: "default" | "warning" };
+
+// Draft toggle state in the manage drawer -- always written as an explicit
+// per-user override on save (see setUserFeatureOverride).
+export type FeatureDraft = Record<FeatureKey, boolean>;
 
 export type ManageDrawerProps = {
   user: AdminUserListItem;

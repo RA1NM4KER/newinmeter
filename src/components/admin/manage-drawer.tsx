@@ -4,16 +4,17 @@ import { Check, Copy, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import type { AdminUserListItem } from "@/lib/user-roles";
+import { FEATURES } from "@/lib/newinmeter/features-shared";
 import { ConnectionStatusBadge } from "./connection-status-badge";
 import { LastSyncCell } from "./last-sync-cell";
-import { FEATURES, type FeatureDraft } from "./admin-feature-flags";
-import type { ManageDrawerProps } from "./types";
+import type { FeatureDraft, ManageDrawerProps } from "./types";
 
 function draftFromUser(user: AdminUserListItem): FeatureDraft {
   return {
-    aiAssistantEnabled: user.aiAssistantEnabled,
-    activitiesEnabled: user.activitiesEnabled,
-    liveMeterEnabled: user.liveMeterEnabled
+    ai: user.features.ai.enabled,
+    activities: user.features.activities.enabled,
+    live: user.features.live.enabled,
+    alerts: user.features.alerts.enabled
   };
 }
 
@@ -76,12 +77,12 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
     };
   }, [requestClose, saving]);
 
-  const dirty = FEATURES.some((feature) => draft[feature.key] !== user[feature.key]);
+  const dirty = FEATURES.some((feature) => draft[feature.key] !== user.features[feature.key].enabled);
 
   async function handleSave() {
     const changes: Partial<FeatureDraft> = {};
     for (const feature of FEATURES) {
-      if (draft[feature.key] !== user[feature.key]) {
+      if (draft[feature.key] !== user.features[feature.key].enabled) {
         changes[feature.key] = draft[feature.key];
       }
     }
@@ -178,6 +179,11 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{feature.name}</p>
                     <p className="mt-1 text-xs text-muted">{feature.description}</p>
+                    <p className="mt-1 text-xs text-muted/70">
+                      {user.features[feature.key].source === "override"
+                        ? "Individual override"
+                        : "From global rollout"}
+                    </p>
                   </div>
                   <Switch
                     ariaLabel={`${feature.name} for ${user.email ?? "user"}`}

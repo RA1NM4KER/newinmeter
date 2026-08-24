@@ -12,15 +12,15 @@
 // Runs with the repo's service-role setup via the npm script, which uses
 // `tsx --conditions=react-server --env-file=.env.local`. The
 // `--conditions=react-server` flag is required: the server-only lib modules
-// this pulls in (meter-devices -> supabase-rest/user-roles) start with
+// this pulls in (meter-devices -> supabase-rest/features) start with
 // `import "server-only"`, whose default export throws by design. Next.js
 // resolves that marker's `react-server` export condition (an empty no-op
 // module); direct Node/tsx execution does not, so the flag makes the marker
 // resolve the same harmless way here instead of throwing at import.
 
+import { hasFeatureAccess } from "@/lib/features";
 import { createMeterDevice, getActiveConnectionForUser } from "@/lib/meter-devices";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
-import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 function parseArgs(argv: string[]): Map<string, string> {
   const args = new Map<string, string>();
@@ -98,11 +98,11 @@ async function main() {
 
   // Refuse to register a device for a user who doesn't have the live-meter
   // feature enabled -- the feature is gated by this one permission end to end.
-  const permissions = await getOrCreateUserPermissions(user.id);
-  if (!permissions.liveMeterEnabled) {
+  const liveMeterEnabled = await hasFeatureAccess(user.id, "live");
+  if (!liveMeterEnabled) {
     console.error(
       `User ${user.email} does not have the live-meter feature enabled. ` +
-        "Enable it from the admin users table (Live meter toggle) before registering a device."
+        "Enable it from the admin Features tab (or that user's drawer) before registering a device."
     );
     process.exitCode = 1;
     return;

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { getUserFeatureAccessDetailed } from "@/lib/features";
 import { getUnreadNotificationCount } from "@/lib/newinmeter/alerts";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
@@ -19,8 +20,9 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   // migration is applied) must not take down the whole authenticated app
   // shell, just start the badge at 0 until the bell's own client fetch
   // corrects it.
-  const [permissions, connection, initialUnreadNotificationCount] = await Promise.all([
+  const [permissions, features, connection, initialUnreadNotificationCount] = await Promise.all([
     getOrCreateUserPermissions(session.userId),
+    getUserFeatureAccessDetailed(session.userId),
     getConnectionForUser(session.userId),
     getUnreadNotificationCount(session.userId).catch((error) => {
       console.error("newinmeter_get_unread_count_failed", error instanceof Error ? error.message : error);
@@ -33,8 +35,8 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
       <AppShell
         userEmail={session.email}
         isAdmin={permissions.role === "admin"}
-        isActivitiesEnabled={permissions.activitiesEnabled}
-        isLiveMeterEnabled={permissions.liveMeterEnabled}
+        isActivitiesEnabled={features.activities.enabled}
+        isLiveMeterEnabled={features.live.enabled}
         isDemo={connection?.isDemo ?? false}
         initialUnreadNotificationCount={initialUnreadNotificationCount}
       >

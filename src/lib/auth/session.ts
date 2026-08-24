@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { hasFeatureAccess } from "@/lib/features";
 import { getConnectionForUser, type LivemopayConnection } from "@/lib/newinmeter/connection";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 import { getOrCreateUserPermissions, type UserPermissions } from "@/lib/user-roles";
@@ -82,9 +83,9 @@ export async function requireActivitiesSession(): Promise<RequireActivitiesSessi
     return connected;
   }
 
-  const permissions = await getOrCreateUserPermissions(connected.session.userId);
+  const activitiesEnabled = await hasFeatureAccess(connected.session.userId, "activities");
 
-  if (!permissions.activitiesEnabled) {
+  if (!activitiesEnabled) {
     return { ok: false, status: 403 };
   }
 

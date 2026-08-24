@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   adminSupabaseCount: vi.fn(),
   sendPushToUser: vi.fn(),
   getConnectionRowForUser: vi.fn(),
-  setAutoSyncEnabled: vi.fn()
+  setAutoSyncEnabled: vi.fn(),
+  hasFeatureAccess: vi.fn(),
+  getFeatureAccessForUsers: vi.fn()
 }));
 
 vi.mock("../supabase-rest", () => ({
@@ -15,6 +17,20 @@ vi.mock("../supabase-rest", () => ({
   adminSupabaseCount: mocks.adminSupabaseCount
 }));
 vi.mock("../push-notify", () => ({ sendPushToUser: mocks.sendPushToUser }));
+// Alerts gating (hasFeatureAccess/getFeatureAccessForUsers) is its own
+// module with its own tests (features.test.ts) -- everything in this file
+// is testing evaluateAlertsAfterSync/evaluateDataDelayedAlerts's own alert
+// logic, so the gate defaults to "access granted" here. The one test that
+// cares about the gate itself (see "Alerts feature gating" below) overrides
+// this per-call.
+mocks.hasFeatureAccess.mockResolvedValue(true);
+mocks.getFeatureAccessForUsers.mockImplementation(async (userIds: string[]) =>
+  new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
+);
+vi.mock("../features", () => ({
+  hasFeatureAccess: mocks.hasFeatureAccess,
+  getFeatureAccessForUsers: mocks.getFeatureAccessForUsers
+}));
 // Same react cache() shim as connection.test.ts -- this file imports the
 // real connection.ts (for getConnectionRowForUser's mock shape / the
 // DemoAccountProtectedError class), whose getConnectionForUser uses React
@@ -1661,5 +1677,72 @@ describe("resolveOverlappingUsageAnomalyEvents", () => {
 
     await resolveOverlappingUsageAnomalyEvents("conn-1", `${TODAY}T18:00:00`, `${TODAY}T20:00:00`);
     expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("Alerts feature gating", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.hasFeatureAccess.mockResolvedValue(true);
+    mocks.getFeatureAccessForUsers.mockImplementation(async (userIds: string[]) =>
+      new Map(userIds.map((userId) => [userId, { alerts: { enabled: true, source: "rollout" as const } }]))
+    );
+  });
+
+  it("evaluateAlertsAfterSync skips all evaluation and push when the user lacks Alerts access", async () => {
+    mocks.hasFeatureAccess.mockResolvedValue(false);
+
+    await evaluateAlertsAfterSync("conn-1", "user-1");
+
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith("user-1", "alerts");
+    expect(mocks.adminSupabaseFetch).not.toHaveBeenCalled();
+    expect(mocks.sendPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("evaluateAlertsAfterSync proceeds as normal when the user has Alerts access", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([]);
+
+    await evaluateAlertsAfterSync("conn-1", "user-1");
+
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith("user-1", "alerts");
+    expect(mocks.adminSupabaseFetch).toHaveBeenCalled();
+  });
+
+  it("evaluateDataDelayedAlerts excludes connections whose owner lacks Alerts access from the batch", async () => {
+    mocks.getFeatureAccessForUsers.mockResolvedValue(
+      new Map([
+        ["user-yes", { alerts: { enabled: true, source: "rollout" as const } }],
+        ["user-no", { alerts: { enabled: false, source: "rollout" as const } }]
+      ])
+    );
+    mocks.adminSupabaseFetch.mockImplementation(async (path: string) => {
+      if (path.includes("/alert_rules")) {
+        // Only "conn-yes" should ever appear in the query -- "conn-no"'s
+        // owner has no Alerts access, so it must be filtered out before the
+        // rule fetch, not merely skipped afterwards.
+        expect(path).toContain("conn-yes");
+        expect(path).not.toContain("conn-no");
+        return [];
+      }
+      throw new Error(`unexpected path: ${path}`);
+    });
+
+    const result = await evaluateDataDelayedAlerts([
+      { connectionId: "conn-yes", userId: "user-yes", lastSyncedAt: null },
+      { connectionId: "conn-no", userId: "user-no", lastSyncedAt: null }
+    ]);
+
+    expect(result).toEqual({ checked: 0, notified: 0 });
+  });
+
+  it("evaluateDataDelayedAlerts is a no-op when every connection's owner lacks Alerts access", async () => {
+    mocks.getFeatureAccessForUsers.mockResolvedValue(
+      new Map([["user-no", { alerts: { enabled: false, source: "rollout" as const } }]])
+    );
+
+    const result = await evaluateDataDelayedAlerts([{ connectionId: "conn-no", userId: "user-no", lastSyncedAt: null }]);
+
+    expect(result).toEqual({ checked: 0, notified: 0 });
+    expect(mocks.adminSupabaseFetch).not.toHaveBeenCalled();
   });
 });

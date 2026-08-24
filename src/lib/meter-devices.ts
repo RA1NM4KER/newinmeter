@@ -1,8 +1,8 @@
 import "server-only";
 
+import { hasFeatureAccess } from "./features";
 import { deviceKeyHint, generateDeviceKey, hashDeviceKey, parseBearerDeviceKey } from "./meter-device-keys";
 import { adminSupabaseRawResponse, adminSupabaseRequest } from "./supabase-rest";
-import { getOrCreateUserPermissions } from "./user-roles";
 
 // The authenticated device identity. This -- never anything from the request
 // body -- decides which device owns the pulse rows, so a request can't spoof
@@ -81,8 +81,7 @@ export async function authenticateDeviceKey(
 // authenticateDeviceKey so the 401 (bad credentials) and 403 (feature off for
 // this owner) cases stay distinct in the route.
 export async function isLiveMeterEnabledForDevice(device: MeterDevice): Promise<boolean> {
-  const permissions = await getOrCreateUserPermissions(device.ownerUserId);
-  return permissions.liveMeterEnabled;
+  return hasFeatureAccess(device.ownerUserId, "live");
 }
 
 export type PulseInput = {

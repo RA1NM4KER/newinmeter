@@ -26,7 +26,8 @@
 import { buildDemoDataset } from "@/lib/demo/dataset";
 import { adminSupabaseRequest } from "@/lib/supabase-rest";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
-import { setActivitiesEnabled, setAiAssistantEnabled, setUserRole } from "@/lib/user-roles";
+import { setUserFeatureOverride } from "@/lib/features";
+import { setUserRole } from "@/lib/user-roles";
 
 const DEMO_LIVEMOPAY_EMAIL = "demo.recruiter@newinmeter.invalid";
 const DEMO_ACCOUNT_ID = "demo-account-001";
@@ -245,9 +246,10 @@ async function main() {
   await seedActivities(connection.id, dataset.activities);
 
   await setUserRole(user.id, "user");
-  await setAiAssistantEnabled(user.id, true);
-  await setActivitiesEnabled(user.id, true);
-  console.log("Set user_roles: role=user, ai_assistant_enabled=true, activities_enabled=true.");
+  // AI is on for everyone by default (rollout mode 'everyone'); Activities
+  // defaults off ('selected'), so the demo account needs an explicit grant.
+  await setUserFeatureOverride(user.id, "activities", true);
+  console.log("Set user_roles: role=user. Granted the demo account an explicit Activities override.");
 
   console.log("\nDemo account ready:");
   console.log(`  email: ${email}`);

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { getUserFeatureAccessDetailed } from "@/lib/features";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { loadDashboardDailyRollups, loadDashboardHourlyRollups, loadDashboardSummary } from "@/lib/dashboard-data";
-import { getOrCreateUserPermissions } from "@/lib/user-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,9 @@ export default async function Home() {
     redirect("/connect");
   }
 
-  const [summary, permissions] = await Promise.all([
+  const [summary, features] = await Promise.all([
     loadDashboardSummary(session.accessToken),
-    getOrCreateUserPermissions(session.userId)
+    getUserFeatureAccessDetailed(session.userId)
   ]);
   const [dailyRows, hourlyRows] = await Promise.all([
     loadDashboardDailyRollups(session.accessToken),
@@ -32,8 +32,8 @@ export default async function Home() {
       dailyRows={dailyRows}
       hourlyRows={hourlyRows}
       summary={summary}
-      isAiAssistantEnabled={permissions.aiAssistantEnabled}
-      isActivitiesEnabled={permissions.activitiesEnabled}
+      isAiAssistantEnabled={features.ai.enabled}
+      isActivitiesEnabled={features.activities.enabled}
     />
   );
 }

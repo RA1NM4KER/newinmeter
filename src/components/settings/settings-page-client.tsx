@@ -43,6 +43,7 @@ type SettingsPageClientProps = {
   userEmail: string | null;
   avatarInitial: string;
   connection: ConnectionProps;
+  alertsEnabled: boolean;
   alertRules: AlertRule[];
   latestBalance: number | null;
   insights: AlertInsights | null;
@@ -62,6 +63,7 @@ export function SettingsPageClient({
   userEmail,
   avatarInitial,
   connection,
+  alertsEnabled,
   alertRules,
   latestBalance,
   insights,
@@ -73,9 +75,17 @@ export function SettingsPageClient({
   const searchParams = useSearchParams();
   const { refresh: refreshNotificationCentre } = useNotificationCentre();
 
+  // Alerts is a fully revocable feature -- hidden from the tab list entirely
+  // (not shown-disabled) when this user doesn't have it, matching Live
+  // Meter's existing "doesn't exist" posture elsewhere in the app.
+  const visibleTabs = alertsEnabled ? settingsTabs : settingsTabs.filter((tab) => tab.id !== "alerts");
+
   const [activeTab, setActiveTabState] = useState<SettingsTabId>(() => {
     const requested = searchParams.get("tab");
-    return requested && isSettingsTabId(requested) ? requested : "general";
+    if (requested && isSettingsTabId(requested) && (requested !== "alerts" || alertsEnabled)) {
+      return requested;
+    }
+    return "general";
   });
 
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(connection.autoSyncEnabled);
@@ -149,7 +159,7 @@ export function SettingsPageClient({
         <p className="mt-1.5 text-sm text-muted">Manage your data source, appearance, and account.</p>
       </header>
 
-      <UnderlineTabs tabs={settingsTabs} activeId={activeTab} onChange={(id) => setActiveTab(id as SettingsTabId)} />
+      <UnderlineTabs tabs={visibleTabs} activeId={activeTab} onChange={(id) => setActiveTab(id as SettingsTabId)} />
 
       <div className={activeTab === "general" ? "flex flex-col gap-6" : "hidden"}>
         <SettingsGroup label="General">
@@ -181,20 +191,22 @@ export function SettingsPageClient({
         />
       </div>
 
-      <div className={activeTab === "alerts" ? "flex flex-col gap-6" : "hidden"}>
-        <AlertsTab
-          rules={alertRules}
-          enabledByType={alertEnabledByType}
-          autoSyncEnabled={autoSyncEnabled}
-          isDemo={connection.isDemo}
-          latestBalance={latestBalance}
-          insights={insights}
-          suggestedMonthlyBudget={suggestedMonthlyBudget}
-          hasTariffProfile={hasTariffProfile}
-          onEnabledChange={handleAlertEnabledChange}
-          onAutoSyncEnabledChange={handleAutoSyncEnabledChange}
-        />
-      </div>
+      {alertsEnabled ? (
+        <div className={activeTab === "alerts" ? "flex flex-col gap-6" : "hidden"}>
+          <AlertsTab
+            rules={alertRules}
+            enabledByType={alertEnabledByType}
+            autoSyncEnabled={autoSyncEnabled}
+            isDemo={connection.isDemo}
+            latestBalance={latestBalance}
+            insights={insights}
+            suggestedMonthlyBudget={suggestedMonthlyBudget}
+            hasTariffProfile={hasTariffProfile}
+            onEnabledChange={handleAlertEnabledChange}
+            onAutoSyncEnabledChange={handleAutoSyncEnabledChange}
+          />
+        </div>
+      ) : null}
 
       <div className={activeTab === "account" ? "flex flex-col gap-6" : "hidden"}>
         <SettingsGroup label="Account">

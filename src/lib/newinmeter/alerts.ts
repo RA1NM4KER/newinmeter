@@ -2,6 +2,7 @@ import "server-only";
 
 import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { formatCurrency, formatKwh, formatTariff } from "../format";
+import { getFeatureAccessForUsers, hasFeatureAccess } from "../features";
 import { sendPushToUser } from "../push-notify";
 import {
   ALERT_TYPES,
@@ -1105,6 +1106,15 @@ async function evaluateUsageAnomalyFamily(
 // daily_spend/daily_kwh (the original, most-relied-on alerts) from
 // evaluating normally, and vice versa.
 export async function evaluateAlertsAfterSync(connectionId: string, userId: string): Promise<void> {
+  // The Alerts feature is fully revocable: while off for this user, no new
+  // alert_events get written and no push gets sent (push only ever happens
+  // inside the insert paths below), but nothing already stored is touched --
+  // restoring access resumes evaluation from here with existing rules/state
+  // intact.
+  if (!(await hasFeatureAccess(userId, "alerts"))) {
+    return;
+  }
+
   const now = new Date();
   const today = currentLocalDateString(now);
 
@@ -1399,7 +1409,17 @@ export async function evaluateDataDelayedAlerts(connections: StaleConnectionForA
     return { checked: 0, notified: 0 };
   }
 
-  const connectionIds = connections.map((c) => c.connectionId).join(",");
+  // Same Alerts revocability as evaluateAlertsAfterSync -- a batch cron tick
+  // has no per-request session to gate on, so it resolves access itself,
+  // one bulk query for the whole batch rather than one per connection.
+  const accessByUserId = await getFeatureAccessForUsers(connections.map((c) => c.userId));
+  const gatedConnections = connections.filter((c) => accessByUserId.get(c.userId)?.alerts.enabled);
+
+  if (gatedConnections.length === 0) {
+    return { checked: 0, notified: 0 };
+  }
+
+  const connectionIds = gatedConnections.map((c) => c.connectionId).join(",");
   const rules = await adminSupabaseFetch<AlertRuleRow[]>(
     `/alert_rules?select=${RULE_SELECT}&type=eq.data_delayed&enabled=eq.true&connection_id=in.(${connectionIds})`
   );
@@ -1408,7 +1428,7 @@ export async function evaluateDataDelayedAlerts(connections: StaleConnectionForA
     return { checked: 0, notified: 0 };
   }
 
-  const connectionById = new Map(connections.map((c) => [c.connectionId, c]));
+  const connectionById = new Map(gatedConnections.map((c) => [c.connectionId, c]));
   const now = Date.now();
   let notified = 0;
 

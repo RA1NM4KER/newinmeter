@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAuthenticatedSession: vi.fn(),
-  upsertAlertRule: vi.fn()
+  upsertAlertRule: vi.fn(),
+  hasFeatureAccess: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
+vi.mock("@/lib/features", () => ({ hasFeatureAccess: mocks.hasFeatureAccess }));
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return { ...actual, cache: <T>(fn: T) => fn };
@@ -31,6 +33,14 @@ describe("POST /api/alerts/[type]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAuthenticatedSession.mockResolvedValue({ userId: "user-a", email: "a@example.com", accessToken: "t" });
+    mocks.hasFeatureAccess.mockResolvedValue(true);
+  });
+
+  it("returns 403 when the user's Alerts access is off", async () => {
+    mocks.hasFeatureAccess.mockResolvedValue(false);
+    const response = await POST(request({ enabled: true, threshold: 200 }), { params: { type: "low_balance" } });
+    expect(response.status).toBe(403);
+    expect(mocks.upsertAlertRule).not.toHaveBeenCalled();
   });
 
   it("requires authentication", async () => {

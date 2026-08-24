@@ -3,15 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   adminSupabaseRequest: vi.fn(),
   adminSupabaseRawResponse: vi.fn(),
-  getOrCreateUserPermissions: vi.fn()
+  hasFeatureAccess: vi.fn()
 }));
 
 vi.mock("@/lib/supabase-rest", () => ({
   adminSupabaseRequest: mocks.adminSupabaseRequest,
   adminSupabaseRawResponse: mocks.adminSupabaseRawResponse
 }));
-vi.mock("@/lib/user-roles", () => ({
-  getOrCreateUserPermissions: mocks.getOrCreateUserPermissions
+vi.mock("@/lib/features", () => ({
+  hasFeatureAccess: mocks.hasFeatureAccess
 }));
 
 import { generateDeviceKey, hashDeviceKey } from "@/lib/meter-device-keys";
@@ -94,13 +94,13 @@ describe("isLiveMeterEnabledForDevice", () => {
   });
 
   it("checks the flag against the device owner, not the request", async () => {
-    mocks.getOrCreateUserPermissions.mockResolvedValue({ liveMeterEnabled: true });
+    mocks.hasFeatureAccess.mockResolvedValue(true);
     expect(await isLiveMeterEnabledForDevice(device)).toBe(true);
-    expect(mocks.getOrCreateUserPermissions).toHaveBeenCalledWith("user-a");
+    expect(mocks.hasFeatureAccess).toHaveBeenCalledWith("user-a", "live");
   });
 
   it("is false when the owner does not have the feature enabled", async () => {
-    mocks.getOrCreateUserPermissions.mockResolvedValue({ liveMeterEnabled: false });
+    mocks.hasFeatureAccess.mockResolvedValue(false);
     expect(await isLiveMeterEnabledForDevice(device)).toBe(false);
   });
 });
