@@ -142,6 +142,19 @@ describe("push-client", () => {
       });
     });
 
+    it("returns subscription_failed with reason client_setup_failed when the VAPID public key is missing -- distinct from a real browser refusal", async () => {
+      installNotification("granted");
+      installServiceWorkerAndPushManager();
+      delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      const { ensurePushNotificationsEnabled } = await import("./push-client");
+
+      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({
+        status: "subscription_failed",
+        reason: "client_setup_failed"
+      });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it("returns subscription_failed with reason browser_registration_failed (not thrown) when PushManager.subscribe rejects -- e.g. Brave's push-service AbortError", async () => {
       installNotification("granted");
       installServiceWorkerAndPushManager({
@@ -332,6 +345,18 @@ describe("push-client", () => {
       const message = describeSubscriptionFailure("browser_registration_failed");
       expect(message).toMatch(/brave/i);
       expect(message).toMatch(/push messaging/i);
+    });
+
+    it("client_setup_failed on Brave: still the generic message, never Brave-specific", async () => {
+      // A missing VAPID key or a not-yet-ready service worker is a
+      // NewinMeter/deployment problem, not "Brave's push service refused
+      // this device" -- must not get the Brave-specific push-messaging
+      // copy just because the browser happens to be Brave.
+      Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+      const { describeSubscriptionFailure } = await import("./push-client");
+      const message = describeSubscriptionFailure("client_setup_failed");
+      expect(message).not.toMatch(/brave/i);
+      expect(message).toMatch(/browser couldn't register this device/i);
     });
   });
 });

@@ -183,6 +183,26 @@ describe("DeviceNotificationStatus", () => {
     }
   });
 
+  it("client_setup_failed on Brave: never shows Brave copy -- that's not what this reason means", async () => {
+    Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+    try {
+      const enableDeviceNotifications = vi
+        .fn()
+        .mockResolvedValue({ status: "subscription_failed", reason: "client_setup_failed" });
+      setDeviceNotifications({ browserPermission: "granted", enableDeviceNotifications });
+      render(<DeviceNotificationStatus />);
+
+      fireEvent.click(screen.getByText("Turn on notifications"));
+
+      await waitFor(() =>
+        expect(screen.getByText(/browser couldn't register this device/i)).toBeDefined()
+      );
+      expect(screen.queryByText(/brave/i)).toBeNull();
+    } finally {
+      delete (navigator as unknown as { brave?: unknown }).brave;
+    }
+  });
+
   it("retrying after a browser-side failure clears the old error and can succeed", async () => {
     const enableDeviceNotifications = vi
       .fn()

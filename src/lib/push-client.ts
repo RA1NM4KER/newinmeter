@@ -19,15 +19,25 @@ const DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY = "newinmeter:device-notificati
 
 export type PushPermissionState = "unsupported" | "default" | "granted" | "denied";
 
-// Two categories is enough to act on -- "browser" means the failure never
-// reached NewinMeter at all (PushManager.subscribe() itself threw, or the
-// service worker never became ready), "server" means the browser handed us
-// a real subscription but NewinMeter's own /api/push/subscribe round trip
-// failed. UI copy differs meaningfully between the two: a browser-side
-// failure is something the user's browser/OS push settings can fix right
-// now, a server-side one is NewinMeter's problem and "try again" is the
-// honest answer.
-export type SubscriptionFailureReason = "browser_registration_failed" | "server_registration_failed";
+// Three categories, each meaning something different for the user:
+// - browser_registration_failed: PushManager.subscribe() itself threw.
+//   This is the one Brave's disabled push transport lands in, and the only
+//   one specific enough to justify Brave-specific copy -- see
+//   describeSubscriptionFailure.
+// - client_setup_failed: something NewinMeter needed before even trying to
+//   subscribe wasn't there (no VAPID key configured, service worker never
+//   became ready). Also browser-side/pre-network, but not "the push
+//   service refused this device" -- lumping it in with
+//   browser_registration_failed would make Brave-specific copy fire for
+//   e.g. a plain misconfigured deployment, which has nothing to do with
+//   Brave.
+// - server_registration_failed: the browser handed us a real subscription,
+//   NewinMeter's own /api/push/subscribe round trip failed. This one is
+//   NewinMeter's problem, not the browser's.
+export type SubscriptionFailureReason =
+  | "browser_registration_failed"
+  | "client_setup_failed"
+  | "server_registration_failed";
 
 export type PushEnableResult =
   | { status: "granted" }
@@ -65,11 +75,11 @@ function logPushDiagnostic(phase: string, error?: unknown): void {
 // this in the future all say the same thing. Never shows the raw browser
 // exception text.
 export function describeSubscriptionFailure(reason: SubscriptionFailureReason): string {
+  if (reason === "browser_registration_failed" && isBraveBrowser()) {
+    return 'Brave couldn’t connect to its push service. In Brave settings, turn on "Use Google services for push messaging," then try again.';
+  }
   if (reason === "server_registration_failed") {
     return "Couldn't turn on notifications. Try again.";
-  }
-  if (isBraveBrowser()) {
-    return 'Brave couldn’t connect to its push service. In Brave settings, turn on "Use Google services for push messaging," then try again.';
   }
   return "Your browser couldn't register this device for push notifications. Check your browser's notification/push settings and try again.";
 }
@@ -134,22 +144,21 @@ type SubscribeOutcome = { ok: true } | { ok: false; reason: SubscriptionFailureR
 // Assumes permission is already "granted" -- creates (or reuses) a
 // subscription and registers it with the server. Never throws -- every
 // caller treats a failed subscribe as a recoverable, non-fatal state.
-// Split into two try/catch phases (browser vs. server) so a caller can
-// tell "your browser refused to register this device" (Brave with push
-// messaging disabled, a stale/broken service worker, etc.) apart from "the
-// browser subscription is fine but NewinMeter's own API call failed" --
-// see SubscriptionFailureReason's own comment for why that distinction
-// matters to the UI.
+// Three phases, each tagged with its own SubscriptionFailureReason (see
+// that type's own comment): missing prerequisites / SW not ready
+// (client_setup_failed), PushManager.subscribe() itself throwing
+// (browser_registration_failed -- the one Brave's disabled push transport
+// lands in), and NewinMeter's own API call failing (server_registration_failed).
 async function subscribeToPush(): Promise<SubscribeOutcome> {
   if (!VAPID_PUBLIC_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-    logPushDiagnostic("browser_registration_failed:missing_prerequisite");
-    return { ok: false, reason: "browser_registration_failed" };
+    logPushDiagnostic("client_setup_failed:missing_prerequisite");
+    return { ok: false, reason: "client_setup_failed" };
   }
 
   const registration = await getReadyRegistration();
   if (!registration) {
-    logPushDiagnostic("browser_registration_failed:service_worker_not_ready");
-    return { ok: false, reason: "browser_registration_failed" };
+    logPushDiagnostic("client_setup_failed:service_worker_not_ready");
+    return { ok: false, reason: "client_setup_failed" };
   }
 
   let subscription: PushSubscription;
