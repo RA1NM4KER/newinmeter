@@ -70,6 +70,14 @@ export function NotificationProvider({
   const [hasEnabledAlerts, setHasEnabledAlerts] = useState<boolean | null>(null);
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false);
+  // Set when refresh() is called while a fetch is already in flight (e.g.
+  // Settings' optimistic onEnabledChange firing a refresh moments before the
+  // save's own confirmed onEnabledChange fires a second one) -- without
+  // this, the second call used to just bail out on loadingRef and get
+  // silently dropped, which could leave hasEnabledAlerts/the list on
+  // whatever the FIRST (possibly pre-write, stale) fetch saw. Checked when
+  // the in-flight fetch finishes so the last-requested refresh always wins.
+  const pendingRefreshRef = useRef(false);
 
   // Single badge-reconciliation effect for the whole authenticated session
   // (was previously one per bell instance -- see module comment above).
@@ -89,6 +97,7 @@ export function NotificationProvider({
 
   const load = useCallback(() => {
     if (loadingRef.current) {
+      pendingRefreshRef.current = true;
       return;
     }
     loadingRef.current = true;
@@ -106,6 +115,10 @@ export function NotificationProvider({
       .finally(() => {
         setListLoading(false);
         loadingRef.current = false;
+        if (pendingRefreshRef.current) {
+          pendingRefreshRef.current = false;
+          load();
+        }
       });
   }, []);
 

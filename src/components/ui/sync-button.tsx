@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
@@ -47,50 +47,52 @@ export function SyncButton({
     width: popoverWidth
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  // Always mounted (see the render below -- it's never conditionally
+  // rendered on `isOpen`, only visually hidden), so this ref is populated
+  // and already has real, laid-out dimensions from the very first render --
+  // by the time the user's first click ever happens, its height is already
+  // knowable synchronously. The previous version only mounted the popover
+  // once `isOpen` became true, so the very first open had nothing to
+  // measure yet (0 height -> wrongly assumed "fits below") and only
+  // corrected itself, visibly, one frame later -- easy to miss as a subtle
+  // jump, but on a slow paint it read as "opens down, only opens up on the
+  // next click", exactly as reported.
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen || !containerRef.current) {
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) {
       return;
     }
 
-    const updatePosition = () => {
-      if (!containerRef.current) {
-        return;
-      }
+    const rect = containerRef.current.getBoundingClientRect();
+    const matchesMobile = window.matchMedia("(max-width: 639px)").matches;
+    const width = matchesMobile ? rect.width : popoverWidth;
+    const desiredLeft = matchesMobile ? rect.left : rect.left + rect.width / 2 - width / 2;
+    const left = Math.min(window.innerWidth - width - popoverMargin, Math.max(popoverMargin, desiredLeft));
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const matchesMobile = window.matchMedia("(max-width: 639px)").matches;
-      const width = matchesMobile ? rect.width : popoverWidth;
-      const desiredLeft = matchesMobile ? rect.left : rect.left + rect.width / 2 - width / 2;
-      const left = Math.min(window.innerWidth - width - popoverMargin, Math.max(popoverMargin, desiredLeft));
+    // Anchor below the button by default; flip above when the popover's
+    // real (always-mounted, so always current) height wouldn't fit below --
+    // e.g. this trigger sitting low in Settings' Data & Sync card.
+    const measuredHeight = popoverRef.current?.getBoundingClientRect().height ?? 0;
+    const fitsBelow = rect.bottom + measuredHeight + popoverMargin <= window.innerHeight;
+    const top = fitsBelow ? rect.bottom + 8 : Math.max(popoverMargin, rect.top - measuredHeight - 8);
 
-      // Anchor below the button by default, measuring the popover's actual
-      // height (below) to decide whether it fits -- flip above when it
-      // doesn't (e.g. this trigger sitting low in Settings' Data & Sync
-      // card, where "below" often runs past the viewport/card edge).
-      const measuredHeight = popoverRef.current?.getBoundingClientRect().height ?? 0;
-      const fitsBelow = rect.bottom + measuredHeight + popoverMargin <= window.innerHeight;
-      const top = fitsBelow ? rect.bottom + 8 : Math.max(popoverMargin, rect.top - measuredHeight - 8);
+    setPosition({ left, top, width });
+  }, []);
 
-      setPosition({ left, top, width });
-    };
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
 
-    // Runs once to get an initial (assume-below) position so the popover
-    // paints and has a real height to measure, then again on the next frame
-    // once that height is known -- corrects the flip in the same open
-    // gesture rather than visibly jumping after the fact.
-    updatePosition();
-    const raf = requestAnimationFrame(updatePosition);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
 
     return () => {
-      cancelAnimationFrame(raf);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -161,7 +163,15 @@ export function SyncButton({
           iconOnly ? "px-2" : "px-3"
         } ${className ?? ""}`}
         disabled={isLoading || disabled}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          // Computed synchronously before flipping isOpen -- the popover is
+          // always mounted (see below), so its height is already knowable
+          // right now, no need to wait for an effect/paint to measure it.
+          if (!isOpen) {
+            updatePosition();
+          }
+          setIsOpen((prev) => !prev);
+        }}
         type="button"
       >
         {showNudge && !isLoading ? (
@@ -183,33 +193,35 @@ export function SyncButton({
         />
       </button>
 
-      {isOpen ? (
-        <div
-          className="fixed z-40 rounded-md border border-line bg-paper p-1 shadow-soft"
-          ref={popoverRef}
-          role="listbox"
-          aria-label="Sync options"
-          style={{ left: position.left, top: position.top, width: position.width }}
-        >
-          {syncModes.map(({ value, label, subtitle }) => (
-            <button
-              className="flex w-full flex-col items-start gap-0.5 rounded px-2 py-2 text-left transition hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isLoading}
-              key={value}
-              onClick={() => void handleSync(value)}
-              type="button"
-            >
-              <span className="inline-flex items-center gap-1.5 text-sm text-ink">
-                {label}
-                {showNudge && value === "incremental" ? (
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-                ) : null}
-              </span>
-              <span className="text-xs text-muted">{subtitle}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div
+        aria-hidden={!isOpen}
+        aria-label="Sync options"
+        className={`fixed z-40 rounded-md border border-line bg-paper p-1 shadow-soft ${
+          isOpen ? "visible" : "invisible pointer-events-none"
+        }`}
+        ref={popoverRef}
+        role="listbox"
+        style={{ left: position.left, top: position.top, width: position.width }}
+      >
+        {syncModes.map(({ value, label, subtitle }) => (
+          <button
+            className="flex w-full flex-col items-start gap-0.5 rounded px-2 py-2 text-left transition hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isLoading}
+            key={value}
+            onClick={() => void handleSync(value)}
+            tabIndex={isOpen ? 0 : -1}
+            type="button"
+          >
+            <span className="inline-flex items-center gap-1.5 text-sm text-ink">
+              {label}
+              {showNudge && value === "incremental" ? (
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              ) : null}
+            </span>
+            <span className="text-xs text-muted">{subtitle}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
