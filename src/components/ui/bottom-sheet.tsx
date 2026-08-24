@@ -11,6 +11,11 @@ type BottomSheetProps = {
   onClose(): void;
   title: string;
   children: ReactNode;
+  // Optional control rendered in the header, between the title and the
+  // close button (e.g. NotificationBell's "Mark all as read") -- so a
+  // consumer with its own header-level action doesn't need to duplicate
+  // this sheet's title row just to add one.
+  headerAction?: ReactNode;
 };
 
 // Bottom-anchored counterpart to FullscreenDialog -- for menus/content short
@@ -18,7 +23,7 @@ type BottomSheetProps = {
 // below it. Animation plumbing (visible state + rAF-triggered transition +
 // timeout-delayed unmount, body-scroll lock, Escape-to-close) mirrors
 // ManageDrawer, just with the slide axis swapped from X to Y.
-export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({ isOpen, onClose, title, children, headerAction }: BottomSheetProps) {
   const [visible, setVisible] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -72,15 +77,18 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h2 className="text-base font-semibold text-ink">{title}</h2>
-          <button
-            aria-label="Close"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-canvas text-muted transition hover:text-ink"
-            onClick={requestClose}
-            ref={closeButtonRef}
-            type="button"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            {headerAction}
+            <button
+              aria-label="Close"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-canvas text-muted transition hover:text-ink"
+              onClick={requestClose}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-5">
           {children}

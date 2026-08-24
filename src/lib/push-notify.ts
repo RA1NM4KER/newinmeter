@@ -8,6 +8,10 @@ export type PushPayload = {
   title: string;
   body: string;
   url?: string;
+  // Per-type notification tag (see sw.js) so two different simultaneous
+  // alerts don't collapse into one OS notification. Optional: falls back to
+  // the service worker's own default tag when omitted.
+  tag?: string;
 };
 
 let vapidConfigured = false;

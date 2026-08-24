@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   adminSupabaseFetch: vi.fn(),
   adminSupabaseRequest: vi.fn(),
+  adminSupabaseCount: vi.fn(),
   sendPushToUser: vi.fn(),
   getConnectionRowForUser: vi.fn(),
   setAutoSyncEnabled: vi.fn()
@@ -10,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../supabase-rest", () => ({
   adminSupabaseFetch: mocks.adminSupabaseFetch,
-  adminSupabaseRequest: mocks.adminSupabaseRequest
+  adminSupabaseRequest: mocks.adminSupabaseRequest,
+  adminSupabaseCount: mocks.adminSupabaseCount
 }));
 vi.mock("../push-notify", () => ({ sendPushToUser: mocks.sendPushToUser }));
 // Same react cache() shim as connection.test.ts -- this file imports the
@@ -37,10 +39,15 @@ import {
   DATA_DELAYED_AFTER_HOURS,
   evaluateAlertsAfterSync,
   evaluateDataDelayedAlerts,
+  getRecentNotifications,
+  getUnreadNotificationCount,
+  markAllNotificationsRead,
+  markNotificationRead,
   upsertAlertRule,
   validateThreshold
 } from "./alerts";
 import { DemoAccountProtectedError } from "./connection";
+import { formatCurrency } from "../format";
 
 const baseConnectionRow = {
   id: "conn-1",
@@ -411,5 +418,196 @@ describe("evaluateDataDelayedAlerts", () => {
 
     expect(result.notified).toBe(0);
     expect(mocks.sendPushToUser).not.toHaveBeenCalled();
+  });
+});
+
+function routeEventFetch(rules: Array<{ id: string; type: string }>, events: unknown[]) {
+  mocks.adminSupabaseFetch.mockImplementation(async (path: string) => {
+    if (path.includes("/alert_rules")) return rules;
+    if (path.includes("/alert_events")) return events;
+    throw new Error(`unexpected fetch path in test: ${path}`);
+  });
+}
+
+describe("getRecentNotifications", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1", user_id: "user-1" });
+  });
+
+  it("returns an empty list when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+    const result = await getRecentNotifications("user-1");
+    expect(result).toEqual([]);
+    expect(mocks.adminSupabaseFetch).not.toHaveBeenCalled();
+  });
+
+  it("scopes both queries to the resolved connection and passes the limit through", async () => {
+    routeEventFetch([{ id: "rule-1", type: "low_balance" }], []);
+    await getRecentNotifications("user-1", 10);
+
+    const calledPaths = mocks.adminSupabaseFetch.mock.calls.map((call) => call[0] as string);
+    expect(calledPaths.some((p) => p.includes("/alert_rules") && p.includes("connection_id=eq.conn-1"))).toBe(true);
+    expect(
+      calledPaths.some(
+        (p) => p.includes("/alert_events") && p.includes("connection_id=eq.conn-1") && p.includes("limit=10")
+      )
+    ).toBe(true);
+    expect(calledPaths.some((p) => p.includes("order=triggered_at.desc"))).toBe(true);
+  });
+
+  it("includes resolved historical events and reports correct read state", async () => {
+    routeEventFetch(
+      [{ id: "rule-1", type: "low_balance" }],
+      [
+        {
+          id: "event-unread",
+          alert_rule_id: "rule-1",
+          triggered_at: "2026-08-24T01:00:00.000Z",
+          trigger_value: 100,
+          threshold_value: 200,
+          read_at: null
+        },
+        {
+          id: "event-read-and-resolved",
+          alert_rule_id: "rule-1",
+          triggered_at: "2026-08-23T01:00:00.000Z",
+          trigger_value: 250,
+          threshold_value: 200,
+          read_at: "2026-08-23T02:00:00.000Z"
+        }
+      ]
+    );
+
+    const result = await getRecentNotifications("user-1");
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: "event-unread", isRead: false, type: "low_balance" });
+    expect(result[1]).toMatchObject({ id: "event-read-and-resolved", isRead: true });
+    expect(result[1].title).toBe("Low balance");
+  });
+
+  it("uses the event's own snapshotted threshold, not any current rule value", async () => {
+    routeEventFetch(
+      [{ id: "rule-1", type: "daily_spend" }],
+      [
+        {
+          id: "event-1",
+          alert_rule_id: "rule-1",
+          triggered_at: "2026-08-24T01:00:00.000Z",
+          trigger_value: 54.8,
+          threshold_value: 50,
+          read_at: null
+        }
+      ]
+    );
+
+    const [item] = await getRecentNotifications("user-1");
+    // en-ZA currency formatting (formatCurrency) -- "R 50,00" style, not
+    // "R50.00". The point of this test is that it's 50 (the snapshotted
+    // threshold_value), not any different current rule.threshold.
+    expect(item.body).toContain(formatCurrency(50));
+    expect(item.body).toContain(formatCurrency(54.8));
+  });
+});
+
+describe("getUnreadNotificationCount", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 0 when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+    await expect(getUnreadNotificationCount("user-1")).resolves.toBe(0);
+    expect(mocks.adminSupabaseCount).not.toHaveBeenCalled();
+  });
+
+  it("counts only this connection's unread events", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseCount.mockResolvedValue(3);
+
+    await expect(getUnreadNotificationCount("user-1")).resolves.toBe(3);
+    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(
+      expect.stringContaining("connection_id=eq.conn-1")
+    );
+    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("read_at=is.null"));
+  });
+});
+
+describe("markNotificationRead", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseRequest.mockResolvedValue(undefined);
+  });
+
+  it("marks an unread event read, scoped to the resolved connection and only that field", async () => {
+    await markNotificationRead("user-1", "event-1");
+
+    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
+      "PATCH",
+      expect.stringMatching(/id=eq\.event-1.*connection_id=eq\.conn-1.*read_at=is\.null/),
+      { read_at: expect.any(String) },
+      "return=minimal"
+    );
+  });
+
+  it("does not touch any system field (trigger_value, threshold_value, resolved_at, connection_id, alert_rule_id)", async () => {
+    await markNotificationRead("user-1", "event-1");
+    const [, , body] = mocks.adminSupabaseRequest.mock.calls[0];
+    expect(Object.keys(body)).toEqual(["read_at"]);
+  });
+
+  it("is idempotent -- calling it again on an already-read event is a no-op, not an error", async () => {
+    await markNotificationRead("user-1", "event-1");
+    await expect(markNotificationRead("user-1", "event-1")).resolves.toBeUndefined();
+  });
+
+  it("cannot mark another user's event -- ownership always comes from the resolved connection, never the event id", async () => {
+    // "user-1" only ever resolves to conn-1 in this test; the PATCH is
+    // always scoped to that connection_id regardless of which event id is
+    // passed, so an id belonging to another user's connection matches zero
+    // rows server-side rather than this code ever targeting it directly.
+    await markNotificationRead("user-1", "someone-elses-event-id");
+    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
+      "PATCH",
+      expect.stringContaining("connection_id=eq.conn-1"),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it("does nothing when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+    await markNotificationRead("user-1", "event-1");
+    expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("markAllNotificationsRead", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+  });
+
+  it("marks all of this connection's unread events and returns how many", async () => {
+    mocks.adminSupabaseRequest.mockResolvedValue([{ id: "e1" }, { id: "e2" }]);
+
+    await expect(markAllNotificationsRead("user-1")).resolves.toBe(2);
+    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
+      "PATCH",
+      expect.stringMatching(/connection_id=eq\.conn-1.*read_at=is\.null/),
+      { read_at: expect.any(String) },
+      "return=representation"
+    );
+  });
+
+  it("is idempotent -- returns 0 when nothing is unread", async () => {
+    mocks.adminSupabaseRequest.mockResolvedValue([]);
+    await expect(markAllNotificationsRead("user-1")).resolves.toBe(0);
+  });
+
+  it("does nothing when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+    await expect(markAllNotificationsRead("user-1")).resolves.toBe(0);
+    expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
   });
 });

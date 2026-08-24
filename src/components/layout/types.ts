@@ -7,6 +7,7 @@ export type AppShellProps = {
   isActivitiesEnabled?: boolean;
   isLiveMeterEnabled?: boolean;
   isDemo?: boolean;
+  initialUnreadNotificationCount?: number;
 };
 
 export type ThemeChoice = "system" | "light" | "dark";

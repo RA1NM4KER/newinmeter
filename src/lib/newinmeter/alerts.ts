@@ -1,6 +1,6 @@
 import "server-only";
 
-import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
+import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { formatCurrency, formatKwh } from "../format";
 import { sendPushToUser } from "../push-notify";
 import { ALERT_TYPES, FRESH_DATA_ALERT_TYPES, THRESHOLD_BOUNDS, type AlertType } from "./alert-types";
@@ -58,7 +58,7 @@ type AlertRuleRow = {
 
 const RULE_SELECT = "id,connection_id,type,enabled,threshold,updated_at";
 
-function toNumber(value: number | string | null): number | null {
+export function toNumber(value: number | string | null): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -225,9 +225,19 @@ async function markEventNotified(eventId: string): Promise<void> {
   );
 }
 
-type NotifyCopy = { title: string; body: string; url: string; tag: string };
+export type NotifyCopy = { title: string; body: string; url: string; tag: string };
 
-function notifyCopyFor(rule: AlertRuleRow, currentValue: number): NotifyCopy {
+// Narrower than AlertRuleRow -- only what the copy actually depends on.
+// Lets this be reused for a *historical* event's copy (notification
+// centre), where the correct threshold is the one snapshotted on the event
+// at trigger time (alert_events.threshold_value), not the rule's current
+// (possibly since-edited) threshold.
+type NotifyCopyInput = { type: AlertType; threshold: number | string | null };
+
+// Single source of truth for alert-type copy -- both the live evaluator
+// (push, at trigger time) and the notification centre (in-app, any time
+// after) call this, so the two never drift apart.
+export function notifyCopyFor(rule: NotifyCopyInput, currentValue: number): NotifyCopy {
   switch (rule.type) {
     case "low_balance":
       return {
@@ -492,4 +502,159 @@ export async function evaluateDataDelayedAlerts(connections: StaleConnectionForA
   }
 
   return { checked: rules.length, notified };
+}
+
+// ---------------------------------------------------------------------------
+// Notification centre (header bell)
+// ---------------------------------------------------------------------------
+//
+// alert_events is the source of truth -- this reads it, it doesn't create a
+// second notifications table. Every write here (mark one/all read) goes
+// through the same service-role + resolved-connection_id pattern as the
+// rest of this file (see disableFreshDataAlertRules, markAutoSyncSuccess,
+// etc.), not a new grantable Postgres function -- alert_events' RLS stays
+// exactly select-only for authenticated (20260824020000), so its
+// system-generated fields (trigger_value, threshold_value, resolved_at,
+// connection_id, alert_rule_id) remain fully protected from any
+// authenticated write, direct or otherwise. Ownership for every operation
+// below is resolved from the authenticated caller's userId via
+// getConnectionRowForUser -- never from a client-supplied id -- and every
+// write additionally filters by that resolved connection_id, so an event
+// id that doesn't belong to the caller simply matches zero rows rather
+// than ever touching another user's data.
+
+const NOTIFICATION_LIST_LIMIT = 30;
+
+export type NotificationItem = {
+  id: string;
+  type: AlertType;
+  title: string;
+  body: string;
+  url: string;
+  triggeredAt: string;
+  readAt: string | null;
+  isRead: boolean;
+};
+
+type AlertEventRow = {
+  id: string;
+  alert_rule_id: string;
+  triggered_at: string;
+  trigger_value: number | string;
+  threshold_value: number | string | null;
+  read_at: string | null;
+};
+
+// Recent notifications for the header bell -- capped, newest first,
+// includes resolved historical events (resolution isn't a UX concept here,
+// only read/unread is -- see the module comment on alert_events staying the
+// source of truth). Two small admin-scoped queries (events + this
+// connection's handful of rules) rather than a PostgREST embedded select --
+// this codebase has no existing embedded-select precedent, and the rule
+// list per connection is at most 4 rows, so the extra round trip is
+// negligible and keeps the query shape consistent with every other read in
+// this file.
+export async function getRecentNotifications(
+  userId: string,
+  limit: number = NOTIFICATION_LIST_LIMIT
+): Promise<NotificationItem[]> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return [];
+  }
+
+  const [rules, events] = await Promise.all([
+    adminSupabaseFetch<Array<{ id: string; type: AlertType }>>(
+      `/alert_rules?select=id,type&connection_id=eq.${encodeURIComponent(connectionRow.id)}`
+    ),
+    adminSupabaseFetch<AlertEventRow[]>(
+      `/alert_events?select=id,alert_rule_id,triggered_at,trigger_value,threshold_value,read_at&connection_id=eq.${encodeURIComponent(connectionRow.id)}&order=triggered_at.desc&limit=${limit}`
+    )
+  ]);
+
+  const typeByRuleId = new Map(rules.map((rule) => [rule.id, rule.type]));
+
+  // flatMap rather than map+filter: skips an event whose rule no longer
+  // resolves (shouldn't happen -- alert_rule_id cascades on delete -- but
+  // there's nothing meaningful to render without knowing the type, so drop
+  // it rather than guess).
+  return events.flatMap((event) => {
+    const type = typeByRuleId.get(event.alert_rule_id);
+    if (!type) {
+      return [];
+    }
+
+    const currentValue = toNumber(event.trigger_value) ?? 0;
+    // threshold_value is the snapshot from when THIS event triggered, not
+    // the rule's current threshold -- see notifyCopyFor's own comment on
+    // why that distinction matters for historical accuracy.
+    const copy = notifyCopyFor({ type, threshold: event.threshold_value }, currentValue);
+
+    return [
+      {
+        id: event.id,
+        type,
+        title: copy.title,
+        body: copy.body,
+        url: copy.url,
+        triggeredAt: event.triggered_at,
+        readAt: event.read_at,
+        isRead: event.read_at !== null
+      }
+    ];
+  });
+}
+
+// Unread count for the bell badge -- deliberately independent of
+// resolved_at (a resolved historical event can still be unread; those are
+// different concepts, see the module comment). Exact count via PostgREST's
+// Content-Range header, no rows fetched.
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return 0;
+  }
+
+  return adminSupabaseCount(
+    `/alert_events?connection_id=eq.${encodeURIComponent(connectionRow.id)}&read_at=is.null`
+  );
+}
+
+// Marks one notification read. The read_at=is.null filter makes this
+// naturally idempotent (re-marking an already-read event matches zero rows,
+// not an error) and the connection_id filter makes it ownership-safe (an
+// event id belonging to another user's connection also matches zero rows --
+// there is no separate existence check that could leak whether the id
+// exists at all).
+export async function markNotificationRead(userId: string, eventId: string): Promise<void> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return;
+  }
+
+  await adminSupabaseRequest(
+    "PATCH",
+    `/alert_events?id=eq.${encodeURIComponent(eventId)}&connection_id=eq.${encodeURIComponent(connectionRow.id)}&read_at=is.null`,
+    { read_at: new Date().toISOString() },
+    "return=minimal"
+  );
+}
+
+// Marks every currently-unread notification read for this user's own
+// connection. Returns how many were actually marked, so the caller can
+// report/verify without a second round trip.
+export async function markAllNotificationsRead(userId: string): Promise<number> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return 0;
+  }
+
+  const rows = await adminSupabaseRequest<Array<{ id: string }>>(
+    "PATCH",
+    `/alert_events?connection_id=eq.${encodeURIComponent(connectionRow.id)}&read_at=is.null`,
+    { read_at: new Date().toISOString() },
+    "return=representation"
+  );
+
+  return rows.length;
 }

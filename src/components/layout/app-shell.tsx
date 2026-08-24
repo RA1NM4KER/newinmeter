@@ -8,6 +8,8 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { BottomNav } from "./bottom-nav";
+import { NotificationBell } from "./notification-bell";
+import { NotificationProvider } from "./notification-provider";
 import { SidebarNav } from "./sidebar-nav";
 import { Wordmark } from "./wordmark";
 import type { AppShellProps } from "./types";
@@ -94,7 +96,8 @@ export function AppShell({
   isAdmin = false,
   isActivitiesEnabled = false,
   isLiveMeterEnabled = false,
-  isDemo = false
+  isDemo = false,
+  initialUnreadNotificationCount = 0
 }: AppShellProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isActivitiesTableTab, setIsActivitiesTableTab] = useState(false);
@@ -171,119 +174,32 @@ export function AppShell({
   };
 
   return (
-    <div className="flex h-[100svh] overflow-hidden">
-      {pathname === "/activities" ? (
-        <Suspense fallback={null}>
-          <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
-        </Suspense>
-      ) : null}
-      <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex">
-        <div className="flex h-16 shrink-0 items-center px-6">
-          <Link href="/">
-            <Wordmark className="text-2xl" textClassName="text-ink" accentClassName="text-accent" />
-          </Link>
-        </div>
-        <div className="min-h-0 flex-1 px-3">
-          <SidebarNav
-            isAdmin={isAdmin}
-            isActivitiesEnabled={isActivitiesEnabled}
-            isLiveMeterEnabled={isLiveMeterEnabled}
-          />
-        </div>
-        <div className="shrink-0 px-3 pb-3">
-          <MenuLink href="/install" icon={Smartphone} label="Install app" />
-          <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
-        </div>
-        <div className="shrink-0 border-t border-line px-4 py-4">
-          {isDemo ? (
-            <div className="mb-2">
-              <DemoBadge />
-            </div>
-          ) : null}
-          <div className="flex items-center gap-2">
-            {userEmail ? <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p> : null}
-            <SignOutForm />
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
-              Privacy
+    <NotificationProvider initialUnreadCount={initialUnreadNotificationCount}>
+      <div className="flex h-[100svh] overflow-hidden">
+        {pathname === "/activities" ? (
+          <Suspense fallback={null}>
+            <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
+          </Suspense>
+        ) : null}
+        <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex">
+          <div className="flex h-16 shrink-0 items-center justify-between px-6">
+            <Link href="/">
+              <Wordmark className="text-2xl" textClassName="text-ink" accentClassName="text-accent" />
             </Link>
-            <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
-              Terms
-            </Link>
-            <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
-              Feedback
-            </a>
+            <NotificationBell />
           </div>
-        </div>
-      </aside>
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header
-          className={`fixed inset-x-0 top-0 z-20 flex h-14 items-center border-b border-line bg-canvas px-4 transition-transform duration-200 motion-reduce:transition-none lg:hidden ${
-            isHeaderHidden ? "-translate-y-full" : "translate-y-0"
-          }`}
-        >
-          <Link href="/">
-            <Wordmark className="text-base" textClassName="text-ink" accentClassName="text-accent" />
-          </Link>
-        </header>
-
-        {/* The shell itself never scrolls -- the sidebar must stay put.
-            Regular pages scroll their own content here; lockViewport pages
-            (data table, admin users table, activities table tab) instead
-            delegate scrolling to a nested region so their own
-            header/toolbar/footer can stay pinned too. The mobile header is
-            `fixed` (out of flow, so it can roll away on scroll without
-            leaving a gap), so pt-14 recreates the space it used to occupy
-            in-flow -- dropped again at lg since the header doesn't render
-            there at all. */}
-        <main
-          className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
-            lockViewport
-              ? isFullBleedTable
-                ? // /data and activities' Table tab go full-bleed/edge-to-edge
-                  // below lg (/data has its own internal footer row for
-                  // bottom padding there; activities' table has none by
-                  // design, running flush to the bottom nav). At lg+ each is
-                  // back to a normal rounded, bordered, margined card -- same
-                  // "floating" treatment as every other card on the page --
-                  // so it wants the same
-                  // bottom breathing room those get, restored via lg:pb-5.
-                  "min-h-0 overflow-hidden lg:pb-5"
-                : // Admin's table stays a margined card at every width, so it
-                  // keeps the usual pb-5 throughout.
-                  "min-h-0 overflow-hidden pb-5"
-              : "overflow-y-auto pb-5"
-          }`}
-          onScroll={handleMainScroll}
-          ref={mainRef}
-        >
-          {children}
-        </main>
-
-        <BottomNav
-          isAdmin={isAdmin}
-          isActivitiesEnabled={isActivitiesEnabled}
-          isLiveMeterEnabled={isLiveMeterEnabled}
-          onOpenMenu={() => setIsNavOpen(true)}
-        />
-      </div>
-
-      <BottomSheet isOpen={isNavOpen} onClose={() => setIsNavOpen(false)} title="Menu">
-        <div className="flex flex-col gap-1">
-          {isAdmin ? (
-            <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
-          ) : null}
-          <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
-          <MenuLink
-            external
-            href="https://ko-fi.com/kefasaleck"
-            icon={Heart}
-            label="Buy me a coffee"
-            onClick={() => setIsNavOpen(false)}
-          />
-          <div className="border-t border-line pt-4">
+          <div className="min-h-0 flex-1 px-3">
+            <SidebarNav
+              isAdmin={isAdmin}
+              isActivitiesEnabled={isActivitiesEnabled}
+              isLiveMeterEnabled={isLiveMeterEnabled}
+            />
+          </div>
+          <div className="shrink-0 px-3 pb-3">
+            <MenuLink href="/install" icon={Smartphone} label="Install app" />
+            <MenuLink external href="https://ko-fi.com/kefasaleck" icon={Heart} label="Buy me a coffee" />
+          </div>
+          <div className="shrink-0 border-t border-line px-4 py-4">
             {isDemo ? (
               <div className="mb-2">
                 <DemoBadge />
@@ -305,8 +221,99 @@ export function AppShell({
               </a>
             </div>
           </div>
+        </aside>
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header
+            className={`fixed inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-line bg-canvas px-4 transition-transform duration-200 motion-reduce:transition-none lg:hidden ${
+              isHeaderHidden ? "-translate-y-full" : "translate-y-0"
+            }`}
+          >
+            <Link href="/">
+              <Wordmark className="text-base" textClassName="text-ink" accentClassName="text-accent" />
+            </Link>
+            <NotificationBell />
+          </header>
+
+          {/* The shell itself never scrolls -- the sidebar must stay put.
+            Regular pages scroll their own content here; lockViewport pages
+            (data table, admin users table, activities table tab) instead
+            delegate scrolling to a nested region so their own
+            header/toolbar/footer can stay pinned too. The mobile header is
+            `fixed` (out of flow, so it can roll away on scroll without
+            leaving a gap), so pt-14 recreates the space it used to occupy
+            in-flow -- dropped again at lg since the header doesn't render
+            there at all. */}
+          <main
+            className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-3 pt-14 sm:px-6 lg:px-8 lg:pt-0 ${
+              lockViewport
+                ? isFullBleedTable
+                  ? // /data and activities' Table tab go full-bleed/edge-to-edge
+                    // below lg (/data has its own internal footer row for
+                    // bottom padding there; activities' table has none by
+                    // design, running flush to the bottom nav). At lg+ each is
+                    // back to a normal rounded, bordered, margined card -- same
+                    // "floating" treatment as every other card on the page --
+                    // so it wants the same
+                    // bottom breathing room those get, restored via lg:pb-5.
+                    "min-h-0 overflow-hidden lg:pb-5"
+                  : // Admin's table stays a margined card at every width, so it
+                    // keeps the usual pb-5 throughout.
+                    "min-h-0 overflow-hidden pb-5"
+                : "overflow-y-auto pb-5"
+            }`}
+            onScroll={handleMainScroll}
+            ref={mainRef}
+          >
+            {children}
+          </main>
+
+          <BottomNav
+            isAdmin={isAdmin}
+            isActivitiesEnabled={isActivitiesEnabled}
+            isLiveMeterEnabled={isLiveMeterEnabled}
+            onOpenMenu={() => setIsNavOpen(true)}
+          />
         </div>
-      </BottomSheet>
-    </div>
+
+        <BottomSheet isOpen={isNavOpen} onClose={() => setIsNavOpen(false)} title="Menu">
+          <div className="flex flex-col gap-1">
+            {isAdmin ? (
+              <MenuLink href="/admin" icon={ShieldCheck} label="Admin" onClick={() => setIsNavOpen(false)} />
+            ) : null}
+            <MenuLink href="/install" icon={Smartphone} label="Install app" onClick={() => setIsNavOpen(false)} />
+            <MenuLink
+              external
+              href="https://ko-fi.com/kefasaleck"
+              icon={Heart}
+              label="Buy me a coffee"
+              onClick={() => setIsNavOpen(false)}
+            />
+            <div className="border-t border-line pt-4">
+              {isDemo ? (
+                <div className="mb-2">
+                  <DemoBadge />
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                {userEmail ? <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p> : null}
+                <SignOutForm />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
+                  Privacy
+                </Link>
+                <Link className="text-xs text-muted transition hover:text-ink" href="/terms">
+                  Terms
+                </Link>
+                <a className="text-xs text-muted transition hover:text-ink" href={SUPPORT_MAILTO}>
+                  Feedback
+                </a>
+              </div>
+            </div>
+          </div>
+        </BottomSheet>
+      </div>
+    </NotificationProvider>
   );
 }
