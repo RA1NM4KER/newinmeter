@@ -9,14 +9,23 @@ import { buildNavItems, type NavPermissions } from "./nav-items";
 
 type BottomNavProps = NavPermissions & {
   onOpenMenu: () => void;
+  // True on regular pages, where AppShell now lets the document itself
+  // scroll (so iOS Safari's toolbar can collapse) instead of containing
+  // scroll inside a fixed-height flex column -- this bar can no longer
+  // rely on being sized by that column and must pin itself to the viewport
+  // directly. lockViewport pages (/data, /admin, Activities table) keep
+  // the original fixed-height-column architecture unchanged, so they pass
+  // false here and this stays a plain flex sibling exactly as before.
+  overlay?: boolean;
 };
 
-// Lives as a shrink-0 flex sibling of <main> in AppShell, not `fixed` --
-// the shell's root is already a fixed-height (100svh) flex column, so this
-// just claims its own row and <main> shrinks to fit, no manual bottom
-// padding needed on any page (including the lockViewport ones that manage
-// their own internal scroll region).
-export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, onOpenMenu }: BottomNavProps) {
+// On lockViewport pages: a shrink-0 flex sibling of <main> inside the
+// shell's fixed-height (100svh) flex column, so it just claims its own row
+// and <main> shrinks to fit -- no manual bottom padding needed there. On
+// regular (document-scrolling) pages: a fixed viewport overlay instead,
+// since nothing in that flow is a fixed-height container anymore -- see
+// AppShell's own main-padding comment for the matching bottom clearance.
+export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, onOpenMenu, overlay = false }: BottomNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { from, to } = parseDateRangeQuery(new URLSearchParams(searchParams.toString()));
@@ -33,7 +42,11 @@ export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, on
   const items = buildNavItems({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled }).filter((item) => item.bottomNav);
 
   return (
-    <nav className="flex shrink-0 items-stretch border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav
+      className={`flex items-stretch border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden ${
+        overlay ? "fixed inset-x-0 bottom-0 z-20" : "shrink-0"
+      }`}
+    >
       {items.map((item) => {
         const href = item.preserveDateRange ? queryHref(item.href, dateParams) : item.href;
         const isActive = pathname === item.href;

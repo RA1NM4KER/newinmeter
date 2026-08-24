@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Download, MonitorDown, Share, SquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Wordmark } from "@/components/layout/wordmark";
+import { TopBar } from "@/components/layout/top-bar";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { usePwaInstall } from "./pwa-install-provider";
 import { IosInstallSteps } from "./install-steps";
@@ -59,16 +59,6 @@ function ManualPlatformInstructions() {
   );
 }
 
-function PageHeader() {
-  return (
-    <header className="sticky top-0 z-20 border-b border-line bg-canvas/90 px-6 py-5 backdrop-blur">
-      <Link href="/">
-        <Wordmark className="text-xl" textClassName="text-ink" accentClassName="text-accent" />
-      </Link>
-    </header>
-  );
-}
-
 function PageFooter() {
   return (
     <div className="mt-10 flex items-center gap-3 border-t border-line pt-6 text-sm text-muted">
@@ -89,7 +79,7 @@ export function InstallPageClient() {
   if (ready && isStandalone) {
     return (
       <div className="min-h-screen bg-canvas">
-        <PageHeader />
+        <TopBar className="sticky top-0 z-20" />
         <main className="mx-auto max-w-2xl px-6 py-12">
           <h1 className="text-3xl font-semibold tracking-tight text-ink">NewinMeter is already installed</h1>
           <p className="mt-2 text-sm text-muted">
@@ -107,7 +97,7 @@ export function InstallPageClient() {
   if (ready && isIos) {
     return (
       <div className="min-h-screen bg-canvas">
-        <PageHeader />
+        <TopBar className="sticky top-0 z-20" />
         <main className="mx-auto max-w-2xl px-6 py-12">
           <h1 className="text-3xl font-semibold tracking-tight text-ink">Get NewinMeter alerts on your phone</h1>
           <p className="mt-2 text-sm text-muted">
@@ -127,7 +117,7 @@ export function InstallPageClient() {
   if (ready && canPromptInstall) {
     return (
       <div className="min-h-screen bg-canvas">
-        <PageHeader />
+        <TopBar className="sticky top-0 z-20" />
         <main className="mx-auto max-w-2xl px-6 py-12">
           <h1 className="text-3xl font-semibold tracking-tight text-ink">Install NewinMeter</h1>
           <p className="mt-2 text-sm text-muted">
@@ -144,7 +134,7 @@ export function InstallPageClient() {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <PageHeader />
+      <TopBar className="sticky top-0 z-20" />
       <main className="mx-auto max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-semibold tracking-tight text-ink">Install NewinMeter</h1>
         <p className="mt-2 text-sm text-muted">
