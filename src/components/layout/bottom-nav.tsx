@@ -20,7 +20,7 @@ type BottomNavProps = NavPermissions & {
 };
 
 // On lockViewport pages: a shrink-0 flex sibling of <main> inside the
-// shell's fixed-height (100svh) flex column, so it just claims its own row
+// shell's fixed-height (100dvh) flex column, so it just claims its own row
 // and <main> shrinks to fit -- no manual bottom padding needed there. On
 // regular (document-scrolling) pages: a fixed viewport overlay instead,
 // since nothing in that flow is a fixed-height container anymore -- see

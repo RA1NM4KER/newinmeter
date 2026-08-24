@@ -215,18 +215,32 @@ export function AppShell({
       <PushNotificationProvider>
         {/* lockViewport pages keep the original fixed-height, internally-
         scrolling shell (nothing here may scroll except the nested region
-        those pages manage themselves). Regular pages instead let the
-        document itself grow/scroll -- min-h-[100svh] (not a fixed height)
-        so short pages still fill the viewport, but without overflow-hidden
-        clipping the document's own scroll, which is what lets iOS Safari's
-        toolbar/address bar collapse on scroll like any normal page. */}
-        <div className={`flex ${lockViewport ? "h-[100svh] overflow-hidden" : "min-h-[100svh]"}`}>
+        those pages manage themselves) -- sized with 100dvh (the *actual*
+        current viewport), not 100svh (the smallest the viewport could get
+        if mobile browser chrome fully expanded). svh is right for content
+        that has to keep working while chrome is showing, but this shell has
+        no chrome to reserve space for once it's a standalone/installed PWA
+        -- and on iOS specifically, svh can read stale/undersized right
+        after first launching a freshly installed PWA (before the OS has
+        settled on the real fullscreen viewport), leaving a phantom gap
+        below BottomNav that only clears on a full relaunch. dvh tracks the
+        real visible viewport instead, so it's correct immediately.
+        Regular pages instead let the document itself grow/scroll --
+        min-h-[100svh] (not a fixed height, and deliberately still svh, not
+        dvh: for a *min-height* on a page real users scroll, svh is the
+        conservative floor that stays satisfied even while chrome is
+        expanded, whereas dvh here would flicker the page shorter every
+        time chrome re-expands mid-scroll) so short pages still fill the
+        viewport, but without overflow-hidden clipping the document's own
+        scroll, which is what lets iOS Safari's toolbar/address bar
+        collapse on scroll like any normal page. */}
+        <div className={`flex ${lockViewport ? "h-[100dvh] overflow-hidden" : "min-h-[100svh]"}`}>
           {pathname === "/activities" ? (
             <Suspense fallback={null}>
               <ActivitiesTableTabDetector onChange={setIsActivitiesTableTab} />
             </Suspense>
           ) : null}
-          <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-[100svh] lg:self-start">
+          <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:self-start">
             <div className="flex h-16 shrink-0 items-center justify-between px-6">
               <Link href="/">
                 <Wordmark className="text-2xl" textClassName="text-ink" accentClassName="text-accent" />
