@@ -30,8 +30,17 @@ function badgeLabel(count: number): string {
 export function NotificationBell() {
   const router = useRouter();
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const { unreadCount, notifications, listLoading, markingAllRead, isDesktop, ensureLoaded, markOneRead, markAllRead } =
-    useNotificationCentre();
+  const {
+    unreadCount,
+    notifications,
+    listLoading,
+    markingAllRead,
+    isDesktop,
+    hasEnabledAlerts,
+    ensureLoaded,
+    markOneRead,
+    markAllRead
+  } = useNotificationCentre();
 
   const [isOpen, setIsOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -108,6 +117,11 @@ export function NotificationBell() {
     router.push(item.url);
   }
 
+  function handleGoToSettings() {
+    setIsOpen(false);
+    router.push("/settings?tab=alerts");
+  }
+
   const accessibleLabel = unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications";
 
   const bellButton = (
@@ -145,9 +159,11 @@ export function NotificationBell() {
               style={{ top: popoverPosition.top, left: popoverPosition.left, width: POPOVER_WIDTH }}
             >
               <NotificationList
+                hasEnabledAlerts={hasEnabledAlerts}
                 loading={listLoading}
                 markingAllRead={markingAllRead}
                 notifications={notifications}
+                onGoToSettings={handleGoToSettings}
                 onItemClick={(item) => void handleItemClick(item)}
                 onMarkAllRead={() => void markAllRead()}
               />
@@ -166,9 +182,11 @@ export function NotificationBell() {
           title="Notifications"
         >
           <NotificationList
+            hasEnabledAlerts={hasEnabledAlerts}
             loading={listLoading}
             markingAllRead={markingAllRead}
             notifications={notifications}
+            onGoToSettings={handleGoToSettings}
             onItemClick={(item) => void handleItemClick(item)}
             onMarkAllRead={() => void markAllRead()}
             showHeader={false}

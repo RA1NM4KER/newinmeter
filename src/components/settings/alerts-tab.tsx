@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BellOff } from "lucide-react";
 import { SettingsGroup } from "@/components/ui/settings";
+import { formatCurrency } from "@/lib/format";
 import { DEFAULT_THRESHOLDS, type AlertType } from "@/lib/newinmeter/alert-types";
 import type { AlertRule } from "@/lib/newinmeter/alerts";
 import { AlertRuleRow } from "./alert-rule-row";
@@ -12,6 +13,11 @@ type AlertsTabProps = {
   enabledByType: Partial<Record<AlertType, boolean>>;
   autoSyncEnabled: boolean;
   isDemo: boolean;
+  // Server-fetched, display-only -- lets the low_balance row show "Your
+  // balance is currently RX" next to the threshold input instead of asking
+  // for a number with no reference point. Null when unavailable (no
+  // connection yet, fetch failed) -- row just omits the hint then.
+  latestBalance: number | null;
   onEnabledChange: (type: AlertType, enabled: boolean) => void;
   onAutoSyncEnabledChange: (enabled: boolean) => void;
 };
@@ -29,6 +35,7 @@ export function AlertsTab({
   enabledByType,
   autoSyncEnabled,
   isDemo,
+  latestBalance,
   onEnabledChange,
   onAutoSyncEnabledChange
 }: AlertsTabProps) {
@@ -70,6 +77,7 @@ export function AlertsTab({
           enabled={enabledByType.low_balance ?? false}
           autoSyncEnabled={autoSyncEnabled}
           isDemo={isDemo}
+          helperText={latestBalance !== null ? `Your balance is currently ${formatCurrency(latestBalance)}.` : undefined}
           onEnabledChange={onEnabledChange}
           onAutoSyncEnabledChange={onAutoSyncEnabledChange}
         />

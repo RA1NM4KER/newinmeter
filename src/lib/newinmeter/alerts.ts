@@ -433,6 +433,22 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
   }
 }
 
+// Settings' low_balance row shows this next to the threshold input ("Your
+// balance is currently RX") so setting a threshold isn't a guess -- same
+// dashboard_summary.latest_balance read evaluateAlertsAfterSync already
+// does, just exposed for display rather than comparison. Returns null on
+// any failure (no connection, no summary row yet) -- this is a helpful
+// hint, never something Settings should fail to render over.
+export async function getLatestBalanceForUser(userId: string): Promise<number | null> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) return null;
+
+  const [summaryRow] = await adminSupabaseFetch<Array<{ latest_balance: number | string | null }>>(
+    `/dashboard_summary?select=latest_balance&connection_id=eq.${encodeURIComponent(connectionRow.id)}&limit=1`
+  );
+  return toNumber(summaryRow?.latest_balance ?? null);
+}
+
 type StaleConnectionForAlerts = {
   connectionId: string;
   userId: string;
@@ -603,6 +619,23 @@ export async function getRecentNotifications(
       }
     ];
   });
+}
+
+// Distinguishes "nothing has happened yet" from "nothing is even being
+// watched" for the notification centre's empty state -- an empty
+// alert_events list means something different to a user with zero enabled
+// alert_rules (point them at Settings) than to one whose alerts just
+// haven't fired (nothing to do but wait).
+export async function hasAnyEnabledAlertRule(userId: string): Promise<boolean> {
+  const connectionRow = await getConnectionRowForUser(userId);
+  if (!connectionRow) {
+    return false;
+  }
+
+  const count = await adminSupabaseCount(
+    `/alert_rules?connection_id=eq.${encodeURIComponent(connectionRow.id)}&enabled=eq.true`
+  );
+  return count > 0;
 }
 
 // Unread count for the bell badge -- deliberately independent of

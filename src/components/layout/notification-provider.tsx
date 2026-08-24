@@ -9,6 +9,10 @@ type NotificationCentreState = {
   listLoading: boolean;
   markingAllRead: boolean;
   isDesktop: boolean;
+  // Null until the first list load resolves -- distinguishes "don't know
+  // yet" from "confirmed zero", so the empty state doesn't flash the wrong
+  // copy before the fetch completes.
+  hasEnabledAlerts: boolean | null;
   // Fetches the list once per app session (first time any trigger -- desktop
   // or mobile -- opens the centre); later opens reuse this same state
   // instead of refetching, and mutations below patch it in place.
@@ -57,6 +61,7 @@ export function NotificationProvider({
   const [listLoading, setListLoading] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [hasEnabledAlerts, setHasEnabledAlerts] = useState<boolean | null>(null);
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false);
 
@@ -84,11 +89,12 @@ export function NotificationProvider({
     setListLoading(true);
     fetch("/api/notifications")
       .then((response) => (response.ok ? response.json() : null))
-      .then((body: { notifications?: NotificationItem[] } | null) => {
+      .then((body: { notifications?: NotificationItem[]; hasEnabledAlerts?: boolean } | null) => {
         if (!body) return;
         const list = body.notifications ?? [];
         setNotifications(list);
         setUnreadCount(list.filter((item) => !item.isRead).length);
+        setHasEnabledAlerts(body.hasEnabledAlerts ?? null);
         hasLoadedRef.current = true;
       })
       .finally(() => {
@@ -147,11 +153,22 @@ export function NotificationProvider({
       listLoading,
       markingAllRead,
       isDesktop,
+      hasEnabledAlerts,
       ensureLoaded,
       markOneRead,
       markAllRead
     }),
-    [unreadCount, notifications, listLoading, markingAllRead, isDesktop, ensureLoaded, markOneRead, markAllRead]
+    [
+      unreadCount,
+      notifications,
+      listLoading,
+      markingAllRead,
+      isDesktop,
+      hasEnabledAlerts,
+      ensureLoaded,
+      markOneRead,
+      markAllRead
+    ]
   );
 
   return <NotificationCentreContext.Provider value={value}>{children}</NotificationCentreContext.Provider>;

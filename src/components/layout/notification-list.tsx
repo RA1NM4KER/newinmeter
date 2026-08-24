@@ -14,6 +14,11 @@ type NotificationListProps = {
   // mobile BottomSheet does, via its headerAction slot) -- avoids rendering
   // "Notifications" / "Mark all as read" twice.
   showHeader?: boolean;
+  // null while the first load is still in flight -- distinct from `false`
+  // so the empty state doesn't flash "all caught up" then swap to the
+  // Settings prompt a moment later.
+  hasEnabledAlerts?: boolean | null;
+  onGoToSettings?: () => void;
 };
 
 // Only shown when there's something to mark -- "Mark all as read" has no
@@ -53,7 +58,9 @@ export function NotificationList({
   markingAllRead,
   onItemClick,
   onMarkAllRead,
-  showHeader = true
+  showHeader = true,
+  hasEnabledAlerts = null,
+  onGoToSettings
 }: NotificationListProps) {
   const unreadCount = notifications.filter((item) => !item.isRead).length;
 
@@ -69,6 +76,23 @@ export function NotificationList({
       <div className={`min-h-0 flex-1 overflow-auto ${showHeader ? "border-t border-line" : ""}`}>
         {loading ? (
           <div className="px-4 py-8 text-center text-sm text-muted">Loading…</div>
+        ) : notifications.length === 0 && hasEnabledAlerts === false ? (
+          // No alert_events AND nothing is even enabled to produce one --
+          // different from "configured, just hasn't fired" (below), so this
+          // points at Settings instead of implying anything is being
+          // watched.
+          <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+            <BellRing aria-hidden="true" className="h-5 w-5 text-muted/60" />
+            <p className="text-sm font-medium text-ink">No alerts set up yet.</p>
+            <p className="text-xs text-muted">Turn one on to start getting notified here.</p>
+            <button
+              className="mt-2 rounded text-[0.8125rem] font-medium text-accent outline-none transition hover:text-ink"
+              onClick={onGoToSettings}
+              type="button"
+            >
+              Set up an alert
+            </button>
+          </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <BellRing aria-hidden="true" className="h-5 w-5 text-muted/60" />

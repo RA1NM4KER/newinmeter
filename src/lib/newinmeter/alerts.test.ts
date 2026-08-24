@@ -41,6 +41,7 @@ import {
   evaluateDataDelayedAlerts,
   getRecentNotifications,
   getUnreadNotificationCount,
+  hasAnyEnabledAlertRule,
   markAllNotificationsRead,
   markNotificationRead,
   upsertAlertRule,
@@ -529,6 +530,32 @@ describe("getUnreadNotificationCount", () => {
       expect.stringContaining("connection_id=eq.conn-1")
     );
     expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("read_at=is.null"));
+  });
+});
+
+describe("hasAnyEnabledAlertRule", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns false when the user has no connection", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(null);
+    await expect(hasAnyEnabledAlertRule("user-1")).resolves.toBe(false);
+    expect(mocks.adminSupabaseCount).not.toHaveBeenCalled();
+  });
+
+  it("returns false when the connection has zero enabled rules", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseCount.mockResolvedValue(0);
+
+    await expect(hasAnyEnabledAlertRule("user-1")).resolves.toBe(false);
+    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("connection_id=eq.conn-1"));
+    expect(mocks.adminSupabaseCount).toHaveBeenCalledWith(expect.stringContaining("enabled=eq.true"));
+  });
+
+  it("returns true when at least one rule is enabled", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue({ id: "conn-1" });
+    mocks.adminSupabaseCount.mockResolvedValue(2);
+
+    await expect(hasAnyEnabledAlertRule("user-1")).resolves.toBe(true);
   });
 });
 

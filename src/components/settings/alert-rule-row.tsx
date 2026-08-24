@@ -14,6 +14,9 @@ type AlertRuleRowProps = {
   unit: "currency" | "kwh" | null;
   defaultThreshold: number | null;
   initialThreshold: number | null;
+  // Optional reference point shown under the threshold input (e.g. "Your
+  // balance is currently R143.41.") -- so setting a number isn't a guess.
+  helperText?: string;
   // Controlled from the parent (SettingsPageClient) -- the single source of
   // truth for "is this alert on", since ConnectionCard's auto-sync-off flow
   // needs to be able to see and react to it (the warning list) without a
@@ -37,6 +40,7 @@ export function AlertRuleRow({
   unit,
   defaultThreshold,
   initialThreshold,
+  helperText,
   enabled,
   autoSyncEnabled,
   isDemo,
@@ -51,8 +55,17 @@ export function AlertRuleRow({
   const needsAutoSync = unit !== null;
 
   async function save(nextEnabled: boolean, nextThreshold: number, alsoEnableAutoSync: boolean) {
+    const previousEnabled = enabled;
+
     setBusy(true);
     setError(null);
+    // Optimistic: flip the toggle immediately rather than waiting on the
+    // round trip -- previously the switch only moved once the network call
+    // resolved, which on a slow connection reads as "stuck"/unresponsive.
+    // Reverted below if the save doesn't actually succeed. A no-op for the
+    // threshold-blur caller (nextEnabled === enabled already there).
+    onEnabledChange(type, nextEnabled);
+
     try {
       const response = await fetch(`/api/alerts/${type}`, {
         method: "POST",
@@ -66,8 +79,15 @@ export function AlertRuleRow({
 
       const body = await response.json().catch(() => null);
 
-      if (!response.ok) {
+      // `body` can be null even when response.ok -- a truncated/aborted
+      // response body (flaky connection) still resolves the fetch with a
+      // 2xx status but fails to parse. Treat a missing rule the same as a
+      // failed save rather than crashing on `body.rule.threshold` below,
+      // which previously masked an actually-successful server-side write
+      // behind a generic "Couldn't save this alert." with no toggle revert.
+      if (!response.ok || !body?.rule) {
         setError(body?.message || "Couldn't save this alert.");
+        onEnabledChange(type, previousEnabled);
         return;
       }
 
@@ -80,6 +100,7 @@ export function AlertRuleRow({
       }
     } catch {
       setError("Couldn't save this alert.");
+      onEnabledChange(type, previousEnabled);
     } finally {
       setBusy(false);
     }
@@ -143,6 +164,8 @@ export function AlertRuleRow({
           {unit === "kwh" ? <span className="text-sm text-muted">kWh</span> : null}
         </div>
       ) : null}
+
+      {enabled && helperText ? <p className="mt-2 text-[0.8125rem] text-muted">{helperText}</p> : null}
 
       {error ? <p className="mt-2 text-[0.8125rem] text-red-600">{error}</p> : null}
 

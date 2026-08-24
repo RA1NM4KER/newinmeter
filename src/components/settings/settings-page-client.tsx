@@ -38,6 +38,7 @@ type SettingsPageClientProps = {
   avatarInitial: string;
   connection: ConnectionProps;
   alertRules: AlertRule[];
+  latestBalance: number | null;
 };
 
 // All four tab panels are mounted at once, toggled with a CSS class rather
@@ -48,7 +49,13 @@ type SettingsPageClientProps = {
 // gymnastics) while still keeping ConnectionCard and AlertsTab able to affect
 // each other's already-mounted state directly through this component's own
 // lifted autoSyncEnabled/alertEnabledByType state.
-export function SettingsPageClient({ userEmail, avatarInitial, connection, alertRules }: SettingsPageClientProps) {
+export function SettingsPageClient({
+  userEmail,
+  avatarInitial,
+  connection,
+  alertRules,
+  latestBalance
+}: SettingsPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -161,6 +168,7 @@ export function SettingsPageClient({ userEmail, avatarInitial, connection, alert
           enabledByType={alertEnabledByType}
           autoSyncEnabled={autoSyncEnabled}
           isDemo={connection.isDemo}
+          latestBalance={latestBalance}
           onEnabledChange={handleAlertEnabledChange}
           onAutoSyncEnabledChange={handleAutoSyncEnabledChange}
         />

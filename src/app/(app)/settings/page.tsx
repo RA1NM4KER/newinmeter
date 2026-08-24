@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { getAlertRulesForUser } from "@/lib/newinmeter/alerts";
+import { getAlertRulesForUser, getLatestBalanceForUser } from "@/lib/newinmeter/alerts";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const [connection, alertRules] = await Promise.all([
+  const [connection, alertRules, latestBalance] = await Promise.all([
     getConnectionForUser(session.userId),
     // Alert rules are a genuinely optional part of this page -- General,
     // Data & Sync, and Account all render fine with none. Falling back to
@@ -26,6 +26,12 @@ export default async function SettingsPage() {
     getAlertRulesForUser(session.userId).catch((error) => {
       console.error("newinmeter_get_alert_rules_failed", error instanceof Error ? error.message : error);
       return [];
+    }),
+    // Purely a display hint on the low_balance row -- never worth failing
+    // the page over.
+    getLatestBalanceForUser(session.userId).catch((error) => {
+      console.error("newinmeter_get_latest_balance_failed", error instanceof Error ? error.message : error);
+      return null;
     })
   ]);
 
@@ -45,6 +51,7 @@ export default async function SettingsPage() {
         nextSyncAt: connection?.nextSyncAt ?? null
       }}
       alertRules={alertRules}
+      latestBalance={latestBalance}
     />
   );
 }

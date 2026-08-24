@@ -126,6 +126,43 @@ describe("NotificationList", () => {
     expect(screen.queryByRole("heading", { name: "Notifications" })).toBeNull();
   });
 
+  it("shows a Settings prompt instead of 'all caught up' when nothing is enabled", () => {
+    const onGoToSettings = vi.fn();
+    render(
+      <NotificationList
+        hasEnabledAlerts={false}
+        loading={false}
+        markingAllRead={false}
+        notifications={[]}
+        onGoToSettings={onGoToSettings}
+        onItemClick={vi.fn()}
+        onMarkAllRead={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("No alerts set up yet.")).not.toBeNull();
+    expect(screen.queryByText("You're all caught up.")).toBeNull();
+
+    fireEvent.click(screen.getByText("Set up an alert"));
+    expect(onGoToSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the plain empty state (not the Settings prompt) when alerts are enabled but nothing has fired", () => {
+    render(
+      <NotificationList
+        hasEnabledAlerts={true}
+        loading={false}
+        markingAllRead={false}
+        notifications={[]}
+        onItemClick={vi.fn()}
+        onMarkAllRead={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("You're all caught up.")).not.toBeNull();
+    expect(screen.queryByText("No alerts set up yet.")).toBeNull();
+  });
+
   it("shows a loading state", () => {
     render(
       <NotificationList
