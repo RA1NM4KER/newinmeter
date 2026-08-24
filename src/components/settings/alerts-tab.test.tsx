@@ -4,17 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 
 const mocks = vi.hoisted(() => ({
-  useDeviceNotifications: vi.fn(),
-  hasDismissedDeviceNotifications: vi.fn(),
-  markDeviceNotificationsDismissed: vi.fn()
+  useDeviceNotifications: vi.fn()
 }));
 
 vi.mock("@/components/layout/push-notification-provider", () => ({
   useDeviceNotifications: mocks.useDeviceNotifications
-}));
-vi.mock("@/lib/push-client", () => ({
-  hasDismissedDeviceNotifications: mocks.hasDismissedDeviceNotifications,
-  markDeviceNotificationsDismissed: mocks.markDeviceNotificationsDismissed
 }));
 
 import { AlertsTab } from "./alerts-tab";
@@ -35,51 +29,49 @@ function baseProps(overrides: Partial<ComponentProps<typeof AlertsTab>> = {}) {
   };
 }
 
-function setDeviceNotifications(subscriptionActive: boolean) {
-  mocks.useDeviceNotifications.mockReturnValue({
-    browserPermission: subscriptionActive ? "granted" : "denied",
-    subscriptionActive,
-    checking: false,
-    enableDeviceNotifications: vi.fn(),
-    disableDeviceNotifications: vi.fn(),
-    refreshDeviceNotificationState: vi.fn()
-  });
-}
-
-const STATUS_TEXT = /Alerts are active, but this device isn't sending push notifications/i;
-
-describe("AlertsTab device-status messaging", () => {
+// Device-status state matrix (off/blocked/unsupported/error) belongs to
+// DeviceNotificationStatus itself -- see device-notification-status.test.tsx.
+// This file only checks AlertsTab wires that section in and still renders
+// its groups.
+describe("AlertsTab", () => {
   afterEach(() => {
     cleanup();
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.hasDismissedDeviceNotifications.mockReturnValue(false);
-  });
-
-  it("says nothing when no alert is enabled yet, even if device push is off", () => {
-    setDeviceNotifications(false);
-    render(<AlertsTab {...baseProps({ enabledByType: {} })} />);
-    expect(screen.queryByText(STATUS_TEXT)).toBeNull();
-  });
-
-  it("says nothing when device push is on (subscriptionActive), regardless of enabled alerts", () => {
-    setDeviceNotifications(true);
-    render(<AlertsTab {...baseProps({ enabledByType: { low_balance: true } })} />);
-    expect(screen.queryByText(STATUS_TEXT)).toBeNull();
-  });
-
-  it("shows the subtle status line when an alert is enabled and device push is off, even with permission granted", () => {
     mocks.useDeviceNotifications.mockReturnValue({
-      browserPermission: "granted",
+      browserPermission: "default",
       subscriptionActive: false,
       checking: false,
       enableDeviceNotifications: vi.fn(),
       disableDeviceNotifications: vi.fn(),
       refreshDeviceNotificationState: vi.fn()
     });
-    render(<AlertsTab {...baseProps({ enabledByType: { daily_spend: true } })} />);
-    expect(screen.queryByText(STATUS_TEXT)).not.toBeNull();
+  });
+
+  it("renders the device-notification status section near the top", () => {
+    render(<AlertsTab {...baseProps()} />);
+    expect(screen.queryByText("Push notifications are off on this device.")).not.toBeNull();
+  });
+
+  it("omits the device-notification status section once this device is subscribed", () => {
+    mocks.useDeviceNotifications.mockReturnValue({
+      browserPermission: "granted",
+      subscriptionActive: true,
+      checking: false,
+      enableDeviceNotifications: vi.fn(),
+      disableDeviceNotifications: vi.fn(),
+      refreshDeviceNotificationState: vi.fn()
+    });
+    render(<AlertsTab {...baseProps()} />);
+    expect(screen.queryByText("Push notifications are off on this device.")).toBeNull();
+  });
+
+  it("renders every group label, even with zero rules configured", () => {
+    render(<AlertsTab {...baseProps()} />);
+    for (const label of ["Balance & spending", "Usage & tariff", "More", "System"]) {
+      expect(screen.queryByText(label)).not.toBeNull();
+    }
   });
 });

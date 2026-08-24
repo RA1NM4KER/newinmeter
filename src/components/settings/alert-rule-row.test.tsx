@@ -125,10 +125,9 @@ describe("AlertRuleRow", () => {
 
       expect(mocks.enableDeviceNotifications).not.toHaveBeenCalled();
       expect(mocks.markDeviceNotificationsDismissed).toHaveBeenCalledTimes(1);
+      // No per-row push-status echo any more -- DeviceNotificationStatus
+      // (top of the Alerts tab) is the one place that explains this now.
       await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
-      await waitFor(() =>
-        expect(screen.queryByText(/You'll see alerts in NewinMeter, but this device won't send push notifications/i)).not.toBeNull()
-      );
     });
   });
 
@@ -160,12 +159,11 @@ describe("AlertRuleRow", () => {
       expect(screen.queryByText("Turn on notifications?")).toBeNull();
       expect(mocks.enableDeviceNotifications).not.toHaveBeenCalled();
       await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
-      await waitFor(() => expect(screen.queryByText(/notifications are blocked on this device/i)).not.toBeNull());
     });
   });
 
   describe("subscription failure via Turn on notifications", () => {
-    it("keeps the alert enabled and shows a recoverable warning, without an error state", async () => {
+    it("keeps the alert enabled anyway, without an error state -- the subscription failure is not this row's concern", async () => {
       setDeviceNotifications({ browserPermission: "granted", subscriptionActive: false });
       mocks.enableDeviceNotifications.mockResolvedValue({ status: "subscription_failed" });
       const onEnabledChange = vi.fn();
@@ -175,7 +173,6 @@ describe("AlertRuleRow", () => {
       fireEvent.click(screen.getByText("Turn on notifications"));
 
       await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("low_balance", true));
-      await waitFor(() => expect(screen.queryByText(/couldn't be registered for push notifications/i)).not.toBeNull());
       expect(screen.queryByText("Couldn't save this alert.")).toBeNull();
     });
   });
