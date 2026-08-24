@@ -163,14 +163,6 @@ export function ConnectionCard({
                   {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
                 </dd>
               </div>
-              {autoSyncEnabled ? (
-                <div className="min-w-0 col-span-2">
-                  <dt className="text-muted">Next scheduled update</dt>
-                  <dd className="mt-1 truncate text-ink">
-                    {nextSyncAt ? new Date(nextSyncAt).toLocaleString() : "Not scheduled yet"}
-                  </dd>
-                </div>
-              ) : null}
             </dl>
 
             <div className="mt-5 flex items-start justify-between gap-4 border-t border-line pt-4">
@@ -181,6 +173,11 @@ export function ConnectionCard({
                     ? "NewinMeter periodically refreshes your LiveMopay data automatically."
                     : "Your dashboard will only update when you refresh it manually."}
                 </p>
+                {autoSyncEnabled ? (
+                  <p className="mt-2 text-[0.8125rem] text-muted">
+                    Next scheduled update: {nextSyncAt ? new Date(nextSyncAt).toLocaleString() : "Not scheduled yet"}
+                  </p>
+                ) : null}
               </div>
               <Toggle checked={autoSyncEnabled} disabled={autoSyncBusy} onChange={handleAutoSyncToggle} label="Automatic updates" />
             </div>
