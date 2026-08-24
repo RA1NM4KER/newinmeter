@@ -355,7 +355,7 @@ describe("AlertRuleRow", () => {
       rerender(<AlertRuleRow {...props} enabled />);
       expect(screen.queryByText("Couldn't save this alert.")).toBeNull();
       expect(screen.queryByText(/must be greater than/i)).toBeNull();
-      expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("");
+      expect((screen.getByLabelText("Monthly budget threshold") as HTMLInputElement).value).toBe("");
     });
 
     it("saves once the user actually types a value and blurs", async () => {
@@ -379,7 +379,7 @@ describe("AlertRuleRow", () => {
       expect(globalThis.fetch).not.toHaveBeenCalled();
       rerender(<AlertRuleRow {...props} enabled />);
 
-      const input = screen.getByRole("spinbutton");
+      const input = screen.getByLabelText("Monthly budget threshold");
       fireEvent.change(input, { target: { value: "1500" } });
       fireEvent.blur(input);
 
@@ -398,7 +398,7 @@ describe("AlertRuleRow", () => {
       await waitFor(() => expect(onEnabledChange).toHaveBeenCalledWith("monthly_budget", true));
       rerender(<AlertRuleRow {...props} enabled />);
 
-      fireEvent.blur(screen.getByRole("spinbutton"));
+      fireEvent.blur(screen.getByLabelText("Monthly budget threshold"));
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
@@ -427,7 +427,7 @@ describe("AlertRuleRow", () => {
       expect(globalThis.fetch).not.toHaveBeenCalled();
       rerender(<AlertRuleRow {...props} enabled />);
 
-      const input = screen.getByRole("spinbutton");
+      const input = screen.getByLabelText("Monthly budget threshold");
       fireEvent.change(input, { target: { value: "1500" } });
       fireEvent.blur(input);
 
@@ -437,6 +437,65 @@ describe("AlertRuleRow", () => {
       // not silently dropped by the deferred-threshold gap.
       expect(body).toEqual({ enabled: true, threshold: 1500, alsoEnableAutoSync: true });
       expect(onAutoSyncEnabledChange).toHaveBeenCalledWith(true, "2026-08-25T00:00:00.000Z");
+    });
+  });
+
+  // Regression coverage for a real bug report: a controlled type="number"
+  // input made Number("") collapse to 0 (never actually empty) and had a
+  // React-specific DOM-desync quirk that left stale leading-zero text
+  // ("03") stuck on screen. See the input's own onChange comment.
+  describe("threshold input: clearing and retyping doesn't get stuck", () => {
+    it("clearing the field to empty shows an empty box, not a stuck 0", () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      render(<AlertRuleRow {...baseProps({ enabled: true, initialThreshold: 200 })} />);
+
+      const input = screen.getByLabelText("Low balance threshold") as HTMLInputElement;
+      expect(input.value).toBe("200");
+
+      fireEvent.change(input, { target: { value: "" } });
+      expect(input.value).toBe("");
+    });
+
+    it("typing a fresh digit after clearing shows just that digit, never a leftover leading zero", () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      render(<AlertRuleRow {...baseProps({ enabled: true, initialThreshold: 200 })} />);
+
+      const input = screen.getByLabelText("Low balance threshold") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "" } });
+      // Simulates the full-field-content payload a real onChange delivers
+      // after a keystroke -- "03" is exactly the stuck value from the bug
+      // report.
+      fireEvent.change(input, { target: { value: "03" } });
+      expect(input.value).toBe("3");
+    });
+
+    it("strips non-numeric paste noise instead of accepting it verbatim", () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      render(<AlertRuleRow {...baseProps({ enabled: true, initialThreshold: 200 })} />);
+
+      const input = screen.getByLabelText("Low balance threshold") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "R1,500abc" } });
+      expect(input.value).toBe("1500");
+    });
+
+    it("caps a days-unit field to digits only, with no decimal point", () => {
+      setDeviceNotifications({ subscriptionActive: true });
+      render(
+        <AlertRuleRow
+          {...baseProps({
+            type: "balance_runway",
+            title: "Running out soon",
+            unit: "days",
+            defaultThreshold: 3,
+            initialThreshold: 3,
+            enabled: true
+          })}
+        />
+      );
+
+      const input = screen.getByLabelText("Running out soon threshold") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "1.5" } });
+      expect(input.value).toBe("15");
     });
   });
 });

@@ -292,18 +292,32 @@ export function AlertRuleRow({
         <div className="mt-3 flex items-center gap-2">
           {unit === "currency" ? <span className="text-sm text-muted">R</span> : null}
           <input
+            aria-label={`${title} threshold`}
             className="h-9 w-28 rounded-md border border-line bg-canvas px-3 text-sm text-ink outline-none transition focus:border-accent disabled:opacity-60"
             disabled={busy}
             inputMode={unit === "days" ? "numeric" : "decimal"}
-            min={unit === "days" ? 1 : 0}
-            max={unit === "days" ? 30 : undefined}
-            step={unit === "days" ? 1 : undefined}
             onBlur={handleThresholdBlur}
-            onChange={(event) =>
-              setThreshold(unit === "days" ? Math.round(Number(event.target.value)) : Number(event.target.value))
-            }
+            onChange={(event) => {
+              // type="text" (not "number") deliberately -- a controlled
+              // type="number" input has two compounding bugs: Number("")
+              // is 0 not null, so the field can never actually go empty
+              // (it snaps back to "0" and traps the user), and React has a
+              // documented reconciliation quirk for type="number" where it
+              // skips re-syncing the DOM while focused if the new value is
+              // loosely equal to the current one -- which leaves stale
+              // leading-zero text ("03") stuck on screen even though state
+              // is numerically correct. Sanitizing the raw string
+              // ourselves and treating "" as null (not 0) avoids both.
+              const raw = event.target.value;
+              const cleaned = unit === "days" ? raw.replace(/\D/g, "") : raw.replace(/[^\d.]/g, "");
+              if (cleaned === "" || cleaned === ".") {
+                setThreshold(null);
+                return;
+              }
+              setThreshold(unit === "days" ? Math.round(Number(cleaned)) : Number(cleaned));
+            }}
             placeholder={threshold === null && unit === "currency" ? "e.g. 1500" : undefined}
-            type="number"
+            type="text"
             value={threshold ?? ""}
           />
           {unit === "kwh" ? <span className="text-sm text-muted">kWh</span> : null}
