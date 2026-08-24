@@ -17,8 +17,8 @@ export default function PrivacyPolicyPage() {
       <Section title="What we collect">
         <ul className="list-disc pl-5">
           <li>
-            Your email address, used to sign you in. You can use a magic link or continue with Google. We never see or
-            store a password.
+            Your email address, used to sign you in. You can use a one-time emailed code or continue with Google. We
+            never see or store a password.
           </li>
           <li>
             Your LiveMopay password, which you provide once to connect your account. It&apos;s used exactly once,

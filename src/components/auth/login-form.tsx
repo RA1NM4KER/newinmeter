@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+
+const OTP_LENGTH = 6;
+// Long enough to discourage spamming Supabase's own send endpoint, short
+// enough that a user who genuinely didn't get the email isn't stuck
+// waiting. Supabase's own auth rate limits are the real backstop here --
+// this is purely a client-side "don't be annoying" guard, not security.
+const RESEND_COOLDOWN_SECONDS = 45;
 
 function GoogleIcon() {
   return (
@@ -62,7 +69,9 @@ function DemoLoginButton({ token }: { token: string }) {
       // action_link itself only works when opened by the same browser that
       // requested it, which isn't the case for a server-admin-generated
       // link). A normal Supabase session comes out of this, same as any
-      // other verified sign-in.
+      // other verified sign-in. Distinct from the email OTP flow below --
+      // this redeems a server-generated `token_hash` via type "magiclink",
+      // not a user-typed 6-digit code via type "email".
       const supabase = createSupabaseBrowserClient();
       const { error: verifyError } = await supabase.auth.verifyOtp({
         token_hash: body.tokenHash,
@@ -99,36 +108,160 @@ function DemoLoginButton({ token }: { token: string }) {
   );
 }
 
+// Best-effort classification of a verifyOtp failure into copy the user can
+// actually act on. Supabase doesn't reliably expose a clean "expired" vs
+// "wrong code" signal across versions -- `code` is checked first where
+// present (newer supabase-js), falling back to matching the message text,
+// and anything unrecognized gets the honest generic fallback rather than a
+// guess dressed up as certainty.
+function describeVerifyOtpError(error: { message?: string; code?: string } | null | undefined): string {
+  const code = error?.code ?? "";
+  const message = (error?.message ?? "").toLowerCase();
+
+  if (code === "otp_expired" || message.includes("expired")) {
+    return "That code has expired. Send a new one and try again.";
+  }
+  if (code === "otp_disabled" || message.includes("invalid") || message.includes("token")) {
+    return "That code isn't correct. Check the email and try again.";
+  }
+  return "That code couldn't be verified. Try again or send a new code.";
+}
+
 export function LoginForm({ demoToken }: { demoToken?: string }) {
+  const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
-  async function handleSubmit(event: FormEvent) {
+  // Single ticking interval for the whole code step -- runs whenever this
+  // step is active and just no-ops once cooldownRemaining is already 0,
+  // rather than restarting itself every time the count changes.
+  useEffect(() => {
+    if (step !== "code") {
+      return;
+    }
+    const id = setInterval(() => {
+      setCooldownRemaining((previous) => (previous > 0 ? previous - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [step]);
+
+  async function sendCode(): Promise<boolean> {
+    const supabase = createSupabaseBrowserClient();
+    // No emailRedirectTo: this is a code the user types back in here, not a
+    // link to follow -- nothing for Supabase to redirect to. Omitting it
+    // also means the Magic Link route in the email template (if the
+    // Dashboard template isn't already switched to OTP-only) has nowhere
+    // useful to send the user, encouraging use of the code instead.
+    const { error: signInError } = await supabase.auth.signInWithOtp({ email });
+
+    if (signInError) {
+      setError(signInError.message);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleSubmitEmail(event: FormEvent) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-
-      if (signInError) {
-        setError(signInError.message);
-        return;
+      const ok = await sendCode();
+      if (ok) {
+        setCode("");
+        setResendMessage("");
+        setCooldownRemaining(RESEND_COOLDOWN_SECONDS);
+        setStep("code");
       }
-
-      setSent(true);
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleResend() {
+    if (isResending || cooldownRemaining > 0) {
+      return;
+    }
+    setError("");
+    setResendMessage("");
+    setIsResending(true);
+
+    try {
+      const ok = await sendCode();
+      if (ok) {
+        setCode("");
+        setResendMessage("New code sent.");
+        setCooldownRemaining(RESEND_COOLDOWN_SECONDS);
+      }
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  async function verifyCode(candidate: string) {
+    if (isVerifying || candidate.length !== OTP_LENGTH) {
+      return;
+    }
+    setError("");
+    setResendMessage("");
+    setIsVerifying(true);
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: candidate,
+        type: "email"
+      });
+
+      if (verifyError) {
+        setError(describeVerifyOtpError(verifyError));
+        setCode("");
+        setIsVerifying(false);
+        return;
+      }
+
+      // Session is created by this same call, inside this same page/PWA
+      // context -- no redirect through /auth/callback, so there's no
+      // browser hand-off for an installed PWA to get stranded by.
+      window.location.href = "/";
+    } catch {
+      setError("Couldn't verify the code. Check your connection and try again.");
+      setIsVerifying(false);
+    }
+  }
+
+  // Auto-submits once six digits are present (typed, pasted, or
+  // autofilled) -- verifyCode's own isVerifying guard keeps this from
+  // double-firing, and a failed attempt clears `code`, so this naturally
+  // doesn't re-trigger until the user has entered a fresh 6-digit value.
+  useEffect(() => {
+    if (code.length === OTP_LENGTH) {
+      void verifyCode(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  function handleSubmitCode(event: FormEvent) {
+    event.preventDefault();
+    void verifyCode(code);
+  }
+
+  function handleUseDifferentEmail() {
+    setStep("email");
+    setCode("");
+    setError("");
+    setResendMessage("");
+    setCooldownRemaining(0);
   }
 
   async function handleGoogleSignIn() {
@@ -149,21 +282,65 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
     }
   }
 
-  if (sent) {
+  if (step === "code") {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-6 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-6 text-center">
         <CheckCircle2 className="h-5 w-5 text-brandGreen" aria-hidden="true" />
-        <p className="text-sm text-white">
-          Sent to <span className="font-medium">{email}</span>
-        </p>
-        <p className="text-xs text-white/45">Open the link on this device to continue.</p>
-        <button
-          type="button"
-          onClick={() => setSent(false)}
-          className="mt-1 text-xs font-medium text-brandGreen transition hover:opacity-80"
-        >
-          Use a different email
-        </button>
+        <div>
+          <p className="text-sm font-medium text-white">Check your email</p>
+          <p className="mt-1 text-xs text-white/45">
+            We sent a 6-digit sign-in code to <span className="font-medium text-white">{email}</span>
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmitCode} className="mt-2 flex w-full flex-col items-center gap-3">
+          <input
+            aria-label="6-digit code"
+            autoComplete="one-time-code"
+            autoFocus
+            className="h-14 w-48 rounded-xl border border-white/10 bg-white/[0.04] text-center text-2xl font-semibold tracking-[0.5em] text-white outline-none transition focus:border-brandGreen"
+            disabled={isVerifying}
+            inputMode="numeric"
+            maxLength={OTP_LENGTH}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, OTP_LENGTH))}
+            pattern="[0-9]*"
+            placeholder="······"
+            value={code}
+          />
+
+          <p className="text-xs text-white/35">Enter the code from your email to continue.</p>
+
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {!error && resendMessage ? <p className="text-sm text-brandGreen">{resendMessage}</p> : null}
+
+          <button
+            type="submit"
+            disabled={isVerifying || code.length !== OTP_LENGTH}
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brandGreen text-sm font-semibold text-neutral-950 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+            Continue
+          </button>
+        </form>
+
+        <div className="mt-1 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void handleResend()}
+            disabled={isResending || cooldownRemaining > 0}
+            className="text-xs font-medium text-brandGreen transition hover:opacity-80 disabled:cursor-not-allowed disabled:text-white/35"
+          >
+            {cooldownRemaining > 0 ? `Resend code (${cooldownRemaining}s)` : "Resend code"}
+          </button>
+          <span className="text-xs text-white/20">·</span>
+          <button
+            type="button"
+            onClick={handleUseDifferentEmail}
+            className="text-xs font-medium text-brandGreen transition hover:opacity-80"
+          >
+            Use a different email
+          </button>
+        </div>
       </div>
     );
   }
@@ -186,7 +363,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
         <div className="h-px flex-1 bg-white/10" />
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmitEmail} className="flex flex-col gap-3">
         <div className="relative">
           <Mail
             aria-hidden="true"
@@ -210,11 +387,11 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brandGreen text-sm font-semibold text-neutral-950 transition hover:brightness-95 disabled:cursor-not-allowed"
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-          Send sign-in link
+          Send code
           {!isSubmitting ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}
         </button>
 
-        <p className="mt-1 text-xs text-white/35">One-time link, no password to remember.</p>
+        <p className="mt-1 text-xs text-white/35">We&apos;ll email you a 6-digit code. No password to remember.</p>
       </form>
 
       {demoToken ? <DemoLoginButton token={demoToken} /> : null}
