@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 // Exit animation duration; keep in sync with the transition classes below.
 const SHEET_ANIM_MS = 220;
@@ -60,7 +61,16 @@ export function BottomSheet({ isOpen, onClose, title, children, headerAction }: 
     return null;
   }
 
-  return (
+  // Portaled to document.body -- some callers (e.g. NotificationBell's
+  // mobile trigger) render this from inside a `transform`-animated ancestor
+  // (the scroll-hiding mobile header), and per spec any `transform` on an
+  // ancestor creates a new containing block for `position: fixed`
+  // descendants. Without the portal, "fixed inset-0" resolves against that
+  // small transformed header box instead of the real viewport, collapsing
+  // the whole sheet to a sliver with no backdrop. Portaling out to <body>
+  // (same pattern the desktop notification popover already uses) makes this
+  // correct regardless of what any future caller's ancestor tree looks like.
+  return createPortal(
     <div aria-modal="true" className="fixed inset-0 z-50" role="dialog">
       <button
         aria-label="Close"
@@ -94,6 +104,7 @@ export function BottomSheet({ isOpen, onClose, title, children, headerAction }: 
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
