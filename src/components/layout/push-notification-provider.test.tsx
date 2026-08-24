@@ -124,6 +124,10 @@ describe("PushNotificationProvider", () => {
     await waitFor(() => expect(screen.getByTestId("probe-checking").textContent).toBe("false"));
     expect(screen.getByTestId("probe-active").textContent).toBe("false");
     expect(screen.getByTestId("probe-permission").textContent).toBe("denied");
+    // Denied is terminal -- never worth checking for/repairing a
+    // subscription that the OS won't deliver to anyway.
+    expect(mocks.hasActiveSubscription).not.toHaveBeenCalled();
+    expect(mocks.repairExistingSubscription).not.toHaveBeenCalled();
   });
 
   it("unsupported short-circuits to OFF without checking for a subscription", async () => {
@@ -207,5 +211,162 @@ describe("PushNotificationProvider", () => {
     await waitFor(() => expect(screen.getByTestId("a-active").textContent).toBe("true"));
     expect(screen.getByTestId("b-active").textContent).toBe("true");
     expect(mocks.hasActiveSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  // The iOS/PWA resume bug this whole task fixes: the app never reloads
+  // when the user hops to iPhone Settings and back, so without a resume
+  // listener, state from initial mount goes stale.
+  describe("resume (iOS/PWA foreground) refresh", () => {
+    function setVisibilityState(state: DocumentVisibilityState) {
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: state });
+    }
+
+    afterEach(() => {
+      setVisibilityState("visible");
+    });
+
+    it("visibilitychange back to visible re-checks permission and subscription state", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
+
+      // Simulate returning from iPhone Settings having revoked permission.
+      mocks.getPushPermissionState.mockReturnValue("denied");
+      setVisibilityState("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      await waitFor(() => expect(screen.getByTestId("probe-permission").textContent).toBe("denied"));
+      expect(screen.getByTestId("probe-active").textContent).toBe("false");
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not refresh on visibilitychange when the document becomes hidden", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
+
+      setVisibilityState("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // Give any (incorrect) refresh a chance to run before asserting it didn't.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
+    });
+
+    it("window focus also triggers a refresh", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event("focus"));
+
+      await waitFor(() => expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(2));
+    });
+
+    it("coalesces visibilitychange + focus firing together into a single refresh", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
+
+      // Both commonly fire for the same real resume moment.
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+
+      await waitFor(() => expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(2));
+      // Give a moment for a second (incorrect) refresh to have started too.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(2);
+    });
+
+    it("a permission revoked on resume never calls requestPermission (via ensurePushNotificationsEnabled)", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
+
+      // Only care about calls made *during the resume pass*, not the
+      // initial mount's own (legitimate) check.
+      mocks.hasActiveSubscription.mockClear();
+      mocks.getPushPermissionState.mockReturnValue("denied");
+      window.dispatchEvent(new Event("focus"));
+
+      await waitFor(() => expect(screen.getByTestId("probe-permission").textContent).toBe("denied"));
+      expect(screen.getByTestId("probe-active").textContent).toBe("false");
+      expect(mocks.hasActiveSubscription).not.toHaveBeenCalled();
+      expect(mocks.ensurePushNotificationsEnabled).not.toHaveBeenCalled();
+    });
+
+    it("permission granted again on resume does not auto-subscribe if device notifications were explicitly off", async () => {
+      // Starts off: permission default, no subscription (device notifications OFF).
+      mocks.getPushPermissionState.mockReturnValue("default");
+      mocks.hasActiveSubscription.mockResolvedValue(false);
+      render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("probe-checking").textContent).toBe("false"));
+      expect(screen.getByTestId("probe-active").textContent).toBe("false");
+
+      // User grants permission via iPhone Settings, returns to the app --
+      // but never subscribed this device (General was OFF), so there's
+      // still no browser PushSubscription to find.
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      window.dispatchEvent(new Event("focus"));
+
+      await waitFor(() => expect(screen.getByTestId("probe-permission").textContent).toBe("granted"));
+      // Still OFF -- OS permission alone never flips General/subscriptionActive on.
+      expect(screen.getByTestId("probe-active").textContent).toBe("false");
+      expect(mocks.ensurePushNotificationsEnabled).not.toHaveBeenCalled();
+    });
+
+    it("removes its resume listeners on unmount", async () => {
+      mocks.getPushPermissionState.mockReturnValue("granted");
+      mocks.hasActiveSubscription.mockResolvedValue(true);
+      const { unmount } = render(
+        <PushNotificationProvider>
+          <Probe />
+        </PushNotificationProvider>
+      );
+      await waitFor(() => expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1));
+
+      unmount();
+      mocks.getPushPermissionState.mockClear();
+
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pageshow"));
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mocks.getPushPermissionState).not.toHaveBeenCalled();
+    });
   });
 });
