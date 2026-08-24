@@ -22,7 +22,11 @@ export type SyncButtonProps = {
   // `bottom` property instead of a computed `top - height` means the
   // browser grows the box in the right direction on its own, no
   // measurement needed at all.
-  dropDirection?: "down" | "up";
+  // "up-on-mobile" reuses the same <=639px breakpoint this component
+  // already checks for its own mobile width behaviour, so it's the one
+  // breakpoint this component has an opinion about rather than a second,
+  // possibly-inconsistent one.
+  dropDirection?: "down" | "up" | "up-on-mobile";
 };
 
 const syncModes = [
@@ -72,10 +76,9 @@ export function SyncButton({
       const desiredLeft = matchesMobile ? rect.left : rect.left + rect.width / 2 - width / 2;
       const left = Math.min(window.innerWidth - width - popoverMargin, Math.max(popoverMargin, desiredLeft));
 
+      const opensUp = dropDirection === "up" || (dropDirection === "up-on-mobile" && matchesMobile);
       setPosition(
-        dropDirection === "up"
-          ? { left, width, bottom: window.innerHeight - rect.top + 8 }
-          : { left, width, top: rect.bottom + 8 }
+        opensUp ? { left, width, bottom: window.innerHeight - rect.top + 8 } : { left, width, top: rect.bottom + 8 }
       );
     };
 
