@@ -15,21 +15,27 @@ import {
 type DeviceNotificationsState = {
   // Is NewinMeter allowed by the browser/OS to send notifications at all?
   browserPermission: PushPermissionState;
-  // Does THIS DEVICE currently have an active NewinMeter push subscription
-  // THAT THE SERVER CAN ACTUALLY REACH? Three things have to be true:
-  // browser permission allows it, a browser PushSubscription exists, and
-  // NewinMeter's server has that exact endpoint registered in
-  // push_subscriptions. This -- never `browserPermission === "granted"`,
-  // and never just "a browser PushSubscription object exists" -- is what
-  // General's ON/OFF switch and Alerts' "does this device need asking"
-  // check both read. Two bugs this fixes: (1) permission can be "granted"
-  // while the user has explicitly unsubscribed this device (General OFF);
-  // treating those as the same thing meant enabling an alert silently
-  // re-subscribed a device the user had deliberately turned off. (2) a
-  // browser can hold a live PushSubscription object the server no longer
-  // has a row for (row deleted, VAPID rotated, etc.) -- reporting ON from
-  // the browser object alone would show a device as reachable when the
-  // server literally cannot send it anything.
+  // "Is NewinMeter push enabled for this browser/device?" -- ON means a
+  // browser PushSubscription exists AND NewinMeter's server has that exact
+  // endpoint registered; OFF means it doesn't. Never derived from
+  // `browserPermission === "granted"` alone -- a user can explicitly
+  // unsubscribe this device (General OFF) while the browser still reports
+  // permission granted, and enabling an alert must not silently
+  // re-subscribe a device the user deliberately turned off. Nor is it just
+  // "a browser PushSubscription object exists" -- a browser can hold a
+  // live subscription the server no longer has a row for (deleted row,
+  // rotated VAPID key), and reporting ON from the object alone would claim
+  // reachability the server can't actually deliver on.
+  //
+  // Deliberately NOT a claim about the OS/system notification switch.
+  // "ON" means "NewinMeter is configured to send this device push" -- the
+  // OS can still suppress delivery afterward (most notably: iOS Safari/
+  // home-screen PWA does not reliably expose the iPhone Settings ->
+  // NewinMeter -> Notifications toggle through Notification.permission, so
+  // General can legitimately show ON even if that system switch is off).
+  // That's an accepted, truthful limitation under this definition, not a
+  // bug -- see the resume-refresh effect below for what it does and does
+  // NOT promise about detecting that toggle.
   subscriptionActive: boolean;
   // True during the initial check and any explicit refresh -- callers use
   // this to avoid rendering a confident ON/OFF before the real browser
@@ -78,21 +84,24 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
       setBrowserPermission(permission);
 
       if (permission === "unsupported" || permission === "denied") {
-        // "denied" specifically covers the iOS/PWA case: the user revoked
-        // notifications in iPhone Settings -> NewinMeter -> Notifications,
-        // then returned to the app. The browser may still hand back a
-        // PushSubscription object here (iOS doesn't always clear it
-        // immediately/at all), but that subscription is not usable -- the
-        // OS will not deliver anything to it -- so this is reported OFF
-        // without even checking. Deliberately does NOT unsubscribe/delete
-        // it: the user revoked *permission*, not their NewinMeter
-        // preference, and there's nothing unsafe about a leftover
-        // subscription sitting unused server-side (it simply won't
-        // receive anything while permission is denied). If permission is
-        // later restored, the next refresh re-checks it properly and
-        // either repairs it (if the browser still considers it valid) or
-        // finds it gone (if iOS already dropped it) -- either way self-
-        // corrects without needing to proactively clean up here.
+        // Covers any platform where the browser itself explicitly reports
+        // permission as "denied" (desktop Chrome/Firefox/Edge, Android
+        // Chrome, and iOS when it does happen to report it) -- a
+        // subscription can't be usable when the browser says notifications
+        // are blocked, so this is reported OFF without even checking.
+        // Deliberately does NOT unsubscribe/delete any existing
+        // subscription: "denied" from the browser isn't necessarily the
+        // user changing their NewinMeter preference, and there's nothing
+        // unsafe about a leftover subscription sitting unused server-side.
+        // NOTE: this branch is correct wherever the browser DOES expose an
+        // honest "denied", but iOS Safari/home-screen PWA does not
+        // reliably enter it just because the user turned notifications off
+        // in iPhone Settings -> NewinMeter -> Notifications --
+        // Notification.permission there can keep reading "granted"
+        // regardless of that system toggle. This is not something
+        // NewinMeter can detect from here; see subscriptionActive's own
+        // doc comment for the (deliberately more modest) promise General
+        // ON/OFF actually makes.
         setSubscriptionActive(false);
         return;
       }
@@ -132,15 +141,23 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
     void refreshDeviceNotificationState();
   }, [refreshDeviceNotificationState]);
 
-  // Re-check on resume -- covers the iOS/PWA case this was built for: the
-  // app never reloads when the user hops out to iPhone Settings and back
-  // (it's the same still-running page), so without this, browserPermission/
-  // subscriptionActive stay whatever they were at initial mount even
-  // though the OS permission (and therefore the truth) may have changed
-  // while the app was backgrounded. `visibilitychange` is the primary,
-  // most reliable signal for this across iOS Safari/home-screen PWA;
-  // `focus` and `pageshow` are included as belt-and-braces for cases
-  // visibilitychange doesn't fire in some embedded/PWA contexts.
+  // Re-check on resume -- the app never reloads when backgrounded and
+  // foregrounded again (true of any tab, and especially a PWA the user
+  // hops out of and back into), so without this, browserPermission/
+  // subscriptionActive would stay whatever they were at initial mount for
+  // the rest of the session. Two things this genuinely buys, regardless of
+  // platform: (1) re-confirming/repairing the server's registration for an
+  // existing browser subscription -- worth doing any time the app was
+  // backgrounded a while; (2) picking up a real Notification.permission
+  // change on platforms that actually expose one (desktop, Android). It is
+  // NOT a reliable way to detect the user disabling notifications for
+  // NewinMeter via iPhone Settings -> NewinMeter -> Notifications -- iOS
+  // Safari/home-screen PWA can keep reporting the same
+  // Notification.permission value regardless of that system toggle, so
+  // this refresh makes no promise that General flips to OFF/blocked when
+  // that happens. `visibilitychange` is the primary signal; `focus` and
+  // `pageshow` are included as belt-and-braces for contexts where it
+  // doesn't fire.
   useEffect(() => {
     const handleResume = () => {
       const now = Date.now();

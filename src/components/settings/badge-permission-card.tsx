@@ -68,12 +68,21 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
     return null;
   }
 
+  // "ON" is a statement about whether NewinMeter is configured to push to
+  // this device (an active, server-registered subscription exists) -- not
+  // a claim about the OS-level notification switch. The device's own
+  // settings can still block delivery even while this shows ON (most
+  // notably: iOS doesn't reliably expose its Settings -> NewinMeter ->
+  // Notifications toggle to the browser), which the secondary sentence on
+  // ON exists to make explicit rather than implying certainty NewinMeter
+  // doesn't have. "denied" is only shown when the browser itself honestly
+  // reports it (true on desktop/Android; not guaranteed on iOS).
   const description =
     browserPermission === "denied"
-      ? "Notifications are blocked by this device or browser. Alerts still appear in NewinMeter."
+      ? "Notifications are blocked for this device. Alerts still appear in NewinMeter."
       : subscriptionActive
-        ? "Receiving NewinMeter notifications on this device."
-        : "Push notifications are off on this device. Alerts still appear in NewinMeter.";
+        ? "NewinMeter notifications are enabled for this device. Your device settings can still block delivery."
+        : "NewinMeter won't send push notifications to this device. Alerts still appear in the app.";
 
   return (
     <SettingsRow

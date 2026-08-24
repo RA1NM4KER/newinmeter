@@ -47,13 +47,18 @@ describe("BadgePermissionCard", () => {
     setDeviceNotifications({ browserPermission: "granted", subscriptionActive: true });
     render(<BadgePermissionCard />);
     expect(screen.getByLabelText("Notifications").getAttribute("aria-checked")).toBe("true");
+    // ON means "NewinMeter is configured to push to this device", not "the
+    // OS will definitely deliver it" -- the copy says so explicitly rather
+    // than implying certainty about a system-level toggle NewinMeter can't
+    // reliably read (notably on iOS).
+    expect(screen.queryByText(/Your device settings can still block delivery/i)).not.toBeNull();
   });
 
   it("shows OFF when permission is granted but there's no active subscription -- the core bug fix", () => {
     setDeviceNotifications({ browserPermission: "granted", subscriptionActive: false });
     render(<BadgePermissionCard />);
     expect(screen.getByLabelText("Notifications").getAttribute("aria-checked")).toBe("false");
-    expect(screen.queryByText(/Push notifications are off on this device/i)).not.toBeNull();
+    expect(screen.queryByText(/NewinMeter won't send push notifications to this device/i)).not.toBeNull();
   });
 
   it("disables the toggle and explains when permission is denied, without offering a broken Enable action", () => {
@@ -61,7 +66,7 @@ describe("BadgePermissionCard", () => {
     render(<BadgePermissionCard />);
 
     expect((screen.getByLabelText("Notifications") as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByText(/blocked by this device or browser/i)).not.toBeNull();
+    expect(screen.queryByText(/blocked for this device/i)).not.toBeNull();
   });
 
   it("turning the toggle on calls enableDeviceNotifications", async () => {

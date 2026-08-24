@@ -213,10 +213,17 @@ describe("PushNotificationProvider", () => {
     expect(mocks.hasActiveSubscription).toHaveBeenCalledTimes(1);
   });
 
-  // The iOS/PWA resume bug this whole task fixes: the app never reloads
-  // when the user hops to iPhone Settings and back, so without a resume
-  // listener, state from initial mount goes stale.
-  describe("resume (iOS/PWA foreground) refresh", () => {
+  // The app never reloads when backgrounded and foregrounded again, so
+  // without a resume listener, state from initial mount goes stale for the
+  // rest of the session. What this buys: re-confirming/repairing an
+  // existing subscription's server registration, and picking up a real
+  // Notification.permission change on platforms that expose one. It does
+  // NOT reliably detect an iOS Settings -> NewinMeter -> Notifications
+  // toggle -- iOS can keep reporting the same permission value regardless
+  // of that system switch. The "denied" case below is tested because the
+  // code path is real and correct wherever the browser DOES report denied
+  // (desktop/Android), not as a claim that iOS will take it.
+  describe("resume (foreground) refresh", () => {
     function setVisibilityState(state: DocumentVisibilityState) {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: state });
     }
@@ -236,7 +243,8 @@ describe("PushNotificationProvider", () => {
       await waitFor(() => expect(screen.getByTestId("probe-active").textContent).toBe("true"));
       expect(mocks.getPushPermissionState).toHaveBeenCalledTimes(1);
 
-      // Simulate returning from iPhone Settings having revoked permission.
+      // A platform where the browser does expose a permission change
+      // (desktop/Android) -- not a claim about iOS.
       mocks.getPushPermissionState.mockReturnValue("denied");
       setVisibilityState("visible");
       document.dispatchEvent(new Event("visibilitychange"));
@@ -336,14 +344,14 @@ describe("PushNotificationProvider", () => {
       await waitFor(() => expect(screen.getByTestId("probe-checking").textContent).toBe("false"));
       expect(screen.getByTestId("probe-active").textContent).toBe("false");
 
-      // User grants permission via iPhone Settings, returns to the app --
-      // but never subscribed this device (General was OFF), so there's
-      // still no browser PushSubscription to find.
+      // Permission becomes granted (browser-reported), but this device was
+      // never subscribed (General was OFF), so there's still no browser
+      // PushSubscription to find.
       mocks.getPushPermissionState.mockReturnValue("granted");
       window.dispatchEvent(new Event("focus"));
 
       await waitFor(() => expect(screen.getByTestId("probe-permission").textContent).toBe("granted"));
-      // Still OFF -- OS permission alone never flips General/subscriptionActive on.
+      // Still OFF -- browser permission alone never flips General/subscriptionActive on.
       expect(screen.getByTestId("probe-active").textContent).toBe("false");
       expect(mocks.ensurePushNotificationsEnabled).not.toHaveBeenCalled();
     });
