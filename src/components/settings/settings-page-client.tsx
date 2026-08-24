@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Avatar, IconTile, SettingsGroup, SettingsRow } from "@/components/ui/settings";
 import { Button } from "@/components/ui/button";
+import { useNotificationCentre } from "@/components/layout/notification-provider";
 import type { AlertType } from "@/lib/newinmeter/alert-types";
 import type { AlertRule } from "@/lib/newinmeter/alerts";
 import { queryHref } from "@/lib/url-query";
@@ -59,6 +60,7 @@ export function SettingsPageClient({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh: refreshNotificationCentre } = useNotificationCentre();
 
   const [activeTab, setActiveTabState] = useState<SettingsTabId>(() => {
     const requested = searchParams.get("tab");
@@ -93,6 +95,11 @@ export function SettingsPageClient({
 
   function handleAlertEnabledChange(type: AlertType, enabled: boolean) {
     setAlertEnabledByType((prev) => ({ ...prev, [type]: enabled }));
+    // The notification centre's hasEnabledAlerts/list are fetched once and
+    // cached for the session (notification-provider.tsx) -- without this,
+    // turning an alert on here and immediately opening the bell would still
+    // show the stale "No alerts set up yet." prompt until a full reload.
+    refreshNotificationCentre();
   }
 
   const freshDataAlertsEnabled = (["low_balance", "daily_spend", "daily_kwh"] as const)

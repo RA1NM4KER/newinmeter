@@ -17,6 +17,12 @@ type NotificationCentreState = {
   // or mobile -- opens the centre); later opens reuse this same state
   // instead of refetching, and mutations below patch it in place.
   ensureLoaded: () => void;
+  // Forces a refetch even if already loaded -- for the one thing that can go
+  // stale outside this provider's own control: Settings enabling/disabling
+  // an alert rule changes hasEnabledAlerts and the eventual notification
+  // list, but nothing about opening/closing the centre itself would ever
+  // know that happened. Settings calls this directly after a save succeeds.
+  refresh: () => void;
   markOneRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
 };
@@ -81,8 +87,8 @@ export function NotificationProvider({
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  const ensureLoaded = useCallback(() => {
-    if (hasLoadedRef.current || loadingRef.current) {
+  const load = useCallback(() => {
+    if (loadingRef.current) {
       return;
     }
     loadingRef.current = true;
@@ -102,6 +108,18 @@ export function NotificationProvider({
         loadingRef.current = false;
       });
   }, []);
+
+  const ensureLoaded = useCallback(() => {
+    if (hasLoadedRef.current) {
+      return;
+    }
+    load();
+  }, [load]);
+
+  const refresh = useCallback(() => {
+    hasLoadedRef.current = false;
+    load();
+  }, [load]);
 
   const markOneRead = useCallback(async (id: string) => {
     let alreadyRead = true;
@@ -155,6 +173,7 @@ export function NotificationProvider({
       isDesktop,
       hasEnabledAlerts,
       ensureLoaded,
+      refresh,
       markOneRead,
       markAllRead
     }),
@@ -166,6 +185,7 @@ export function NotificationProvider({
       isDesktop,
       hasEnabledAlerts,
       ensureLoaded,
+      refresh,
       markOneRead,
       markAllRead
     ]

@@ -47,6 +47,7 @@ export function SyncButton({
     width: popoverWidth
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen || !containerRef.current) {
@@ -63,16 +64,29 @@ export function SyncButton({
       const width = matchesMobile ? rect.width : popoverWidth;
       const desiredLeft = matchesMobile ? rect.left : rect.left + rect.width / 2 - width / 2;
       const left = Math.min(window.innerWidth - width - popoverMargin, Math.max(popoverMargin, desiredLeft));
-      const top = rect.bottom + 8;
+
+      // Anchor below the button by default, measuring the popover's actual
+      // height (below) to decide whether it fits -- flip above when it
+      // doesn't (e.g. this trigger sitting low in Settings' Data & Sync
+      // card, where "below" often runs past the viewport/card edge).
+      const measuredHeight = popoverRef.current?.getBoundingClientRect().height ?? 0;
+      const fitsBelow = rect.bottom + measuredHeight + popoverMargin <= window.innerHeight;
+      const top = fitsBelow ? rect.bottom + 8 : Math.max(popoverMargin, rect.top - measuredHeight - 8);
 
       setPosition({ left, top, width });
     };
 
+    // Runs once to get an initial (assume-below) position so the popover
+    // paints and has a real height to measure, then again on the next frame
+    // once that height is known -- corrects the flip in the same open
+    // gesture rather than visibly jumping after the fact.
     updatePosition();
+    const raf = requestAnimationFrame(updatePosition);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
 
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
@@ -172,6 +186,7 @@ export function SyncButton({
       {isOpen ? (
         <div
           className="fixed z-40 rounded-md border border-line bg-paper p-1 shadow-soft"
+          ref={popoverRef}
           role="listbox"
           aria-label="Sync options"
           style={{ left: position.left, top: position.top, width: position.width }}
