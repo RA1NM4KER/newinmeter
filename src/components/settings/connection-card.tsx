@@ -146,7 +146,7 @@ export function ConnectionCard({
             </dl>
 
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-              <SyncButton disabled disabledReason="Demo data · Live sync unavailable" />
+              <SyncButton disabled disabledReason="Demo data · Live sync unavailable" dropDirection="up" />
               <p className="text-[0.8125rem] text-muted">Demo data · Live sync unavailable</p>
             </div>
           </>
@@ -186,7 +186,11 @@ export function ConnectionCard({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-              <SyncButton onSuccess={() => window.location.reload()} showNudge={isSyncStale(lastSyncedAt)} />
+              <SyncButton
+                dropDirection="up"
+                onSuccess={() => window.location.reload()}
+                showNudge={isSyncStale(lastSyncedAt)}
+              />
               <Button variant="dangerGhost" onClick={() => setConfirming(true)}>
                 Disconnect
               </Button>
