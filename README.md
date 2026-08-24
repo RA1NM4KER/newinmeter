@@ -47,6 +47,8 @@ Supabase pg_cron (every 5 minutes)
   -> atomically claims a small batch of connections whose next_sync_at is due
   -> runs the same /api/sync pipeline (incremental) for each, bounded concurrency
   -> records outcome, computes each connection's next deterministic scheduled window
+  -> on success, evaluates that connection's enabled alert_rules against fresh rollups
+  -> a crossed threshold creates an alert_events row and sends a Web Push (deduped while active)
 ```
 
 There is no generic job queue or remote command system -- automatic LiveMopay syncing is the one

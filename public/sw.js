@@ -84,6 +84,11 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "NewinMeter";
   const body = payload.body || "Your usage data looks stale. Open the app to sync.";
   const url = payload.url || "/";
+  // Per-type tag so e.g. a low-balance push and a daily-spend push don't
+  // silently collapse into one notification (same tag = the OS replaces the
+  // old one). Falls back to the original shared tag for any payload that
+  // doesn't specify one, preserving the existing stale-data push behaviour.
+  const tag = payload.tag || "newinmeter-stale-data";
 
   event.waitUntil(
     (async () => {
@@ -97,8 +102,9 @@ self.addEventListener("push", (event) => {
         body,
         icon: "/icon",
         badge: "/icon",
-        // Collapse repeats onto one notification instead of stacking.
-        tag: "newinmeter-stale-data",
+        // Collapses repeats of the SAME alert onto one notification instead
+        // of stacking, without swallowing a different simultaneous alert.
+        tag,
         data: { url }
       });
     })()

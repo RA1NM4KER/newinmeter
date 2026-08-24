@@ -15,8 +15,19 @@ type ConnectionCardProps = {
   accountLabel: string | null;
   lastSyncedAt: string | null;
   isDemo?: boolean;
-  autoSyncEnabled?: boolean;
-  nextSyncAt?: string | null;
+  // Controlled from the parent (SettingsPageClient) -- the single source of
+  // truth, since an AlertRuleRow's own "also turn on automatic updates"
+  // flow can change this from outside this component entirely.
+  autoSyncEnabled: boolean;
+  nextSyncAt: string | null;
+  // Human labels of currently-enabled fresh-data alerts (Alerts tab, already
+  // mounted alongside this one), so turning automatic updates off can warn
+  // exactly which alerts that will also disable before it happens.
+  freshDataAlertsEnabled: string[];
+  // The parent is the state owner: this fires on every successful toggle
+  // (both directions) so the Alerts tab (already mounted) and this card
+  // itself re-render from the new value, no local mirror to fall out of sync.
+  onAutoSyncEnabledChange: (enabled: boolean, nextSyncAt?: string | null) => void;
 };
 
 export function ConnectionCard({
@@ -25,14 +36,16 @@ export function ConnectionCard({
   accountLabel,
   lastSyncedAt,
   isDemo = false,
-  autoSyncEnabled = true,
-  nextSyncAt = null
+  autoSyncEnabled,
+  nextSyncAt,
+  freshDataAlertsEnabled,
+  onAutoSyncEnabledChange
 }: ConnectionCardProps) {
   const router = useRouter();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingAutoSyncOff, setConfirmingAutoSyncOff] = useState(false);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
-  const [autoSyncOn, setAutoSyncOn] = useState(autoSyncEnabled);
 
   async function handleDisconnect() {
     setIsDisconnecting(true);
@@ -45,10 +58,8 @@ export function ConnectionCard({
     }
   }
 
-  async function handleAutoSyncToggle(next: boolean) {
-    if (autoSyncBusy) return;
+  async function applyAutoSyncToggle(next: boolean) {
     setAutoSyncBusy(true);
-    setAutoSyncOn(next);
     try {
       const response = await fetch("/api/livemopay/auto-sync", {
         method: "POST",
@@ -56,21 +67,40 @@ export function ConnectionCard({
         body: JSON.stringify({ enabled: next })
       });
       if (!response.ok) {
-        setAutoSyncOn(!next);
         return;
       }
+      const body = await response.json().catch(() => null);
+      onAutoSyncEnabledChange(next, body?.nextSyncAt ?? null);
       router.refresh();
     } catch {
-      setAutoSyncOn(!next);
+      // Network failure: nothing to revert -- the toggle is controlled by
+      // the parent's autoSyncEnabled prop, which was never optimistically
+      // changed, so it already still shows the correct (unchanged) state.
     } finally {
       setAutoSyncBusy(false);
     }
   }
 
+  function handleAutoSyncToggle(next: boolean) {
+    if (autoSyncBusy) return;
+
+    if (!next && freshDataAlertsEnabled.length > 0) {
+      setConfirmingAutoSyncOff(true);
+      return;
+    }
+
+    void applyAutoSyncToggle(next);
+  }
+
+  function handleConfirmAutoSyncOff() {
+    setConfirmingAutoSyncOff(false);
+    void applyAutoSyncToggle(false);
+  }
+
   const connected = status === "connected";
 
   return (
-    <SettingsGroup label="Data & Sync">
+    <SettingsGroup label="LiveMopay account">
       <div className="p-4 sm:p-5">
         <div className="flex items-center gap-4">
           <IconTile tone={connected ? "accent" : "default"}>
@@ -133,7 +163,7 @@ export function ConnectionCard({
                   {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
                 </dd>
               </div>
-              {autoSyncOn ? (
+              {autoSyncEnabled ? (
                 <div className="min-w-0 col-span-2">
                   <dt className="text-muted">Next scheduled update</dt>
                   <dd className="mt-1 truncate text-ink">
@@ -147,12 +177,12 @@ export function ConnectionCard({
               <div className="min-w-0">
                 <p className="text-[0.9375rem] font-medium text-ink">Automatic updates</p>
                 <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
-                  {autoSyncOn
+                  {autoSyncEnabled
                     ? "NewinMeter periodically refreshes your LiveMopay data automatically."
                     : "Your dashboard will only update when you refresh it manually."}
                 </p>
               </div>
-              <Toggle checked={autoSyncOn} disabled={autoSyncBusy} onChange={handleAutoSyncToggle} label="Automatic updates" />
+              <Toggle checked={autoSyncEnabled} disabled={autoSyncBusy} onChange={handleAutoSyncToggle} label="Automatic updates" />
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
@@ -171,6 +201,17 @@ export function ConnectionCard({
               busy={isDisconnecting}
               onConfirm={() => void handleDisconnect()}
               onCancel={() => setConfirming(false)}
+            />
+
+            <ConfirmDialog
+              open={confirmingAutoSyncOff}
+              title="Turn off automatic updates?"
+              message={`This will also turn off ${freshDataAlertsEnabled.length === 1 ? "this alert" : "these alerts"}, since they need fresh data: ${freshDataAlertsEnabled.join(", ")}.`}
+              confirmLabel="Turn off"
+              confirmVariant="danger"
+              busy={autoSyncBusy}
+              onConfirm={handleConfirmAutoSyncOff}
+              onCancel={() => setConfirmingAutoSyncOff(false)}
             />
           </>
         ) : (

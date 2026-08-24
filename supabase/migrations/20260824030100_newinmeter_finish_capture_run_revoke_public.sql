@@ -1,0 +1,13 @@
+-- Follow-up to 20260824030000: that migration revoked EXECUTE on
+-- finish_capture_run() from anon/authenticated by name, but
+-- has_function_privilege() still showed both able to execute it
+-- afterward. Root cause: PostgreSQL functions (unlike tables) get an
+-- implicit EXECUTE grant to PUBLIC at CREATE FUNCTION time unless
+-- explicitly revoked -- the original finish_capture_run migration
+-- (20260726030000) never did that revoke, unlike
+-- claim_due_auto_sync_connections and trigger_newinmeter_auto_sync, whose
+-- own migrations did revoke from PUBLIC and are therefore already locked
+-- down correctly. Every role is implicitly a member of PUBLIC, so
+-- revoking from the two named roles alone left the PUBLIC grant still
+-- giving them access.
+revoke execute on function public.finish_capture_run(uuid, text, integer, text) from public;

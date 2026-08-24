@@ -9,6 +9,7 @@ import {
   markConnectionSyncOutcome,
   replaceConnectionRefreshToken
 } from "@/lib/newinmeter/connection";
+import { evaluateAlertsAfterSync } from "@/lib/newinmeter/alerts";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
 import { TokenDecryptionError } from "@/lib/token-encryption";
 
@@ -69,6 +70,11 @@ export async function POST(request: Request) {
     });
 
     await markConnectionSyncOutcome(connectionRow.id, null);
+    // Rollups/dashboard_summary are guaranteed fresh at this point -- the
+    // rollup-refresh trigger fires synchronously inside runLivemopaySync's
+    // own finish_capture_run call. Never throws, never affects this
+    // response either way -- see the function's own doc comment.
+    await evaluateAlertsAfterSync(connectionRow.id, session.userId);
     const summary = await loadDashboardSummary(session.accessToken);
 
     return NextResponse.json({ mode: body.mode, summary, output: result.output });

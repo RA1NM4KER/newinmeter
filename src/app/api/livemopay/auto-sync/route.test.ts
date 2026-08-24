@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAuthenticatedSession: vi.fn(),
-  setAutoSyncEnabled: vi.fn()
+  setAutoSyncEnabled: vi.fn(),
+  disableFreshDataAlertRules: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
+vi.mock("@/lib/newinmeter/alerts", () => ({ disableFreshDataAlertRules: mocks.disableFreshDataAlertRules }));
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return { ...actual, cache: <T>(fn: T) => fn };
@@ -45,6 +47,18 @@ describe("POST /api/livemopay/auto-sync", () => {
     // is always called with the session's userId.
     await POST(request({ enabled: true, connectionId: "someone-elses-connection" }));
     expect(mocks.setAutoSyncEnabled).toHaveBeenCalledWith("user-a", true);
+    expect(mocks.disableFreshDataAlertRules).not.toHaveBeenCalled();
+  });
+
+  it("turning off also disables dependent fresh-data alerts and reports which ones", async () => {
+    mocks.setAutoSyncEnabled.mockResolvedValue({ id: "conn-a", autoSyncEnabled: false, nextSyncAt: null });
+    mocks.disableFreshDataAlertRules.mockResolvedValue(["low_balance", "daily_spend"]);
+
+    const response = await POST(request({ enabled: false }));
+    const body = await response.json();
+
+    expect(mocks.disableFreshDataAlertRules).toHaveBeenCalledWith("conn-a");
+    expect(body.disabledAlertTypes).toEqual(["low_balance", "daily_spend"]);
   });
 
   it("returns 403 for a demo connection", async () => {

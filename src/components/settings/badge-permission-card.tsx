@@ -168,7 +168,7 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
   const description =
     permission === "denied"
       ? "Notifications are blocked. Re-enable them for NewinMeter in your browser or device settings."
-      : "Badge the icon and get one notification when your data goes stale.";
+      : "Get notified on this device for alerts you set up, and when your data needs attention.";
 
   return (
     <SettingsRow
@@ -177,14 +177,14 @@ export function BadgePermissionCard({ lastSyncedAt }: BadgePermissionCardProps) 
           <Bell size={18} strokeWidth={2} />
         </IconTile>
       }
-      title="Home screen badge"
+      title="Notifications"
       description={description}
       control={
         <Toggle
           checked={enabled}
           disabled={busy || permission === "denied"}
           onChange={handleToggle}
-          label="Home screen badge"
+          label="Notifications"
         />
       }
     />

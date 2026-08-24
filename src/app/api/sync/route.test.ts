@@ -8,11 +8,13 @@ const mocks = vi.hoisted(() => ({
   markConnectionAuthError: vi.fn(),
   markConnectionSyncOutcome: vi.fn(),
   replaceConnectionRefreshToken: vi.fn(),
-  runLivemopaySync: vi.fn()
+  runLivemopaySync: vi.fn(),
+  evaluateAlertsAfterSync: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireConnectedSession }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
+vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateAlertsAfterSync: mocks.evaluateAlertsAfterSync }));
 vi.mock("@/lib/newinmeter/connection", () => ({
   getConnectionRowForUser: mocks.getConnectionRowForUser,
   getDecryptedRefreshToken: mocks.getDecryptedRefreshToken,
@@ -48,6 +50,7 @@ describe("POST /api/sync", () => {
     mocks.requireConnectedSession.mockResolvedValue({ ok: true, session });
     mocks.loadDashboardSummary.mockResolvedValue({});
     mocks.markConnectionSyncOutcome.mockResolvedValue(undefined);
+    mocks.evaluateAlertsAfterSync.mockResolvedValue(undefined);
   });
 
   it("never decrypts a token or calls runLivemopaySync for a demo connection", async () => {
@@ -59,9 +62,10 @@ describe("POST /api/sync", () => {
     await expect(response.json()).resolves.toMatchObject({ demoAccount: true });
     expect(mocks.getDecryptedRefreshToken).not.toHaveBeenCalled();
     expect(mocks.runLivemopaySync).not.toHaveBeenCalled();
+    expect(mocks.evaluateAlertsAfterSync).not.toHaveBeenCalled();
   });
 
-  it("syncs normally for a real, non-demo connection", async () => {
+  it("syncs normally for a real, non-demo connection and evaluates alerts on success", async () => {
     mocks.getConnectionRowForUser.mockResolvedValue(connectedRow);
     mocks.getDecryptedRefreshToken.mockReturnValue("refresh-token");
     mocks.runLivemopaySync.mockResolvedValue({ output: "ok" });
@@ -74,6 +78,18 @@ describe("POST /api/sync", () => {
       expect.objectContaining({ connectionId: "connection-a", refreshToken: "refresh-token" })
     );
     expect(mocks.markConnectionSyncOutcome).toHaveBeenCalledWith("connection-a", null);
+    expect(mocks.evaluateAlertsAfterSync).toHaveBeenCalledWith("connection-a", "user-a");
+  });
+
+  it("does not evaluate alerts when the sync itself fails", async () => {
+    mocks.getConnectionRowForUser.mockResolvedValue(connectedRow);
+    mocks.getDecryptedRefreshToken.mockReturnValue("refresh-token");
+    mocks.runLivemopaySync.mockRejectedValue(new Error("upstream 500"));
+
+    const response = await POST(request({ mode: "incremental" }));
+
+    expect(response.status).toBe(500);
+    expect(mocks.evaluateAlertsAfterSync).not.toHaveBeenCalled();
   });
 
   it("requires a connected session", async () => {

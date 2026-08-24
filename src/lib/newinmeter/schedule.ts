@@ -65,6 +65,23 @@ export function connectionOffsetMinutes(connectionId: string): number {
 
 type LocalDateParts = { year: number; month: number; day: number };
 
+// en-CA's default format is exactly "YYYY-MM-DD", matching Postgres date
+// literals and energy_day_rollups.period_date -- no manual zero-padding.
+const localDateStringFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: AUTO_SYNC_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+// Today's calendar date in Africa/Johannesburg, as "YYYY-MM-DD" -- the dedup
+// key daily alert events (daily_spend, daily_kwh) are scoped by. Always
+// SAST, never UTC, so a threshold crossing near midnight lands on the
+// correct local day rather than drifting by the UTC+2 offset.
+export function currentLocalDateString(now: Date): string {
+  return localDateStringFormatter.format(now);
+}
+
 function localDateParts(date: Date, timeZone: string): LocalDateParts {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone,

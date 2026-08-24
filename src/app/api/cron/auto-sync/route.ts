@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { getCronSecret } from "@/lib/env";
+import { evaluateAlertsAfterSync } from "@/lib/newinmeter/alerts";
 import {
   claimDueAutoSyncConnections,
   markAutoSyncFailure,
@@ -58,6 +59,9 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
     });
 
     await markAutoSyncSuccess(connection.id);
+    // Same guaranteed-fresh-rollups reasoning as the manual /api/sync hook;
+    // never throws, never affects this connection's outcome either way.
+    await evaluateAlertsAfterSync(connection.id, connection.userId);
     return "success";
   } catch (error) {
     if (error instanceof SyncAlreadyRunningError) {

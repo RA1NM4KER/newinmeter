@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { disableFreshDataAlertRules } from "@/lib/newinmeter/alerts";
 import { DemoAccountProtectedError, setAutoSyncEnabled } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,21 @@ export async function POST(request: Request) {
 
   try {
     const connection = await setAutoSyncEnabled(session.userId, parsed.data.enabled);
-    return NextResponse.json({ autoSyncEnabled: connection.autoSyncEnabled, nextSyncAt: connection.nextSyncAt });
+
+    // Turning automatic updates off means the three fresh-data alerts
+    // (low_balance/daily_spend/daily_kwh) can no longer mean anything --
+    // disable them together rather than leave a "configured but dead"
+    // alert silently not firing. The client is expected to have already
+    // warned the user which alerts this affects before calling here (using
+    // the alert rules it already has loaded), so this is enforcement, not
+    // the only warning.
+    const disabledAlertTypes = parsed.data.enabled ? [] : await disableFreshDataAlertRules(connection.id);
+
+    return NextResponse.json({
+      autoSyncEnabled: connection.autoSyncEnabled,
+      nextSyncAt: connection.nextSyncAt,
+      disabledAlertTypes
+    });
   } catch (error) {
     if (error instanceof DemoAccountProtectedError) {
       return NextResponse.json(

@@ -283,3 +283,22 @@ the app.
 See the migration file's own comments for the full design (the scheduler claim vs.
 `capture_runs_one_running_per_connection`, claim expiry/crash recovery, retryable vs.
 authentication failures, and the deterministic per-connection offset).
+
+## 18. Alert system
+
+Applied by `20260824020000_newinmeter_alert_rules.sql` -- no manual setup required, reuses the
+existing Web Push infrastructure entirely (same `sendPushToUser`, same VAPID keys, same service
+worker). Two new tables, both `connection_id`-scoped with RLS via `my_livemopay_connection_id()`
+(same pattern as `usage_activities`):
+
+- `alert_rules` -- one row per connection per type (`low_balance`, `daily_spend`, `daily_kwh`,
+  `data_delayed`), full CRUD for the owning user via `/api/alerts/[type]`.
+- `alert_events` -- persistent trigger/dedup state (read-only for the owner; every write goes
+  through the service-role evaluator in `src/lib/newinmeter/alerts.ts`).
+
+No backfill, no auto-enabled rules -- every existing connection has zero rows after this migration
+and stays that way until a user opts in from Settings. Evaluation piggybacks on existing scheduled
+work rather than adding a new cron job: the three fresh-data alerts run right after any successful
+sync (manual or automatic, via `evaluateAlertsAfterSync`); `data_delayed` runs inside the existing
+`/api/cron/stale-check` tick. See the migration file and `alerts.ts`'s own comments for the full
+dedup/threshold-reset design.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCronSecret } from "@/lib/env";
+import { evaluateDataDelayedAlerts } from "@/lib/newinmeter/alerts";
 import { listConnectionsForStaleCheck, markConnectionStaleNotified } from "@/lib/newinmeter/connection";
 import { sendPushToUser } from "@/lib/push-notify";
 import { isSyncStale } from "@/lib/sync-status";
@@ -55,5 +56,27 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, checked: connections.length, notified, skipped });
+  // Separate from the unconditional stale nudge above: the data_delayed
+  // alert is opt-in (per-connection alert_rules row), uses a more
+  // conservative threshold (DATA_DELAYED_AFTER_HOURS -- past two
+  // consecutive missed auto-sync windows, not just one), and dedupes
+  // through alert_events rather than stale_notified_at. Reuses this same
+  // daily tick rather than a second scheduler -- this cron already lists
+  // every connected, non-demo connection's lastSyncedAt, which is exactly
+  // what that evaluation needs.
+  const alertResult = await evaluateDataDelayedAlerts(
+    connections.map((connection) => ({
+      connectionId: connection.id,
+      userId: connection.userId,
+      lastSyncedAt: connection.lastSyncedAt
+    }))
+  );
+
+  return NextResponse.json({
+    ok: true,
+    checked: connections.length,
+    notified,
+    skipped,
+    dataDelayedAlerts: alertResult
+  });
 }

@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   releaseAutoSyncClaim: vi.fn(),
   replaceConnectionRefreshToken: vi.fn(),
   runLivemopaySync: vi.fn(),
-  decryptRefreshToken: vi.fn()
+  decryptRefreshToken: vi.fn(),
+  evaluateAlertsAfterSync: vi.fn()
 }));
 
 vi.mock("@/lib/env", () => ({ getCronSecret: mocks.getCronSecret }));
+vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateAlertsAfterSync: mocks.evaluateAlertsAfterSync }));
 vi.mock("@/lib/newinmeter/connection", () => ({
   claimDueAutoSyncConnections: mocks.claimDueAutoSyncConnections,
   markAutoSyncSuccess: mocks.markAutoSyncSuccess,
@@ -62,6 +64,7 @@ describe("POST /api/cron/auto-sync", () => {
     mocks.markAutoSyncFailure.mockResolvedValue(undefined);
     mocks.markConnectionAuthError.mockResolvedValue(undefined);
     mocks.releaseAutoSyncClaim.mockResolvedValue(undefined);
+    mocks.evaluateAlertsAfterSync.mockResolvedValue(undefined);
   });
 
   it("rejects a request without the correct bearer secret", async () => {
@@ -122,6 +125,17 @@ describe("POST /api/cron/auto-sync", () => {
     );
     expect(mocks.markAutoSyncSuccess).toHaveBeenCalledWith("a");
     expect(mocks.markAutoSyncFailure).not.toHaveBeenCalled();
+    expect(mocks.evaluateAlertsAfterSync).toHaveBeenCalledWith("a", "user-a");
+  });
+
+  it("does not evaluate alerts for a connection that fails", async () => {
+    mocks.claimDueAutoSyncConnections.mockResolvedValue([connection("a")]);
+    mocks.runLivemopaySync.mockRejectedValue(new Error("upstream 500"));
+
+    await POST(request());
+
+    expect(mocks.markAutoSyncFailure).toHaveBeenCalledWith("a", "upstream 500");
+    expect(mocks.evaluateAlertsAfterSync).not.toHaveBeenCalled();
   });
 
   it("releases the claim without recording a failure on SyncAlreadyRunningError", async () => {
