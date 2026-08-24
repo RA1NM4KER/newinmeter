@@ -5,6 +5,7 @@ import { BellOff, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
 import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
+import { describeSubscriptionFailure } from "@/lib/push-client";
 
 // Device push is a whole-device state, not a per-alert one -- this is the
 // single place that explains it and offers the fix, instead of every
@@ -61,7 +62,7 @@ export function DeviceNotificationStatus() {
       // said no.
       const result = await enableDeviceNotifications();
       if (result.status === "subscription_failed") {
-        setError("Couldn't turn on notifications. Try again.");
+        setError(describeSubscriptionFailure(result.reason));
       }
       // A "denied" result here (permission was "default" and the user just
       // said no to the native prompt) needs no separate message -- this

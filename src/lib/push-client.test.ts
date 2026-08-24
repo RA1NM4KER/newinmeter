@@ -130,23 +130,49 @@ describe("push-client", () => {
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it("returns subscription_failed (not denied, not thrown) when granted but the server registration fails", async () => {
+    it("returns subscription_failed with reason server_registration_failed when the browser subscription succeeds but NewinMeter's API call fails", async () => {
       installNotification("granted");
       installServiceWorkerAndPushManager();
       globalThis.fetch = vi.fn().mockResolvedValue({ ok: false });
       const { ensurePushNotificationsEnabled } = await import("./push-client");
 
-      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({ status: "subscription_failed" });
+      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({
+        status: "subscription_failed",
+        reason: "server_registration_failed"
+      });
     });
 
-    it("returns subscription_failed rather than throwing when PushManager.subscribe rejects", async () => {
+    it("returns subscription_failed with reason browser_registration_failed (not thrown) when PushManager.subscribe rejects -- e.g. Brave's push-service AbortError", async () => {
       installNotification("granted");
       installServiceWorkerAndPushManager({
-        subscribe: vi.fn().mockRejectedValue(new Error("blocked"))
+        subscribe: vi.fn().mockRejectedValue(new Error("Registration failed - push service error"))
       });
       const { ensurePushNotificationsEnabled } = await import("./push-client");
 
-      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({ status: "subscription_failed" });
+      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({
+        status: "subscription_failed",
+        reason: "browser_registration_failed"
+      });
+      // The whole point: a browser-side subscribe failure must never reach
+      // NewinMeter's own API at all.
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("retries and succeeds after a previous browser-side failure, with no page reload needed", async () => {
+      installNotification("granted");
+      const subscribe = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Registration failed - push service error"))
+        .mockResolvedValueOnce({ toJSON: () => ({ endpoint: "https://retry-ok", keys: {} }) });
+      installServiceWorkerAndPushManager({ subscribe });
+      const { ensurePushNotificationsEnabled } = await import("./push-client");
+
+      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({
+        status: "subscription_failed",
+        reason: "browser_registration_failed"
+      });
+      await expect(ensurePushNotificationsEnabled()).resolves.toEqual({ status: "granted" });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
 
     it("reuses an existing subscription instead of creating a new one", async () => {
@@ -262,6 +288,50 @@ describe("push-client", () => {
       const { repairExistingSubscription } = await import("./push-client");
 
       await expect(repairExistingSubscription()).resolves.toBe(false);
+    });
+  });
+
+  describe("isBraveBrowser", () => {
+    afterEach(() => {
+      delete (navigator as unknown as { brave?: unknown }).brave;
+    });
+
+    it("is false when navigator.brave doesn't exist", async () => {
+      const { isBraveBrowser } = await import("./push-client");
+      expect(isBraveBrowser()).toBe(false);
+    });
+
+    it("is true when navigator.brave exists", async () => {
+      Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+      const { isBraveBrowser } = await import("./push-client");
+      expect(isBraveBrowser()).toBe(true);
+    });
+  });
+
+  describe("describeSubscriptionFailure", () => {
+    afterEach(() => {
+      delete (navigator as unknown as { brave?: unknown }).brave;
+    });
+
+    it("server_registration_failed: always the generic 'try again' copy, Brave or not", async () => {
+      Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+      const { describeSubscriptionFailure } = await import("./push-client");
+      expect(describeSubscriptionFailure("server_registration_failed")).toBe("Couldn't turn on notifications. Try again.");
+    });
+
+    it("browser_registration_failed, ordinary browser: generic browser-settings guidance, no Brave mention", async () => {
+      const { describeSubscriptionFailure } = await import("./push-client");
+      const message = describeSubscriptionFailure("browser_registration_failed");
+      expect(message).toMatch(/browser couldn't register this device/i);
+      expect(message).not.toMatch(/brave/i);
+    });
+
+    it("browser_registration_failed on Brave: Brave-specific recovery guidance", async () => {
+      Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+      const { describeSubscriptionFailure } = await import("./push-client");
+      const message = describeSubscriptionFailure("browser_registration_failed");
+      expect(message).toMatch(/brave/i);
+      expect(message).toMatch(/push messaging/i);
     });
   });
 });

@@ -19,11 +19,60 @@ const DEVICE_NOTIFICATIONS_DISMISSED_STORAGE_KEY = "newinmeter:device-notificati
 
 export type PushPermissionState = "unsupported" | "default" | "granted" | "denied";
 
+// Two categories is enough to act on -- "browser" means the failure never
+// reached NewinMeter at all (PushManager.subscribe() itself threw, or the
+// service worker never became ready), "server" means the browser handed us
+// a real subscription but NewinMeter's own /api/push/subscribe round trip
+// failed. UI copy differs meaningfully between the two: a browser-side
+// failure is something the user's browser/OS push settings can fix right
+// now, a server-side one is NewinMeter's problem and "try again" is the
+// honest answer.
+export type SubscriptionFailureReason = "browser_registration_failed" | "server_registration_failed";
+
 export type PushEnableResult =
   | { status: "granted" }
   | { status: "denied" }
   | { status: "unsupported" }
-  | { status: "subscription_failed" };
+  | { status: "subscription_failed"; reason: SubscriptionFailureReason };
+
+// `navigator.brave` only exists in Brave -- used purely to decide whether a
+// browser-side registration failure is worth Brave-specific copy, never to
+// change subscribe behaviour itself. Brave's own "Use Google services for
+// push messaging" setting (off by default) makes PushManager.subscribe()
+// throw before any network request, which is otherwise indistinguishable
+// from a dozen other legitimate reasons a browser might refuse to register.
+export function isBraveBrowser(): boolean {
+  return typeof navigator !== "undefined" && "brave" in navigator;
+}
+
+// Dev-only, best-effort diagnostics for exactly this kind of "which phase
+// of subscribing failed" question -- never the subscription object itself
+// (that's where the auth/p256dh keys and the real endpoint live), only the
+// coarse state needed to tell platforms apart. No-op in production.
+function logPushDiagnostic(phase: string, error?: unknown): void {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+  console.info("[push]", phase, {
+    permission: typeof Notification !== "undefined" ? Notification.permission : "unavailable",
+    isBrave: isBraveBrowser(),
+    error: error instanceof Error ? { name: error.name, message: error.message } : undefined
+  });
+}
+
+// User-facing copy for a subscription_failed result -- kept here rather
+// than in each component so General/Alerts/anywhere else that surfaces
+// this in the future all say the same thing. Never shows the raw browser
+// exception text.
+export function describeSubscriptionFailure(reason: SubscriptionFailureReason): string {
+  if (reason === "server_registration_failed") {
+    return "Couldn't turn on notifications. Try again.";
+  }
+  if (isBraveBrowser()) {
+    return 'Brave couldn’t connect to its push service. In Brave settings, turn on "Use Google services for push messaging," then try again.';
+  }
+  return "Your browser couldn't register this device for push notifications. Check your browser's notification/push settings and try again.";
+}
 
 function isPushSupported(): boolean {
   return (
@@ -80,38 +129,60 @@ export async function hasActiveSubscription(): Promise<boolean> {
   return Boolean(await registration.pushManager.getSubscription());
 }
 
+type SubscribeOutcome = { ok: true } | { ok: false; reason: SubscriptionFailureReason };
+
 // Assumes permission is already "granted" -- creates (or reuses) a
-// subscription and registers it with the server. Returns false on any
-// failure (missing VAPID key, SW never ready, PushManager rejecting,
-// server round trip failing) rather than throwing -- every caller treats a
-// failed subscribe as a recoverable, non-fatal state.
-async function subscribeToPush(): Promise<boolean> {
+// subscription and registers it with the server. Never throws -- every
+// caller treats a failed subscribe as a recoverable, non-fatal state.
+// Split into two try/catch phases (browser vs. server) so a caller can
+// tell "your browser refused to register this device" (Brave with push
+// messaging disabled, a stale/broken service worker, etc.) apart from "the
+// browser subscription is fine but NewinMeter's own API call failed" --
+// see SubscriptionFailureReason's own comment for why that distinction
+// matters to the UI.
+async function subscribeToPush(): Promise<SubscribeOutcome> {
   if (!VAPID_PUBLIC_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-    return false;
+    logPushDiagnostic("browser_registration_failed:missing_prerequisite");
+    return { ok: false, reason: "browser_registration_failed" };
   }
 
+  const registration = await getReadyRegistration();
+  if (!registration) {
+    logPushDiagnostic("browser_registration_failed:service_worker_not_ready");
+    return { ok: false, reason: "browser_registration_failed" };
+  }
+
+  let subscription: PushSubscription;
   try {
-    const registration = await getReadyRegistration();
-    if (!registration) {
-      return false;
-    }
     const existing = await registration.pushManager.getSubscription();
-    const subscription =
+    subscription =
       existing ??
       (await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       }));
+  } catch (error) {
+    // This is where Brave's "Registration failed - push service error"
+    // AbortError lands -- entirely browser-side, before any NewinMeter
+    // request is ever made.
+    logPushDiagnostic("browser_registration_failed:subscribe_threw", error);
+    return { ok: false, reason: "browser_registration_failed" };
+  }
 
+  try {
     const response = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(subscription.toJSON())
     });
-
-    return response.ok;
-  } catch {
-    return false;
+    if (!response.ok) {
+      logPushDiagnostic("server_registration_failed:response_not_ok");
+      return { ok: false, reason: "server_registration_failed" };
+    }
+    return { ok: true };
+  } catch (error) {
+    logPushDiagnostic("server_registration_failed:fetch_threw", error);
+    return { ok: false, reason: "server_registration_failed" };
   }
 }
 
@@ -190,8 +261,8 @@ export async function ensurePushNotificationsEnabled(): Promise<PushEnableResult
     return { status: "denied" };
   }
 
-  const ok = await subscribeToPush();
-  return ok ? { status: "granted" } : { status: "subscription_failed" };
+  const outcome = await subscribeToPush();
+  return outcome.ok ? { status: "granted" } : { status: "subscription_failed", reason: outcome.reason };
 }
 
 // Device-level "the user chose to keep device notifications off" flag --

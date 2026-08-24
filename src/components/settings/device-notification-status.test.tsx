@@ -139,13 +139,63 @@ describe("DeviceNotificationStatus", () => {
     expect(screen.queryByText("Turn on notifications")).toBeNull();
   });
 
-  it("shows a recoverable inline error when subscribing fails, without claiming success", async () => {
-    const enableDeviceNotifications = vi.fn().mockResolvedValue({ status: "subscription_failed" });
+  it("server-side subscription failure: shows the generic 'try again' copy", async () => {
+    const enableDeviceNotifications = vi
+      .fn()
+      .mockResolvedValue({ status: "subscription_failed", reason: "server_registration_failed" });
     setDeviceNotifications({ browserPermission: "granted", enableDeviceNotifications });
     render(<DeviceNotificationStatus />);
 
     fireEvent.click(screen.getByText("Turn on notifications"));
 
     await waitFor(() => expect(screen.getByText(/Couldn't turn on notifications/i)).toBeDefined());
+  });
+
+  it("browser-side subscription failure, non-Brave: shows browser-settings guidance instead of the generic copy", async () => {
+    const enableDeviceNotifications = vi
+      .fn()
+      .mockResolvedValue({ status: "subscription_failed", reason: "browser_registration_failed" });
+    setDeviceNotifications({ browserPermission: "granted", enableDeviceNotifications });
+    render(<DeviceNotificationStatus />);
+
+    fireEvent.click(screen.getByText("Turn on notifications"));
+
+    await waitFor(() =>
+      expect(screen.getByText(/browser couldn't register this device/i)).toBeDefined()
+    );
+    expect(screen.queryByText(/brave/i)).toBeNull();
+  });
+
+  it("browser-side subscription failure on Brave: shows Brave-specific recovery guidance", async () => {
+    Object.defineProperty(navigator, "brave", { value: {}, configurable: true });
+    try {
+      const enableDeviceNotifications = vi
+        .fn()
+        .mockResolvedValue({ status: "subscription_failed", reason: "browser_registration_failed" });
+      setDeviceNotifications({ browserPermission: "granted", enableDeviceNotifications });
+      render(<DeviceNotificationStatus />);
+
+      fireEvent.click(screen.getByText("Turn on notifications"));
+
+      await waitFor(() => expect(screen.getByText(/brave/i)).toBeDefined());
+    } finally {
+      delete (navigator as unknown as { brave?: unknown }).brave;
+    }
+  });
+
+  it("retrying after a browser-side failure clears the old error and can succeed", async () => {
+    const enableDeviceNotifications = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "subscription_failed", reason: "browser_registration_failed" })
+      .mockResolvedValueOnce({ status: "granted" });
+    setDeviceNotifications({ browserPermission: "granted", enableDeviceNotifications });
+    render(<DeviceNotificationStatus />);
+
+    fireEvent.click(screen.getByText("Turn on notifications"));
+    await waitFor(() => expect(screen.getByText(/browser couldn't register this device/i)).toBeDefined());
+
+    fireEvent.click(screen.getByText("Turn on notifications"));
+    await waitFor(() => expect(screen.queryByText(/browser couldn't register this device/i)).toBeNull());
+    expect(enableDeviceNotifications).toHaveBeenCalledTimes(2);
   });
 });
