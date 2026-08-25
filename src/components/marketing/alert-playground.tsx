@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell, Check, Minus, Plus, RefreshCw } from "lucide-react";
+import type { DemoScenarioId } from "./demo-data";
 
 type AlertId = "dailySpend" | "lowBalance" | "runway";
 
@@ -66,7 +67,17 @@ function formatThreshold(definition: AlertDefinition, value: number) {
   return definition.unit === "currency" ? `R${value}` : `${value} days`;
 }
 
-export function AlertPlayground() {
+type AlertPlaygroundProps = {
+  storyScenarioId?: DemoScenarioId;
+};
+
+const storyDailySpend: Record<DemoScenarioId, number> = {
+  normal: 34.2,
+  evening: 48.8,
+  lateNight: 52.4
+};
+
+export function AlertPlayground({ storyScenarioId }: AlertPlaygroundProps = {}) {
   const [selectedId, setSelectedId] = useState<AlertId>("dailySpend");
   const [thresholds, setThresholds] = useState<Record<AlertId, number>>({
     dailySpend: 50,
@@ -75,7 +86,9 @@ export function AlertPlayground() {
   });
   const definition = alertDefinitions[selectedId];
   const threshold = thresholds[selectedId];
-  const triggered = definition.condition(definition.current, threshold);
+  const current =
+    selectedId === "dailySpend" && storyScenarioId ? storyDailySpend[storyScenarioId] : definition.current;
+  const triggered = definition.condition(current, threshold);
 
   function changeThreshold(direction: -1 | 1) {
     setThresholds((current) => ({
@@ -92,18 +105,16 @@ export function AlertPlayground() {
       <div className="mx-auto max-w-[86rem] px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
         <div className="grid items-start gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brandTeal">
-              Alerts + automatic updates
-            </p>
+            <p className="text-base font-medium text-brandTeal">You found it this time.</p>
             <h2
               id="alert-heading"
-              className="mt-4 max-w-md text-3xl font-semibold tracking-[-0.04em] text-ink sm:text-5xl"
+              className="mt-3 max-w-md text-3xl font-semibold tracking-[-0.04em] text-ink sm:text-5xl"
             >
               You don’t need to keep checking.
             </h2>
             <p className="mt-4 max-w-md text-base leading-7 text-muted">
-              Set a useful boundary. After periodic sync brings in fresh LiveMopay data, NewinMeter can tell you when it
-              has been crossed.
+              Set a boundary for the next day. After periodic sync brings in fresh LiveMopay data, NewinMeter can tell
+              you when it has been crossed.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-2" aria-label="Choose an alert type">
@@ -125,11 +136,11 @@ export function AlertPlayground() {
             </div>
           </div>
 
-          <div className="overflow-hidden border border-brandTeal/15 bg-paper shadow-[0_24px_60px_rgba(1,99,113,0.08)]">
+          <div>
             <div className="grid sm:grid-cols-[1fr_1fr]">
-              <div className="px-5 py-7 sm:border-r sm:border-line sm:px-7 sm:py-8">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">{definition.label} alert</p>
-                <p className="mt-5 text-sm text-ink">{definition.title}</p>
+              <div className="py-2 sm:border-r sm:border-brandTeal/15 sm:py-5 sm:pr-8">
+                <p className="text-sm font-semibold text-ink">{definition.label} alert</p>
+                <p className="mt-4 text-sm text-muted">{definition.title}</p>
 
                 <div className="mt-6 flex items-center justify-between gap-5 border-y border-line py-4">
                   <button
@@ -142,7 +153,7 @@ export function AlertPlayground() {
                     <Minus className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <div className="text-center" aria-live="polite">
-                    <p className="text-3xl font-semibold tracking-[-0.04em] text-ink">
+                    <p className="text-3xl font-semibold tabular-nums tracking-[-0.04em] text-ink transition-opacity motion-reduce:transition-none">
                       {formatThreshold(definition, threshold)}
                     </p>
                     <p className="mt-1 text-xs text-muted">Illustrative threshold</p>
@@ -164,8 +175,8 @@ export function AlertPlayground() {
                 </div>
               </div>
 
-              <div className="border-t border-line px-5 py-7 sm:border-t-0 sm:px-7 sm:py-8">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Phone notification</p>
+              <div className="mt-8 border border-brandTeal/15 bg-paper px-5 py-6 shadow-[0_20px_45px_rgba(1,99,113,0.07)] sm:mt-0 sm:ml-8 sm:px-6">
+                <p className="text-sm font-semibold text-ink">Phone notification</p>
                 <div
                   className={`mt-5 min-h-40 rounded-xl border px-4 py-4 transition-colors duration-300 motion-reduce:transition-none ${
                     triggered ? "border-accent/35 bg-accentSoft/65" : "border-line bg-canvas"
@@ -185,15 +196,13 @@ export function AlertPlayground() {
                     {triggered ? definition.label : "Not triggered yet"}
                   </p>
                   <p className="mt-1 text-sm leading-5 text-muted">
-                    {triggered
-                      ? definition.notification(definition.current, threshold)
-                      : definition.waiting(definition.current, threshold)}
+                    {triggered ? definition.notification(current, threshold) : definition.waiting(current, threshold)}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-2 border-t border-line bg-canvas/60 px-5 py-4 text-xs text-muted sm:grid-cols-[auto_1fr_auto_1fr_auto] sm:items-center sm:px-7">
+            <div className="mt-6 grid gap-2 border-y border-brandTeal/15 py-4 text-xs text-muted sm:grid-cols-[auto_1fr_auto_1fr_auto] sm:items-center">
               <span className="inline-flex items-center gap-2 font-medium text-ink">
                 <RefreshCw className="h-3.5 w-3.5 text-brandTeal" aria-hidden="true" />
                 Periodic sync

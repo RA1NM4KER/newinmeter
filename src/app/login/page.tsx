@@ -3,8 +3,8 @@ import { LoginForm } from "@/components/auth/login-form";
 import { isValidDemoAccessToken } from "@/lib/demo/access-token";
 
 export const metadata = {
-  title: "NewinMeter | See what your electricity was doing",
-  description: "Explore prepaid electricity usage, add household context, ask what changed, and get useful alerts."
+  title: "NewinMeter | Your electricity, finally explained",
+  description: "Understand prepaid electricity usage and get useful alerts. Free for Newinbosch residents."
 };
 
 export const dynamic = "force-dynamic";
@@ -19,13 +19,14 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <AuthShell
-      badge="NewinMeter for LiveMopay"
       title={
         <>
-          See what your electricity <span className="text-brandTeal">was doing.</span>
+          Your electricity.
+          <br />
+          <span className="text-brandTeal">Finally explained.</span>
         </>
       }
-      description="Turn your prepaid history into days you can explore, label, question, and watch — without guessing where the money went."
+      description="See where your prepaid electricity went, understand unusual usage, and get warned when something needs attention."
     >
       <LoginForm demoToken={demoToken} />
     </AuthShell>

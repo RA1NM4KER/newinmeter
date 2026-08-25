@@ -91,7 +91,15 @@ body {
   animation: public-demo-answer-in 280ms ease-out both;
 }
 
+.public-smooth-scroll {
+  scroll-behavior: smooth;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .public-smooth-scroll {
+    scroll-behavior: auto;
+  }
+
   .public-demo-answer {
     animation: none;
   }

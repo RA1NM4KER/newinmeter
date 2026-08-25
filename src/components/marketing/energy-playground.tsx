@@ -18,8 +18,19 @@ function endTime(time: string) {
   return `${String(Math.floor(next / 60) % 24).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
 }
 
-export function EnergyPlayground() {
-  const [scenarioId, setScenarioId] = useState<DemoScenarioId>("lateNight");
+type EnergyPlaygroundProps = {
+  scenarioId?: DemoScenarioId;
+  onScenarioChange?: (scenarioId: DemoScenarioId) => void;
+  onPointChange?: (time: string) => void;
+};
+
+export function EnergyPlayground({
+  scenarioId: controlledScenarioId,
+  onScenarioChange,
+  onPointChange
+}: EnergyPlaygroundProps = {}) {
+  const [localScenarioId, setLocalScenarioId] = useState<DemoScenarioId>("lateNight");
+  const scenarioId = controlledScenarioId ?? localScenarioId;
   const scenario = demoScenarios[scenarioId];
   const [selectedIndex, setSelectedIndex] = useState(scenario.focusIndex);
   const [assistantState, setAssistantState] = useState<"closed" | "thinking" | "open">("closed");
@@ -45,12 +56,14 @@ export function EnergyPlayground() {
   );
 
   function chooseScenario(id: DemoScenarioId) {
-    setScenarioId(id);
+    setLocalScenarioId(id);
+    onScenarioChange?.(id);
   }
 
   function choosePoint(index: number) {
     setSelectedIndex(index);
     setAssistantState("closed");
+    onPointChange?.(scenario.points[index].time);
   }
 
   function openAssistant() {
@@ -74,7 +87,7 @@ export function EnergyPlayground() {
       <div className="px-4 pb-5 pt-5 sm:px-6 sm:pb-6">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs text-muted">Energy spend</p>
+            <p className="text-xs text-muted">12:00–00:00 spend</p>
             <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-ink sm:text-4xl">
               {formatRand(spendFor(totalKwh))}
             </p>
