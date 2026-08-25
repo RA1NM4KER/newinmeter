@@ -14,10 +14,9 @@ type InstallPromoCardProps = {
 
 // One restrained, dismissible install nudge on the dashboard -- the highest-
 // traffic surface, so it's the main lever for actually getting more users
-// installed, but it must stay quiet: mobile-only (this is a "get alerts on
-// your phone" pitch, which doesn't land the same way from a desktop
-// browser), gone the instant this device is standalone, and respects a
-// cooldown once dismissed (shared with AlertRuleRow's contextual iOS setup
+// installed, but it must stay quiet: shown only where the current install
+// eligibility rules allow it, gone the instant this device is standalone,
+// and hidden during the dismissal cooldown (shared with AlertRuleRow's iOS setup
 // prompt via lib/pwa-install-prompt.ts).
 export function InstallPromoCard({ alertsEnabled, isDemo }: InstallPromoCardProps) {
   const router = useRouter();
@@ -58,13 +57,13 @@ export function InstallPromoCard({ alertsEnabled, isDemo }: InstallPromoCardProp
         <Smartphone aria-hidden="true" size={18} strokeWidth={2} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[0.9375rem] font-medium text-ink">Get NewinMeter alerts on your phone</p>
+        <p className="text-[0.9375rem] font-medium text-ink">Install NewinMeter</p>
         <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
-          Install NewinMeter for quick access and electricity notifications.
+          Get quick access and notifications on this device.
         </p>
       </div>
       <Button variant="secondary" size="sm" onClick={() => void handleSetUp()} className="shrink-0">
-        Set up
+        Install
       </Button>
       <button
         aria-label="Dismiss"

@@ -53,7 +53,8 @@ describe("InstallPromoCard", () => {
 
   it("renders on mobile once ready and not cooling down", async () => {
     render(<InstallPromoCard alertsEnabled isDemo={false} />);
-    await waitFor(() => expect(screen.getByText("Get NewinMeter alerts on your phone")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Install NewinMeter")).toBeDefined());
+    expect(screen.getByText("Get quick access and notifications on this device.")).toBeDefined();
   });
 
   it("renders nothing before the client-side ready pass completes", () => {
@@ -92,37 +93,37 @@ describe("InstallPromoCard", () => {
 
   it("dismissing sets the cooldown and hides immediately", async () => {
     render(<InstallPromoCard alertsEnabled isDemo={false} />);
-    await waitFor(() => expect(screen.getByText("Get NewinMeter alerts on your phone")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Install NewinMeter")).toBeDefined());
 
     fireEvent.click(screen.getByLabelText("Dismiss"));
 
     expect(mocks.dismissInstallPromo).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("Get NewinMeter alerts on your phone")).toBeNull();
+    expect(screen.queryByText("Install NewinMeter")).toBeNull();
   });
 
-  it("iOS: Set up opens the install guide", async () => {
+  it("iOS: Install opens the install guide", async () => {
     setPwaInstall({ isIos: true });
     render(<InstallPromoCard alertsEnabled isDemo={false} />);
-    await waitFor(() => expect(screen.getByText("Set up")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Install")).toBeDefined());
 
-    fireEvent.click(screen.getByText("Set up"));
+    fireEvent.click(screen.getByText("Install"));
     expect(mocks.openInstallGuide).toHaveBeenCalledTimes(1);
   });
 
-  it("Android with a deferred prompt: Set up triggers the native install prompt", async () => {
+  it("Android with a deferred prompt: Install triggers the native install prompt", async () => {
     setPwaInstall({ canPromptInstall: true });
     render(<InstallPromoCard alertsEnabled isDemo={false} />);
-    await waitFor(() => expect(screen.getByText("Set up")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Install")).toBeDefined());
 
-    fireEvent.click(screen.getByText("Set up"));
+    fireEvent.click(screen.getByText("Install"));
     await waitFor(() => expect(mocks.promptInstall).toHaveBeenCalledTimes(1));
   });
 
-  it("no deferred prompt available: Set up falls back to /install", async () => {
+  it("no deferred prompt available: Install falls back to /install", async () => {
     render(<InstallPromoCard alertsEnabled isDemo={false} />);
-    await waitFor(() => expect(screen.getByText("Set up")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Install")).toBeDefined());
 
-    fireEvent.click(screen.getByText("Set up"));
+    fireEvent.click(screen.getByText("Install"));
     expect(mocks.push).toHaveBeenCalledWith("/install");
   });
 });
