@@ -14,16 +14,25 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
     redirect("/login");
   }
 
+  // Checked here, before AppShell renders, so a brand-new user never sees a
+  // flash of the dashboard chrome before being bounced to /connect -- each
+  // page below still guards itself too, but that check runs after this
+  // shell has already painted.
+  const earlyConnection = await getConnectionForUser(session.userId);
+  if (!earlyConnection || earlyConnection.status !== "connected") {
+    redirect("/connect");
+  }
+
   // Seeded server-side so the header bell's badge is correct on first
   // paint, no client-fetch flash. Same resilience posture as Settings'
   // alert rules fetch: a failure here (e.g. before this feature's
   // migration is applied) must not take down the whole authenticated app
   // shell, just start the badge at 0 until the bell's own client fetch
   // corrects it.
-  const [permissions, features, connection, initialUnreadNotificationCount] = await Promise.all([
+  const connection = earlyConnection;
+  const [permissions, features, initialUnreadNotificationCount] = await Promise.all([
     getOrCreateUserPermissions(session.userId),
     getUserFeatureAccessDetailed(session.userId),
-    getConnectionForUser(session.userId),
     getUnreadNotificationCount(session.userId).catch((error) => {
       console.error("newinmeter_get_unread_count_failed", error instanceof Error ? error.message : error);
       return 0;
