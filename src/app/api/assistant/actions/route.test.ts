@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   hasFeatureAccess: vi.fn(),
   enforceRateLimit: vi.fn(),
   createActivity: vi.fn(),
+  updateActivity: vi.fn(),
+  deleteActivity: vi.fn(),
   resolveOverlappingUsageAnomalyEvents: vi.fn(),
   upsertAlertRule: vi.fn(),
   getAlertRulesForUser: vi.fn(),
@@ -31,7 +33,9 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/activity/data", () => ({
   activityValidationErrors: (error: { validationErrors?: Record<string, string> }) => error.validationErrors,
-  createActivity: mocks.createActivity
+  createActivity: mocks.createActivity,
+  updateActivity: mocks.updateActivity,
+  deleteActivity: mocks.deleteActivity
 }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
 vi.mock("@/lib/newinmeter/alerts", async () => {
@@ -221,6 +225,175 @@ describe("POST /api/assistant/actions", () => {
       expect(response.status).toBe(400);
       const body = await response.json();
       expect(body.errors).toEqual({ tags: "Add at least one tag." });
+    });
+  });
+
+  describe("update_activity", () => {
+    function updateRequest(overrides: Record<string, unknown> = {}) {
+      return request({
+        type: "update_activity",
+        activityId: "activity-1",
+        date: "2026-08-20",
+        start: "18:00",
+        end: "19:00",
+        tags: ["geyser"],
+        note: null,
+        ...overrides
+      });
+    }
+
+    it("returns 403 when Activities is disabled for this account", async () => {
+      mocks.hasFeatureAccess.mockImplementation(async (_userId: string, key: string) => key === "ai");
+      const response = await POST(updateRequest());
+      expect(response.status).toBe(403);
+      expect(mocks.updateActivity).not.toHaveBeenCalled();
+    });
+
+    it("blocks the demo account, without ever calling updateActivity", async () => {
+      mocks.requireConnectedSession.mockResolvedValue({
+        ok: true,
+        session: { ...session, connection: { ...session.connection, isDemo: true } }
+      });
+      const response = await POST(updateRequest());
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.demoAccount).toBe(true);
+      expect(mocks.updateActivity).not.toHaveBeenCalled();
+    });
+
+    it("resolves ownership via RLS (session accessToken/connection id), never a client-supplied id", async () => {
+      mocks.updateActivity.mockResolvedValue({
+        id: "activity-1",
+        startsAt: "2026-08-20T18:00:00",
+        endsAt: "2026-08-20T19:00:00",
+        allDay: false,
+        tags: ["geyser"],
+        color: "#0f766e",
+        createdAt: "now",
+        updatedAt: "now"
+      });
+
+      const response = await POST(updateRequest({ userId: "someone-else" }));
+
+      expect(response.status).toBe(200);
+      expect(mocks.updateActivity).toHaveBeenCalledWith(
+        "token",
+        "conn-a",
+        "activity-1",
+        expect.objectContaining({ date: "2026-08-20", startTime: "18:00", endTime: "19:00", tags: ["geyser"] })
+      );
+    });
+
+    it("preserves the full tag list sent by the caller, including when removing one of several", async () => {
+      mocks.updateActivity.mockResolvedValue({
+        id: "activity-1",
+        startsAt: "2026-08-20T18:00:00",
+        endsAt: "2026-08-20T19:00:00",
+        allDay: false,
+        tags: ["geyser", "heater"],
+        color: "#0f766e",
+        createdAt: "now",
+        updatedAt: "now"
+      });
+
+      await POST(updateRequest({ tags: ["geyser", "heater"] }));
+
+      expect(mocks.updateActivity).toHaveBeenCalledWith(
+        "token",
+        "conn-a",
+        "activity-1",
+        expect.objectContaining({ tags: ["geyser", "heater"] })
+      );
+    });
+
+    it("supports an overnight activity (end time before start time)", async () => {
+      mocks.updateActivity.mockResolvedValue({
+        id: "activity-1",
+        startsAt: "2026-08-20T22:00:00",
+        endsAt: "2026-08-21T05:00:00",
+        allDay: false,
+        tags: ["geyser"],
+        color: "#0f766e",
+        createdAt: "now",
+        updatedAt: "now"
+      });
+
+      const response = await POST(updateRequest({ start: "22:00", end: "05:00" }));
+
+      expect(response.status).toBe(200);
+      expect(mocks.updateActivity).toHaveBeenCalledWith(
+        "token",
+        "conn-a",
+        "activity-1",
+        expect.objectContaining({ startTime: "22:00", endTime: "05:00" })
+      );
+    });
+
+    it("returns 404 (never a 403/500 that would distinguish it) when the id doesn't exist or isn't owned by this user -- RLS returns null either way", async () => {
+      mocks.updateActivity.mockResolvedValue(null);
+      const response = await POST(updateRequest({ activityId: "someone-elses-activity" }));
+      expect(response.status).toBe(404);
+    });
+
+    it("returns 400 with field errors when the domain layer rejects the input", async () => {
+      mocks.updateActivity.mockRejectedValue({ validationErrors: { tags: "Add at least one tag." } });
+      const response = await POST(updateRequest({ tags: [] }));
+      expect(response.status).toBe(400);
+    });
+
+    it("rejects a request with zero tags at the schema level, before ever reaching updateActivity", async () => {
+      const response = await POST(updateRequest({ tags: [] }));
+      expect(response.status).toBe(400);
+      expect(mocks.updateActivity).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("delete_activity", () => {
+    function deleteRequest(overrides: Record<string, unknown> = {}) {
+      return request({ type: "delete_activity", activityId: "activity-1", ...overrides });
+    }
+
+    it("returns 403 when Activities is disabled for this account", async () => {
+      mocks.hasFeatureAccess.mockImplementation(async (_userId: string, key: string) => key === "ai");
+      const response = await POST(deleteRequest());
+      expect(response.status).toBe(403);
+      expect(mocks.deleteActivity).not.toHaveBeenCalled();
+    });
+
+    it("blocks the demo account, without ever calling deleteActivity", async () => {
+      mocks.requireConnectedSession.mockResolvedValue({
+        ok: true,
+        session: { ...session, connection: { ...session.connection, isDemo: true } }
+      });
+      const response = await POST(deleteRequest());
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.demoAccount).toBe(true);
+      expect(mocks.deleteActivity).not.toHaveBeenCalled();
+    });
+
+    it("deletes using the session's own accessToken (RLS ownership), never a client-supplied user id", async () => {
+      mocks.deleteActivity.mockResolvedValue({
+        id: "activity-1",
+        startsAt: "2026-08-20T18:00:00",
+        endsAt: "2026-08-20T19:00:00",
+        allDay: false,
+        tags: ["geyser"],
+        color: "#0f766e",
+        createdAt: "now",
+        updatedAt: "now"
+      });
+
+      const response = await POST(deleteRequest({ userId: "someone-else" }));
+
+      expect(response.status).toBe(200);
+      expect(mocks.deleteActivity).toHaveBeenCalledWith("token", "activity-1");
+    });
+
+    it("returns 404 when the id doesn't exist or isn't owned by this user", async () => {
+      mocks.deleteActivity.mockResolvedValue(null);
+      const response = await POST(deleteRequest({ activityId: "someone-elses-activity" }));
+      expect(response.status).toBe(404);
     });
   });
 
