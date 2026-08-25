@@ -131,7 +131,7 @@ describe("validateAssistantResponse", () => {
           {
             type: "update_activity",
             label: "Update activity",
-            activityId: "act-1",
+            activityId: "11111111-1111-1111-1111-111111111111",
             date: "2026-08-20",
             start: "18:00",
             end: "19:00",
@@ -146,16 +146,48 @@ describe("validateAssistantResponse", () => {
 
     const deleteActivity = validateAssistantResponse(
       validPayload({
-        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "act-1", requiresConfirmation: true }]
+        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "11111111-1111-1111-1111-111111111111", requiresConfirmation: true }]
       })
     );
     expect(deleteActivity.ok).toBe(true);
   });
 
+  it("rejects a fabricated non-UUID activityId on delete_activity -- the exact 'unknown' regression observed live (model skipped find_activities, PostgREST then raw-400'd on the malformed uuid)", () => {
+    const result = validateAssistantResponse(
+      validPayload({
+        actions: [
+          { type: "delete_activity", label: "Delete activity", activityId: "unknown", requiresConfirmation: true }
+        ]
+      })
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a fabricated non-UUID activityId on update_activity", () => {
+    const result = validateAssistantResponse(
+      validPayload({
+        actions: [
+          {
+            type: "update_activity",
+            label: "Update activity",
+            activityId: "unknown",
+            date: "2026-08-20",
+            start: "18:00",
+            end: "19:00",
+            tags: ["geyser"],
+            note: null,
+            requiresConfirmation: true
+          }
+        ]
+      })
+    );
+    expect(result.ok).toBe(false);
+  });
+
   it("rejects update_activity/delete_activity missing requiresConfirmation: true", () => {
     const result = validateAssistantResponse(
       validPayload({
-        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "act-1" }]
+        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "11111111-1111-1111-1111-111111111111" }]
       })
     );
     expect(result.ok).toBe(false);

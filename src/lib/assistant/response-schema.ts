@@ -79,7 +79,12 @@ const AssistantActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("update_activity"),
     label: z.string().min(1),
-    activityId: z.string().min(1),
+    // A real UUID only -- must come from a prior find_activities call, never
+    // invented. Rejecting a non-UUID here (e.g. the literal "unknown") at
+    // structural-validation time means a fabricated id fails the retry loop
+    // BEFORE any confirm button ever renders, instead of reaching the
+    // database and surfacing a raw Postgres error to the user.
+    activityId: z.string().uuid(),
     date: z.string().min(1),
     start: z.string().min(1),
     end: z.string().min(1),
@@ -90,7 +95,7 @@ const AssistantActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("delete_activity"),
     label: z.string().min(1),
-    activityId: z.string().min(1),
+    activityId: z.string().uuid(),
     requiresConfirmation: z.literal(true)
   }),
   z.object({
@@ -417,7 +422,10 @@ const actionSchema = {
       properties: {
         type: { type: "string", const: "update_activity" },
         label: { type: "string" },
-        activityId: { type: "string" },
+        activityId: {
+          type: "string",
+          description: "A real activity id from a prior find_activities call. Never invent one."
+        },
         date: { type: "string" },
         start: { type: "string" },
         end: { type: "string" },
@@ -433,7 +441,10 @@ const actionSchema = {
       properties: {
         type: { type: "string", const: "delete_activity" },
         label: { type: "string" },
-        activityId: { type: "string" },
+        activityId: {
+          type: "string",
+          description: "A real activity id from a prior find_activities call. Never invent one."
+        },
         requiresConfirmation: { type: "boolean", const: true }
       },
       required: ["type", "label", "activityId", "requiresConfirmation"],

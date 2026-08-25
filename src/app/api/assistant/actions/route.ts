@@ -56,10 +56,16 @@ const addActivitySchema = z.object({
 // activityId is trusted only as an opaque lookup key -- ownership is
 // re-verified server-side by RLS inside updateActivity/deleteActivity
 // itself (see /api/activities/[id]/route.ts's identical pattern), not by
-// anything the model claimed.
+// anything the model claimed. It must still be a well-formed UUID: the
+// usage_activities.id column IS one, and PostgREST returns a raw 400 ("invalid
+// input syntax for type uuid") for anything else -- rejecting a malformed id
+// here with a clean 400 keeps that Postgres error text from ever reaching
+// the client (also enforced earlier, at response-schema.ts, so a fabricated
+// id normally never even reaches a rendered confirm button -- this is the
+// second, independent check for a stale/tampered client request).
 const updateActivitySchema = z.object({
   type: z.literal("update_activity"),
-  activityId: z.string().min(1),
+  activityId: z.string().uuid(),
   date: z.string().refine(isIsoDate, "Invalid date."),
   start: z.string().refine(isHalfHourTime, "Invalid start time."),
   end: z.string().refine((value) => isHalfHourTime(value) || value === "00:00", "Invalid end time."),
@@ -69,7 +75,7 @@ const updateActivitySchema = z.object({
 
 const deleteActivitySchema = z.object({
   type: z.literal("delete_activity"),
-  activityId: z.string().min(1)
+  activityId: z.string().uuid()
 });
 
 const setAlertSchema = z.object({
@@ -205,10 +211,11 @@ async function handleDeleteActivity(
     }
     return NextResponse.json({ activity });
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Failed to delete activity." },
-      { status: 500 }
-    );
+    // Never forward the raw underlying error text (e.g. a Postgres/
+    // PostgREST message) to the client -- log it server-side instead, same
+    // posture as handleSync's own catch block below.
+    console.error("newinmeter_assistant_delete_activity_failed", error instanceof Error ? error.message : error);
+    return NextResponse.json({ message: "Failed to delete activity." }, { status: 500 });
   }
 }
 

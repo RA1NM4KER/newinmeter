@@ -232,7 +232,7 @@ describe("POST /api/assistant/actions", () => {
     function updateRequest(overrides: Record<string, unknown> = {}) {
       return request({
         type: "update_activity",
-        activityId: "activity-1",
+        activityId: "11111111-1111-1111-1111-111111111111",
         date: "2026-08-20",
         start: "18:00",
         end: "19:00",
@@ -279,7 +279,7 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.updateActivity).toHaveBeenCalledWith(
         "token",
         "conn-a",
-        "activity-1",
+        "11111111-1111-1111-1111-111111111111",
         expect.objectContaining({ date: "2026-08-20", startTime: "18:00", endTime: "19:00", tags: ["geyser"] })
       );
     });
@@ -301,7 +301,7 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.updateActivity).toHaveBeenCalledWith(
         "token",
         "conn-a",
-        "activity-1",
+        "11111111-1111-1111-1111-111111111111",
         expect.objectContaining({ tags: ["geyser", "heater"] })
       );
     });
@@ -324,15 +324,23 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.updateActivity).toHaveBeenCalledWith(
         "token",
         "conn-a",
-        "activity-1",
+        "11111111-1111-1111-1111-111111111111",
         expect.objectContaining({ startTime: "22:00", endTime: "05:00" })
       );
     });
 
     it("returns 404 (never a 403/500 that would distinguish it) when the id doesn't exist or isn't owned by this user -- RLS returns null either way", async () => {
       mocks.updateActivity.mockResolvedValue(null);
-      const response = await POST(updateRequest({ activityId: "someone-elses-activity" }));
+      const response = await POST(updateRequest({ activityId: "22222222-2222-2222-2222-222222222222" }));
       expect(response.status).toBe(404);
+    });
+
+    it("rejects a malformed (non-UUID) activityId with 400 before ever calling updateActivity -- the exact 'unknown' shape observed live when the model skipped find_activities", async () => {
+      const response = await POST(updateRequest({ activityId: "unknown" }));
+      expect(response.status).toBe(400);
+      expect(mocks.updateActivity).not.toHaveBeenCalled();
+      const body = await response.json();
+      expect(JSON.stringify(body)).not.toContain("invalid input syntax");
     });
 
     it("returns 400 with field errors when the domain layer rejects the input", async () => {
@@ -350,7 +358,7 @@ describe("POST /api/assistant/actions", () => {
 
   describe("delete_activity", () => {
     function deleteRequest(overrides: Record<string, unknown> = {}) {
-      return request({ type: "delete_activity", activityId: "activity-1", ...overrides });
+      return request({ type: "delete_activity", activityId: "11111111-1111-1111-1111-111111111111", ...overrides });
     }
 
     it("returns 403 when Activities is disabled for this account", async () => {
@@ -387,13 +395,21 @@ describe("POST /api/assistant/actions", () => {
       const response = await POST(deleteRequest({ userId: "someone-else" }));
 
       expect(response.status).toBe(200);
-      expect(mocks.deleteActivity).toHaveBeenCalledWith("token", "activity-1");
+      expect(mocks.deleteActivity).toHaveBeenCalledWith("token", "11111111-1111-1111-1111-111111111111");
     });
 
     it("returns 404 when the id doesn't exist or isn't owned by this user", async () => {
       mocks.deleteActivity.mockResolvedValue(null);
-      const response = await POST(deleteRequest({ activityId: "someone-elses-activity" }));
+      const response = await POST(deleteRequest({ activityId: "22222222-2222-2222-2222-222222222222" }));
       expect(response.status).toBe(404);
+    });
+
+    it("rejects a malformed (non-UUID) activityId with 400 before ever calling deleteActivity, never leaking the raw Postgres error text", async () => {
+      const response = await POST(deleteRequest({ activityId: "unknown" }));
+      expect(response.status).toBe(400);
+      expect(mocks.deleteActivity).not.toHaveBeenCalled();
+      const body = await response.json();
+      expect(JSON.stringify(body)).not.toContain("invalid input syntax");
     });
   });
 
