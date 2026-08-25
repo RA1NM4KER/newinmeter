@@ -76,6 +76,27 @@ body {
   --color-brand-teal: 1 99 113;
 }
 
+@keyframes public-demo-answer-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.public-demo-answer {
+  animation: public-demo-answer-in 280ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-demo-answer {
+    animation: none;
+  }
+}
+
 .fullscreen-glass {
   /* autoprefixer: off */
   top: 0;

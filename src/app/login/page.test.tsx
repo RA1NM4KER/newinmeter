@@ -39,19 +39,19 @@ describe("LoginPage demo-token gating", () => {
     expect(screen.queryByText("Explore demo account")).not.toBeNull();
   });
 
-  it("presents the product and keeps sign-in in the hero", () => {
+  it("presents the interactive product and keeps sign-in in the hero", () => {
     render(<LoginPage searchParams={{}} />);
 
-    expect(screen.getByRole("heading", { level: 1, name: /know where your prepaid electricity/i })).toBeDefined();
-    expect(screen.getByRole("heading", { level: 2, name: "Sign in to NewinMeter" })).toBeDefined();
-    expect(screen.getByAltText(/dashboard showing balance, spend, electricity usage/i)).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1, name: /see what your electricity/i })).toBeDefined();
+    expect(screen.getByText("Connect your account")).toBeDefined();
+    expect(screen.getByRole("region", { name: "Illustrative NewinMeter playground" })).toBeDefined();
   });
 
-  it("includes the three concise product-story sections", () => {
+  it("includes the product-story sections", () => {
     render(<LoginPage searchParams={{}} />);
 
-    expect(screen.getByRole("heading", { name: "See where your money went." })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Add context. Ask what changed." })).toBeDefined();
-    expect(screen.getByRole("heading", { name: /Get notified before your balance/i })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Every day has a shape." })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Label what was happening/i })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /You don’t need to keep checking/i })).toBeDefined();
   });
 });

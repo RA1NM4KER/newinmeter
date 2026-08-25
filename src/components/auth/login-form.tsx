@@ -316,7 +316,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
           <button
             type="submit"
             disabled={isVerifying || code.length !== OTP_LENGTH}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brandTeal text-sm font-semibold text-white outline-none transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-ink text-sm font-semibold text-paper outline-none transition hover:bg-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             Continue
@@ -363,8 +363,8 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
         <div className="h-px flex-1 bg-line" />
       </div>
 
-      <form onSubmit={handleSubmitEmail} className="flex flex-col gap-3">
-        <label htmlFor="login-email" className="text-xs font-medium text-ink">
+      <form onSubmit={handleSubmitEmail} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
+        <label htmlFor="login-email" className="text-xs font-medium text-ink sm:col-span-2">
           Email address
         </label>
         <div className="relative">
@@ -383,19 +383,21 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
           />
         </div>
 
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
-
         <button
           type="submit"
           disabled={isSubmitting || !email}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brandTeal text-sm font-semibold text-white outline-none transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ink text-sm font-semibold text-paper outline-none transition hover:bg-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           Send code
           {!isSubmitting ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}
         </button>
 
-        <p className="mt-1 text-xs text-muted">We&apos;ll email you a 6-digit code. No password to remember.</p>
+        {error ? <p className="text-sm text-red-700 sm:col-span-2">{error}</p> : null}
+
+        <p className="mt-1 text-xs text-muted sm:col-span-2">
+          We&apos;ll email you a 6-digit code. No password to remember.
+        </p>
       </form>
 
       {demoToken ? <DemoLoginButton token={demoToken} /> : null}
