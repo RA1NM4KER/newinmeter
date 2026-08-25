@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import type { AssistantAction } from "@/lib/assistant/types";
 import { assistantActionIcon, assistantActionLabel } from "./action-presentation";
 import { useAssistant } from "./assistant-provider";
+import { useDayDetail } from "./day-detail-provider";
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   low_balance: "Low balance",
@@ -230,6 +231,106 @@ function AddActivityCard({
   );
 }
 
+function UpdateActivityCard({
+  action,
+  onDone
+}: {
+  action: Extract<AssistantAction, { type: "update_activity" }>;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true);
+    const outcome = await postAction({
+      type: "update_activity",
+      activityId: action.activityId,
+      date: action.date,
+      start: action.start,
+      end: action.end,
+      tags: action.tags,
+      note: action.note
+    });
+    setBusy(false);
+    setResult(outcome.ok ? { ok: true, message: "Activity updated." } : outcome);
+  }
+
+  if (result?.ok) {
+    return <ActionResultBanner result={result} />;
+  }
+
+  return (
+    <ConfirmCard>
+      <p className="text-sm font-medium text-ink">Update activity</p>
+      <p className="mt-0.5 text-xs text-muted">
+        {action.date} &middot; {action.start}&ndash;{action.end}
+      </p>
+      {action.tags.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {action.tags.map((tag) => (
+            <span className="rounded-md border border-line bg-paper px-2 py-1 text-xs text-muted" key={tag}>
+              {displayActivityTag(tag)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {result && !result.ok ? <p className="mt-2 text-[0.8125rem] text-red-600">{result.message}</p> : null}
+      <CardFooter
+        busy={busy}
+        confirmLabel="Update activity"
+        onCancel={() => {
+          setResult(null);
+          onDone();
+        }}
+        onConfirm={() => void confirm()}
+      />
+    </ConfirmCard>
+  );
+}
+
+function DeleteActivityCard({
+  action,
+  onDone
+}: {
+  action: Extract<AssistantAction, { type: "delete_activity" }>;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true);
+    const outcome = await postAction({ type: "delete_activity", activityId: action.activityId });
+    setBusy(false);
+    setResult(outcome.ok ? { ok: true, message: "Activity deleted." } : outcome);
+  }
+
+  if (result?.ok) {
+    return <ActionResultBanner result={result} />;
+  }
+
+  return (
+    <ConfirmCard>
+      <p className="text-sm font-medium text-ink">Delete activity</p>
+      <p className="mt-0.5 text-xs text-muted">This can&apos;t be undone.</p>
+      {result && !result.ok ? <p className="mt-2 text-[0.8125rem] text-red-600">{result.message}</p> : null}
+      <CardFooter
+        busy={busy}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onCancel={() => {
+          setResult(null);
+          onDone();
+        }}
+        onConfirm={() => void confirm()}
+      />
+    </ConfirmCard>
+  );
+}
+
 function AlertActionCard({
   action,
   onDone
@@ -374,6 +475,7 @@ function SyncActionCard({ onDone }: { onDone: () => void }) {
 function ActionButton({ action }: { action: AssistantAction }) {
   const router = useRouter();
   const { close, isActivitiesEnabled, isAlertsEnabled, isDemo } = useAssistant();
+  const { openDayDetail } = useDayDetail();
   const [expanded, setExpanded] = useState(false);
   const label = assistantActionLabel(action);
   const Icon = assistantActionIcon(action);
@@ -401,7 +503,30 @@ function ActionButton({ action }: { action: AssistantAction }) {
     );
   }
 
-  if (action.type === "add_activity" && !isActivitiesEnabled) return null;
+  if (action.type === "open_day_detail") {
+    return (
+      <Button
+        onClick={() => {
+          // Same "close the overlay first" reasoning as navigate above --
+          // opens the shared Day Detail dialog (see DayDetailProvider)
+          // rather than leaving the assistant dialog on top of it.
+          const { date } = action;
+          close();
+          openDayDetail(date);
+        }}
+        className="gap-1.5"
+        size="sm"
+        variant="secondary"
+      >
+        <Icon aria-hidden="true" className="h-3.5 w-3.5" />
+        {label}
+      </Button>
+    );
+  }
+
+  if ((action.type === "add_activity" || action.type === "update_activity" || action.type === "delete_activity") && !isActivitiesEnabled) {
+    return null;
+  }
   if (
     (action.type === "set_alert" || action.type === "update_alert" || action.type === "disable_alert") &&
     !isAlertsEnabled
@@ -414,6 +539,10 @@ function ActionButton({ action }: { action: AssistantAction }) {
 
   if (expanded) {
     if (action.type === "add_activity") return <AddActivityCard action={action} onDone={() => setExpanded(false)} />;
+    if (action.type === "update_activity")
+      return <UpdateActivityCard action={action} onDone={() => setExpanded(false)} />;
+    if (action.type === "delete_activity")
+      return <DeleteActivityCard action={action} onDone={() => setExpanded(false)} />;
     if (action.type === "sync") return <SyncActionCard onDone={() => setExpanded(false)} />;
     return <AlertActionCard action={action} onDone={() => setExpanded(false)} />;
   }
@@ -437,7 +566,7 @@ export function AssistantActionRow({ actions }: { actions: AssistantAction[] }) 
     return null;
   }
 
-  const hasMutationActions = actions.some((action) => action.type !== "navigate");
+  const hasMutationActions = actions.some((action) => action.type !== "navigate" && action.type !== "open_day_detail");
 
   return (
     <div className="flex flex-col gap-2">

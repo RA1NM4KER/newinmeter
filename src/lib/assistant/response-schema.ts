@@ -66,6 +66,7 @@ const AssistantNavigateDestinationSchema = z.discriminatedUnion("page", [
 
 const AssistantActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("navigate"), label: z.string().min(1), destination: AssistantNavigateDestinationSchema }),
+  z.object({ type: z.literal("open_day_detail"), label: z.string().min(1), date: z.string().min(1) }),
   z.object({
     type: z.literal("add_activity"),
     label: z.string().min(1),
@@ -73,6 +74,23 @@ const AssistantActionSchema = z.discriminatedUnion("type", [
     start: z.string().min(1),
     end: z.string().min(1),
     suggestedTags: z.array(z.string()).max(5),
+    requiresConfirmation: z.literal(true)
+  }),
+  z.object({
+    type: z.literal("update_activity"),
+    label: z.string().min(1),
+    activityId: z.string().min(1),
+    date: z.string().min(1),
+    start: z.string().min(1),
+    end: z.string().min(1),
+    tags: z.array(z.string()).max(5),
+    note: z.string().max(280).nullable(),
+    requiresConfirmation: z.literal(true)
+  }),
+  z.object({
+    type: z.literal("delete_activity"),
+    label: z.string().min(1),
+    activityId: z.string().min(1),
     requiresConfirmation: z.literal(true)
   }),
   z.object({
@@ -111,8 +129,23 @@ const AssistantMetricSchema = z.object({
   value: z.string().min(1).max(40)
 });
 
+// A short one-liner only -- max ~90 chars, no newlines, and never a raw
+// schema label like "Headline:" leaking through (the exact malformed shape
+// observed in manual testing when the model narrated its own JSON fields as
+// prose instead of calling submit_response properly).
+const HEADLINE_LABEL_PREFIX = /^(headline|metrics|body|actions|suggestions)\s*:/i;
+
+const AssistantHeadlineSchema = z
+  .string()
+  .min(1)
+  .max(90)
+  .refine((value) => !value.includes("\n"), { message: "headline must be a single line" })
+  .refine((value) => !HEADLINE_LABEL_PREFIX.test(value.trim()), {
+    message: "headline must not start with a schema label like 'Headline:'"
+  });
+
 export const AssistantResponseSchema = z.object({
-  headline: z.string().min(1).max(140),
+  headline: AssistantHeadlineSchema,
   metrics: z.array(AssistantMetricSchema).max(3),
   body: z.array(AssistantBodyBlockSchema).max(3),
   evidence: z.array(AssistantEvidenceSchema).max(6),
@@ -358,6 +391,16 @@ const actionSchema = {
     {
       type: "object",
       properties: {
+        type: { type: "string", const: "open_day_detail" },
+        label: { type: "string" },
+        date: { type: "string" }
+      },
+      required: ["type", "label", "date"],
+      additionalProperties: false
+    },
+    {
+      type: "object",
+      properties: {
         type: { type: "string", const: "add_activity" },
         label: { type: "string" },
         date: { type: "string" },
@@ -367,6 +410,33 @@ const actionSchema = {
         requiresConfirmation: { type: "boolean", const: true }
       },
       required: ["type", "label", "date", "start", "end", "suggestedTags", "requiresConfirmation"],
+      additionalProperties: false
+    },
+    {
+      type: "object",
+      properties: {
+        type: { type: "string", const: "update_activity" },
+        label: { type: "string" },
+        activityId: { type: "string" },
+        date: { type: "string" },
+        start: { type: "string" },
+        end: { type: "string" },
+        tags: { type: "array", items: { type: "string" }, maxItems: 5 },
+        note: NULLABLE_STRING,
+        requiresConfirmation: { type: "boolean", const: true }
+      },
+      required: ["type", "label", "activityId", "date", "start", "end", "tags", "note", "requiresConfirmation"],
+      additionalProperties: false
+    },
+    {
+      type: "object",
+      properties: {
+        type: { type: "string", const: "delete_activity" },
+        label: { type: "string" },
+        activityId: { type: "string" },
+        requiresConfirmation: { type: "boolean", const: true }
+      },
+      required: ["type", "label", "activityId", "requiresConfirmation"],
       additionalProperties: false
     },
     {
@@ -440,7 +510,9 @@ export const AssistantResponseJsonSchema = {
   properties: {
     headline: {
       type: "string",
-      description: "One short, concrete conclusion (under ~12 words), e.g. 'Aug 13 was unusually expensive'. No markdown."
+      maxLength: 90,
+      description:
+        "One short, concrete conclusion (under ~12 words), single line, e.g. 'Aug 13 was unusually expensive'. No markdown, no newlines, and never prefixed with a field label like 'Headline:'."
     },
     metrics: {
       type: "array",

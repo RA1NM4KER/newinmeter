@@ -121,4 +121,96 @@ describe("get_alert_status", () => {
 
     expect(result.autoSyncEnabled).toBe(false);
   });
+
+  describe("deterministic direction/conditionMet -- the model never does this arithmetic itself", () => {
+    type StatusEntry = {
+      type: string;
+      threshold: number | null;
+      currentValue: number | null;
+      conditionMet: boolean | null;
+      direction: "above" | "below" | null;
+      differenceFromThreshold: number | null;
+    };
+
+    it("R92.84 balance against a R300 threshold is correctly 'below', never 'above' -- the exact regression case", async () => {
+      mocks.getAlertRulesForUser.mockResolvedValue([rule({ type: "low_balance", enabled: true, threshold: 300 })]);
+      mocks.getAlertInsights.mockResolvedValue(null);
+      mocks.getLatestBalanceForUser.mockResolvedValue(92.84);
+      mocks.getConnectionForUser.mockResolvedValue(null);
+
+      const context = buildTestContext([], [], { from: "", to: "" });
+      const result = (await getAlertStatusTool.handler({}, async () => context)) as { alerts: StatusEntry[] };
+      const lowBalance = result.alerts.find((entry) => entry.type === "low_balance")!;
+
+      expect(lowBalance.direction).toBe("below");
+      expect(lowBalance.conditionMet).toBe(true);
+      expect(lowBalance.differenceFromThreshold).toBeCloseTo(92.84 - 300, 2);
+    });
+
+    it("a balance ABOVE the low_balance threshold reports direction 'above' and conditionMet false", async () => {
+      mocks.getAlertRulesForUser.mockResolvedValue([rule({ type: "low_balance", enabled: true, threshold: 300 })]);
+      mocks.getAlertInsights.mockResolvedValue(null);
+      mocks.getLatestBalanceForUser.mockResolvedValue(450);
+      mocks.getConnectionForUser.mockResolvedValue(null);
+
+      const context = buildTestContext([], [], { from: "", to: "" });
+      const result = (await getAlertStatusTool.handler({}, async () => context)) as { alerts: StatusEntry[] };
+      const lowBalance = result.alerts.find((entry) => entry.type === "low_balance")!;
+
+      expect(lowBalance.direction).toBe("above");
+      expect(lowBalance.conditionMet).toBe(false);
+    });
+
+    it("daily_spend fires on crossing ABOVE its threshold, not below -- opposite fire direction from low_balance", async () => {
+      mocks.getAlertRulesForUser.mockResolvedValue([rule({ type: "daily_spend", enabled: true, threshold: 50 })]);
+      mocks.getAlertInsights.mockResolvedValue(null);
+      mocks.getLatestBalanceForUser.mockResolvedValue(null);
+      mocks.getConnectionForUser.mockResolvedValue(null);
+
+      const today = "2026-08-20";
+      const context = buildTestContext([dailyRow({ periodDate: today, totalSpend: 87.5 })], [], {
+        from: today,
+        to: today
+      });
+      const result = (await getAlertStatusTool.handler({}, async () => context)) as { alerts: StatusEntry[] };
+      const dailySpend = result.alerts.find((entry) => entry.type === "daily_spend")!;
+
+      expect(dailySpend.direction).toBe("above");
+      expect(dailySpend.conditionMet).toBe(true);
+    });
+
+    it("balance_runway fires at-or-below the threshold (not strictly below)", async () => {
+      mocks.getAlertRulesForUser.mockResolvedValue([rule({ type: "balance_runway", enabled: true, threshold: 5 })]);
+      mocks.getAlertInsights.mockResolvedValue({
+        runway: { estimatedDaysRemaining: 5, hasEnoughHistory: true },
+        budget: { projectedSpend: null, hasEnoughHistory: false },
+        tariff: { currentTariff: null },
+        band: { profile: null, monthKwh: 0, nextBandKwh: null, warningDistanceKwh: null },
+        anomaly: { learningDaysSoFar: 0, minLearningDays: 14, hasEnoughHistory: false }
+      });
+      mocks.getLatestBalanceForUser.mockResolvedValue(null);
+      mocks.getConnectionForUser.mockResolvedValue(null);
+
+      const context = buildTestContext([], [], { from: "", to: "" });
+      const result = (await getAlertStatusTool.handler({}, async () => context)) as { alerts: StatusEntry[] };
+      const runway = result.alerts.find((entry) => entry.type === "balance_runway")!;
+
+      expect(runway.conditionMet).toBe(true);
+    });
+
+    it("leaves conditionMet/direction/differenceFromThreshold null when there is no threshold or no current value to compare", async () => {
+      mocks.getAlertRulesForUser.mockResolvedValue([]);
+      mocks.getAlertInsights.mockResolvedValue(null);
+      mocks.getLatestBalanceForUser.mockResolvedValue(null);
+      mocks.getConnectionForUser.mockResolvedValue(null);
+
+      const context = buildTestContext([], [], { from: "", to: "" });
+      const result = (await getAlertStatusTool.handler({}, async () => context)) as { alerts: StatusEntry[] };
+      const lowBalance = result.alerts.find((entry) => entry.type === "low_balance")!;
+
+      expect(lowBalance.conditionMet).toBeNull();
+      expect(lowBalance.direction).toBeNull();
+      expect(lowBalance.differenceFromThreshold).toBeNull();
+    });
+  });
 });

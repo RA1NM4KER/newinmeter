@@ -117,6 +117,62 @@ export const GetActivityReportSchema = {
   additionalProperties: false
 } as const;
 
+// Distinct from get_activity_report: that tool deliberately omits activity
+// ids (it's a read-only reporting tool). This one exists so the model can
+// resolve a real activityId before proposing update_activity/delete_activity
+// -- it never invents one.
+export const FindActivitiesSchema = {
+  type: "object",
+  properties: {
+    from: {
+      type: ["string", "null"],
+      description: "ISO date (YYYY-MM-DD). Defaults to the active dashboard scope start when null."
+    },
+    to: {
+      type: ["string", "null"],
+      description: "ISO date (YYYY-MM-DD). Defaults to the active dashboard scope end when null."
+    },
+    tag: {
+      type: ["string", "null"],
+      description: "Filter to activities carrying this one tag. Null means no tag filter."
+    },
+    startTime: {
+      type: ["string", "null"],
+      description: "HH:MM (half-hour aligned). Together with endTime, narrows to activities overlapping this time-of-day window on each date. Null means no time-of-day filter."
+    },
+    endTime: {
+      type: ["string", "null"],
+      description: "HH:MM (half-hour aligned, or 00:00 for midnight). Null means no time-of-day filter."
+    }
+  },
+  required: ["from", "to", "tag", "startTime", "endTime"],
+  additionalProperties: false
+} as const;
+
+export const InspectTimeWindowSchema = {
+  type: "object",
+  properties: {
+    date: {
+      type: "string",
+      description: "ISO date (YYYY-MM-DD) the window falls on."
+    },
+    startTime: {
+      type: "string",
+      description: "HH:MM, half-hour aligned. Start of the window to inspect, e.g. '19:00'."
+    },
+    endTime: {
+      type: "string",
+      description: "HH:MM, half-hour aligned (or '00:00' for midnight). End of the window to inspect, e.g. '20:00'."
+    },
+    includeTypicalComparison: {
+      type: "boolean",
+      description: "Compare against the same time-of-day window on other complete days in scope, when enough history exists."
+    }
+  },
+  required: ["date", "startTime", "endTime", "includeTypicalComparison"],
+  additionalProperties: false
+} as const;
+
 export const GetRecentAlertsSchema = {
   type: "object",
   properties: {

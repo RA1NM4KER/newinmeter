@@ -1,5 +1,5 @@
 import { loadActivityReport } from "@/lib/activity/data";
-import { getAlertEventDetail } from "@/lib/newinmeter/alerts";
+import { getAlertEventDetail, getAlertRulesForUser } from "@/lib/newinmeter/alerts";
 import type { AssistantTool } from "../types";
 import { ExplainAlertSchema } from "./schemas";
 
@@ -38,6 +38,20 @@ export const explainAlertTool: AssistantTool = {
       return { error: "not_found", alertEventId };
     }
 
+    // detail.thresholdValue is a HISTORICAL snapshot -- the threshold this
+    // rule actually had at the moment it fired. It must never be presented
+    // as the current live configuration (that's what get_alert_status is
+    // for) -- currentThreshold/currentlyEnabled/thresholdChanged make the
+    // distinction explicit so the model doesn't have to infer it, e.g. "you
+    // asked about your monthly budget alert -- back when it fired the
+    // threshold was X, but it's since been changed to Y."
+    const currentRules = await getAlertRulesForUser(context.userId);
+    const currentRule = currentRules.find((rule) => rule.type === detail.type);
+    const currentThreshold = currentRule?.threshold ?? null;
+    const currentlyEnabled = currentRule?.enabled ?? false;
+    const thresholdChanged =
+      detail.thresholdValue !== null && currentThreshold !== null ? detail.thresholdValue !== currentThreshold : null;
+
     const base = {
       alertEventId: detail.id,
       type: detail.type,
@@ -46,7 +60,13 @@ export const explainAlertTool: AssistantTool = {
       navigateUrl: detail.navigateUrl,
       triggeredAt: detail.triggeredAt,
       triggerValue: detail.triggerValue,
+      // Historical: the threshold AT THE TIME this event fired.
       thresholdValue: detail.thresholdValue,
+      // Current live rule configuration -- may differ from thresholdValue
+      // above if the rule has been changed (or disabled) since this event.
+      currentThreshold,
+      currentlyEnabled,
+      thresholdChanged,
       isRead: detail.isRead,
       dateForNavigation: detail.triggeredAt.slice(0, 10)
     };

@@ -37,6 +37,7 @@ const baseToolNames = [
   "get_top_days",
   "get_top_hours",
   "explain_day",
+  "inspect_time_window",
   "get_recent_topups",
   "get_water_overview",
   "get_data_status"
@@ -49,12 +50,13 @@ function toolNames(toolbox: ReturnType<typeof createAssistantToolbox>) {
 }
 
 describe("createAssistantToolbox permission-aware registration", () => {
-  it("registers 10 tools, without get_activity_report or any alert tool, when Activities and Alerts are both disabled", () => {
+  it("registers 11 tools, without get_activity_report/find_activities or any alert tool, when Activities and Alerts are both disabled", () => {
     const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: false });
     const names = toolNames(toolbox);
 
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(11);
     expect(names).not.toContain("get_activity_report");
+    expect(names).not.toContain("find_activities");
     for (const name of alertToolNames) {
       expect(names).not.toContain(name);
     }
@@ -70,33 +72,35 @@ describe("createAssistantToolbox permission-aware registration", () => {
     }
   });
 
-  it("registers 11 tools, including get_activity_report, when only Activities is enabled", () => {
+  it("registers 13 tools, including get_activity_report and find_activities, when only Activities is enabled", () => {
     const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: true, alertsEnabled: false });
     const names = toolNames(toolbox);
 
-    expect(names).toHaveLength(11);
+    expect(names).toHaveLength(13);
     expect(names).toContain("get_activity_report");
+    expect(names).toContain("find_activities");
     for (const name of alertToolNames) {
       expect(names).not.toContain(name);
     }
   });
 
-  it("registers 14 tools, including all 4 alert tools, when only Alerts is enabled", () => {
+  it("registers 15 tools, including all 4 alert tools, when only Alerts is enabled", () => {
     const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: false, alertsEnabled: true });
     const names = toolNames(toolbox);
 
-    expect(names).toHaveLength(14);
+    expect(names).toHaveLength(15);
     expect(names).not.toContain("get_activity_report");
+    expect(names).not.toContain("find_activities");
     for (const name of alertToolNames) {
       expect(names).toContain(name);
     }
   });
 
-  it("registers all 15 tools when both Activities and Alerts are enabled", () => {
+  it("registers all 17 tools when both Activities and Alerts are enabled", () => {
     const toolbox = createAssistantToolbox("token", "user-1", {}, { activitiesEnabled: true, alertsEnabled: true });
     const names = toolNames(toolbox);
 
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(17);
   });
 
   it("rejects a call to get_activity_report when Activities are disabled, as an unknown tool", async () => {

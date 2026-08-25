@@ -36,6 +36,18 @@ const validAssistantResponse = {
   toolsUsed: ["get_scope_overview"]
 };
 
+// The success/streaming path returns an SSE body (`data: <json>\n\n` frames)
+// instead of a single JSON object -- this reads the whole stream and parses
+// each frame back into its event object, in order.
+async function readSseEvents(response: Response): Promise<Array<Record<string, unknown>>> {
+  const text = await response.text();
+  return text
+    .split("\n\n")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => JSON.parse(chunk.replace(/^data:\s*/, "")));
+}
+
 describe("POST /api/assistant", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,7 +94,8 @@ describe("POST /api/assistant", () => {
       })
     );
 
-    expect(mocks.answerAssistantQuestion).toHaveBeenCalledWith(
+    const call = mocks.answerAssistantQuestion.mock.calls[0];
+    expect(call.slice(0, 7)).toEqual([
       "token",
       "user-a",
       "Why was yesterday expensive?",
@@ -90,7 +103,10 @@ describe("POST /api/assistant", () => {
       [],
       { activitiesEnabled: true, alertsEnabled: true },
       { alertEventId: undefined }
-    );
+    ]);
+    // Positional args 8/9 are the onProgress callback and an AbortSignal.
+    expect(typeof call[7]).toBe("function");
+    expect(call[8]).toBeInstanceOf(AbortSignal);
   });
 
   it("resolves activitiesEnabled and alertsEnabled independently and threads both through to the model layer", async () => {
@@ -99,7 +115,8 @@ describe("POST /api/assistant", () => {
     );
     await POST(request({ question: "Q" }));
 
-    expect(mocks.answerAssistantQuestion).toHaveBeenCalledWith(
+    const call = mocks.answerAssistantQuestion.mock.calls[0];
+    expect(call.slice(0, 7)).toEqual([
       "token",
       "user-a",
       "Q",
@@ -107,13 +124,14 @@ describe("POST /api/assistant", () => {
       [],
       { activitiesEnabled: true, alertsEnabled: false },
       { alertEventId: undefined }
-    );
+    ]);
   });
 
   it("forwards a trusted alertEventId context field from the request body", async () => {
     await POST(request({ question: "Explain this alert.", context: { alertEventId: "event-123" } }));
 
-    expect(mocks.answerAssistantQuestion).toHaveBeenCalledWith(
+    const call = mocks.answerAssistantQuestion.mock.calls[0];
+    expect(call.slice(0, 7)).toEqual([
       "token",
       "user-a",
       "Explain this alert.",
@@ -121,22 +139,56 @@ describe("POST /api/assistant", () => {
       [],
       { activitiesEnabled: true, alertsEnabled: true },
       { alertEventId: "event-123" }
-    );
+    ]);
   });
 
-  it("returns the full structured AssistantResponse from the model layer, unmodified", async () => {
+  it("streams started -> response, in order, with the full structured AssistantResponse as the final event", async () => {
     const response = await POST(request({ question: "Q" }));
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(validAssistantResponse);
+    expect(response.headers.get("Content-Type")).toContain("text/event-stream");
+
+    const events = await readSseEvents(response);
+    expect(events[0]).toEqual({ type: "started" });
+    expect(events.at(-1)).toEqual({ type: "response", response: validAssistantResponse });
   });
 
-  it("never leaks the underlying error message to the client on failure, only a generic one", async () => {
+  it("streams progress frames from onProgress in between started and response, never a raw tool name", async () => {
+    mocks.answerAssistantQuestion.mockImplementation(
+      async (
+        _token: string,
+        _userId: string,
+        _question: string,
+        _scope: unknown,
+        _history: unknown,
+        _permissions: unknown,
+        _context: unknown,
+        onProgress?: (stage: string, label: string) => void
+      ) => {
+        onProgress?.("usage", "Checking your usage…");
+        return validAssistantResponse;
+      }
+    );
+
+    const response = await POST(request({ question: "Q" }));
+    const events = await readSseEvents(response);
+
+    expect(events).toEqual([
+      { type: "started" },
+      { type: "progress", stage: "usage", label: "Checking your usage…" },
+      { type: "response", response: validAssistantResponse }
+    ]);
+  });
+
+  it("never leaks the underlying error message to the client on failure, only a generic sanitized one in an error event", async () => {
     mocks.answerAssistantQuestion.mockRejectedValue(new Error("OpenAI request failed: sk-secret-key-in-error"));
     const response = await POST(request({ question: "Q" }));
 
-    expect(response.status).toBe(500);
-    const body = await response.json();
-    expect(body.message).not.toContain("sk-secret-key-in-error");
+    expect(response.status).toBe(200);
+    const events = await readSseEvents(response);
+    const errorEvent = events.find((event) => event.type === "error");
+    expect(errorEvent).toBeDefined();
+    expect(JSON.stringify(errorEvent)).not.toContain("sk-secret-key-in-error");
+    expect(events.some((event) => event.type === "response")).toBe(false);
   });
 
   it("caps conversation history at 12 messages via the request schema", async () => {

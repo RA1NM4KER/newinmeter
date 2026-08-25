@@ -1,12 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTestContext, hourlyRow } from "../test-fixtures";
 import { explainAlertTool } from "./explain-alert";
 
-const mocks = vi.hoisted(() => ({ getAlertEventDetail: vi.fn(), loadActivityReport: vi.fn() }));
-vi.mock("@/lib/newinmeter/alerts", () => ({ getAlertEventDetail: mocks.getAlertEventDetail }));
+const mocks = vi.hoisted(() => ({
+  getAlertEventDetail: vi.fn(),
+  loadActivityReport: vi.fn(),
+  getAlertRulesForUser: vi.fn()
+}));
+vi.mock("@/lib/newinmeter/alerts", () => ({
+  getAlertEventDetail: mocks.getAlertEventDetail,
+  getAlertRulesForUser: mocks.getAlertRulesForUser
+}));
 vi.mock("@/lib/activity/data", () => ({ loadActivityReport: mocks.loadActivityReport }));
 
 describe("explain_alert", () => {
+  beforeEach(() => {
+    mocks.getAlertRulesForUser.mockReset().mockResolvedValue([]);
+  });
+
   it("returns missing_alert_event_id when called with no id", async () => {
     const context = buildTestContext([], [], { from: "", to: "" });
     const result = await explainAlertTool.handler({}, async () => context);
@@ -124,5 +135,88 @@ describe("explain_alert", () => {
 
     expect(result.relatedActivities).toHaveLength(1);
     expect(result.relatedActivities[0].tags).toEqual(["geyser"]);
+  });
+
+  describe("historical threshold snapshot vs current live configuration", () => {
+    function eventFixture(overrides: Record<string, unknown> = {}) {
+      return {
+        id: "evt-hist",
+        type: "monthly_budget",
+        title: "Spending is ahead of budget",
+        body: "...",
+        navigateUrl: "/",
+        triggeredAt: "2026-08-01T10:00:00Z",
+        triggerValue: 950,
+        thresholdValue: 800,
+        context: {},
+        resolvedAt: null,
+        isRead: false,
+        ...overrides
+      };
+    }
+
+    it("reports thresholdChanged: false when the live rule's threshold still matches the historical event", async () => {
+      mocks.getAlertEventDetail.mockResolvedValue(eventFixture());
+      mocks.getAlertRulesForUser.mockResolvedValue([{ type: "monthly_budget", enabled: true, threshold: 800 }]);
+      const context = buildTestContext([], [], { from: "", to: "" });
+
+      const result = (await explainAlertTool.handler({ alertEventId: "evt-hist" }, async () => context)) as {
+        thresholdValue: number | null;
+        currentThreshold: number | null;
+        currentlyEnabled: boolean;
+        thresholdChanged: boolean | null;
+      };
+
+      expect(result.thresholdValue).toBe(800);
+      expect(result.currentThreshold).toBe(800);
+      expect(result.currentlyEnabled).toBe(true);
+      expect(result.thresholdChanged).toBe(false);
+    });
+
+    it("reports thresholdChanged: true when the rule's threshold has since been raised", async () => {
+      mocks.getAlertEventDetail.mockResolvedValue(eventFixture());
+      mocks.getAlertRulesForUser.mockResolvedValue([{ type: "monthly_budget", enabled: true, threshold: 1300 }]);
+      const context = buildTestContext([], [], { from: "", to: "" });
+
+      const result = (await explainAlertTool.handler({ alertEventId: "evt-hist" }, async () => context)) as {
+        thresholdValue: number | null;
+        currentThreshold: number | null;
+        thresholdChanged: boolean | null;
+      };
+
+      expect(result.thresholdValue).toBe(800);
+      expect(result.currentThreshold).toBe(1300);
+      expect(result.thresholdChanged).toBe(true);
+    });
+
+    it("reports currentlyEnabled: false when the rule has since been disabled, without losing the historical threshold", async () => {
+      mocks.getAlertEventDetail.mockResolvedValue(eventFixture());
+      mocks.getAlertRulesForUser.mockResolvedValue([{ type: "monthly_budget", enabled: false, threshold: 800 }]);
+      const context = buildTestContext([], [], { from: "", to: "" });
+
+      const result = (await explainAlertTool.handler({ alertEventId: "evt-hist" }, async () => context)) as {
+        thresholdValue: number | null;
+        currentlyEnabled: boolean;
+      };
+
+      expect(result.thresholdValue).toBe(800);
+      expect(result.currentlyEnabled).toBe(false);
+    });
+
+    it("reports thresholdChanged: null when no live rule exists at all for this type any more", async () => {
+      mocks.getAlertEventDetail.mockResolvedValue(eventFixture());
+      mocks.getAlertRulesForUser.mockResolvedValue([]);
+      const context = buildTestContext([], [], { from: "", to: "" });
+
+      const result = (await explainAlertTool.handler({ alertEventId: "evt-hist" }, async () => context)) as {
+        currentThreshold: number | null;
+        currentlyEnabled: boolean;
+        thresholdChanged: boolean | null;
+      };
+
+      expect(result.currentThreshold).toBeNull();
+      expect(result.currentlyEnabled).toBe(false);
+      expect(result.thresholdChanged).toBeNull();
+    });
   });
 });

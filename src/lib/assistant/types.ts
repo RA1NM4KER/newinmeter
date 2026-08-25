@@ -122,10 +122,21 @@ export type AssistantNavigateDestination =
 
 // Every mutating action carries requiresConfirmation: true (a literal, not a
 // boolean) -- the type system itself makes "propose a mutation the UI
-// doesn't confirm" unrepresentable, not just a convention. navigate is the
-// only action that runs immediately (no server call, no data change).
+// doesn't confirm" unrepresentable, not just a convention. navigate and
+// open_day_detail are the only actions that run immediately (no server
+// call, no data change) -- one leaves the app shell for a URL, the other
+// opens the existing Day Detail dialog in place.
 export type AssistantAction =
   | { type: "navigate"; label: string; destination: AssistantNavigateDestination }
+  | {
+      // Opens the SAME Day Detail dialog the dashboard and Activities pages
+      // already use (see day-detail-provider.tsx), not a raw /data
+      // navigation. Use this for "view/explore that day"; reserve navigate
+      // to the `data` page for explicit raw-table/export requests.
+      type: "open_day_detail";
+      label: string;
+      date: string;
+    }
   | {
       type: "add_activity";
       label: string;
@@ -133,6 +144,26 @@ export type AssistantAction =
       start: string;
       end: string;
       suggestedTags: string[];
+      requiresConfirmation: true;
+    }
+  | {
+      // activityId is resolved from a prior find_activities call -- the
+      // model never invents one, and the action route re-verifies
+      // ownership server-side (RLS) regardless.
+      type: "update_activity";
+      label: string;
+      activityId: string;
+      date: string;
+      start: string;
+      end: string;
+      tags: string[];
+      note: string | null;
+      requiresConfirmation: true;
+    }
+  | {
+      type: "delete_activity";
+      label: string;
+      activityId: string;
       requiresConfirmation: true;
     }
   | {
@@ -193,3 +224,30 @@ export type AssistantResponse = {
   // assistant-message.tsx). Kept for developer debugging and logging.
   toolsUsed: string[];
 };
+
+// ---------------------------------------------------------------------------
+// Streaming execution progress (AI v2.1) -- see openai.ts's onProgress
+// callback and /api/assistant's SSE writer. `stage` is an app-owned
+// identifier (see progress-labels.ts), never a raw tool name, function
+// argument, or chain-of-thought fragment. The final structured answer is
+// always exactly one `response` event, sent once, fully validated -- never
+// streamed token-by-token or half-built.
+// ---------------------------------------------------------------------------
+
+export type AssistantProgressStage =
+  | "usage"
+  | "day"
+  | "comparison"
+  | "activities"
+  | "alerts"
+  | "balance"
+  | "water"
+  | "data_status"
+  | "time_window"
+  | "working";
+
+export type AssistantStreamEvent =
+  | { type: "started" }
+  | { type: "progress"; stage: AssistantProgressStage; label: string }
+  | { type: "response"; response: AssistantResponse }
+  | { type: "error"; message: string };

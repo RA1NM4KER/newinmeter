@@ -8,6 +8,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 import { AssistantDialog } from "@/components/assistant/assistant-dialog";
 import { AssistantProvider } from "@/components/assistant/assistant-provider";
+import { DayDetailProvider } from "@/components/assistant/day-detail-provider";
 import { ACTIVITIES_TAB_CHANGE_EVENT } from "@/lib/activity/tab-event";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
 import { BottomNav } from "./bottom-nav";
@@ -221,6 +222,7 @@ export function AppShell({
       isDemo={isDemo}
       isEnabled={isAiAssistantEnabled}
     >
+      <DayDetailProvider activitiesEnabled={isActivitiesEnabled}>
       <NotificationProvider initialUnreadCount={initialUnreadNotificationCount}>
         <PushNotificationProvider>
           {/* lockViewport pages keep the original fixed-height, internally-
@@ -392,6 +394,7 @@ export function AppShell({
           {isAiAssistantEnabled ? <AssistantDialog /> : null}
         </PushNotificationProvider>
       </NotificationProvider>
+      </DayDetailProvider>
     </AssistantProvider>
   );
 }

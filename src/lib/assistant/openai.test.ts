@@ -334,6 +334,78 @@ describe("answerAssistantQuestion", () => {
     expect(JSON.parse(errorOutput.output).error).toBe("invalid_response_shape");
   });
 
+  it("reproduces and rejects the exact malformed shape observed in manual testing (schema-label-prefixed, multi-line headline), retries, then returns the fixed answer", async () => {
+    const malformedHeadline =
+      "Headline: No new alert tonight due to timing rules\nMetrics: --\nBody: Nothing unusual happened.";
+    queueResponses(
+      toResponse([functionCallItem("submit_response", validSubmitArgs({ headline: malformedHeadline }), "call-1")]),
+      toResponse([
+        functionCallItem("submit_response", validSubmitArgs({ headline: "No new alert tonight." }), "call-2")
+      ])
+    );
+
+    const result = await answerAssistantQuestion("token", "user-1", "Q", {});
+
+    expect(result.headline).toBe("No new alert tonight.");
+    expect(result.headline).not.toContain("Headline:");
+    expect(result.headline).not.toContain("\n");
+  });
+
+  it("rejects a submit_response call whose wording claims a proposed mutation already happened (semantic validation), retries, then accepts corrected wording", async () => {
+    const addActivityAction = {
+      type: "add_activity" as const,
+      label: "Add activity",
+      date: "2026-08-20",
+      start: "18:00",
+      end: "19:00",
+      suggestedTags: ["geyser"],
+      requiresConfirmation: true as const
+    };
+    queueResponses(
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({ headline: "Added the geyser Activity", actions: [addActivityAction] }),
+          "call-1"
+        )
+      ]),
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({ headline: "Ready to add the geyser Activity", actions: [addActivityAction] }),
+          "call-2"
+        )
+      ])
+    );
+
+    const result = await answerAssistantQuestion("token", "user-1", "Q", {});
+
+    expect(result.headline).toBe("Ready to add the geyser Activity");
+    const secondRequestInput = responsesCreateMock.mock.calls[1][0].input;
+    const errorOutput = secondRequestInput.find(
+      (item: { type?: string; call_id?: string }) => item.type === "function_call_output" && item.call_id === "call-1"
+    );
+    const issues = JSON.parse(errorOutput.output).issues as string[];
+    expect(issues.some((issue) => issue.includes("mutation_completion_claim"))).toBe(true);
+  });
+
+  it("calls onProgress with the mapped stage/label right before a batch of real tool calls executes, never with a raw tool name", async () => {
+    queueResponses(
+      toResponse([functionCallItem("tool_a", "{}")]),
+      toResponse([functionCallItem("submit_response", validSubmitArgs())])
+    );
+    executeMock.mockResolvedValue({ ok: true });
+    const onProgress = vi.fn();
+
+    await answerAssistantQuestion("token", "user-1", "Q", {}, [], undefined, {}, onProgress);
+
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    const [stage, label] = onProgress.mock.calls[0];
+    expect(typeof stage).toBe("string");
+    expect(label).not.toContain("tool_a");
+    expect(label.length).toBeGreaterThan(0);
+  });
+
   it("falls back to a minimal valid response, never throwing raw model JSON, when submit_response's arguments never validate", async () => {
     const bodies = Array.from({ length: 8 }, (_, index) =>
       toResponse([functionCallItem("submit_response", JSON.stringify({ headline: "" }), `call-${index}`)])
@@ -347,16 +419,38 @@ describe("answerAssistantQuestion", () => {
     expect(result.actions).toEqual([]);
   });
 
-  it("falls back gracefully to plain output_text when the model answers without calling any tool", async () => {
-    queueResponses(toResponse([messageItem("A plain-text answer.")], "A plain-text answer."));
+  it("never renders raw output_text -- attempts one repair, then falls back to a clean deterministic message with zero model prose", async () => {
+    queueResponses(
+      toResponse([messageItem("A plain-text answer.")], "A plain-text answer."),
+      toResponse([messageItem("Still just plain text.")], "Still just plain text.")
+    );
 
     const result = await answerAssistantQuestion("token", "user-1", "Q", {});
 
-    expect(result.headline).toBe("A plain-text answer.");
+    // Neither raw output_text string ever reaches the returned headline.
+    expect(result.headline).not.toContain("A plain-text answer");
+    expect(result.headline).not.toContain("Still just plain text");
+    expect(result.headline.length).toBeGreaterThan(0);
     expect(result.evidence).toEqual([]);
     expect(result.visualizations).toEqual([]);
     expect(result.actions).toEqual([]);
     expect(result.suggestions).toEqual([]);
+    // One repair attempt was made before giving up.
+    expect(responsesCreateMock).toHaveBeenCalledTimes(2);
+    const repairInput = responsesCreateMock.mock.calls[1][0].input;
+    expect(repairInput.at(-1)).toMatchObject({ role: "system" });
+  });
+
+  it("recovers cleanly if the model calls submit_response on the repair attempt after skipping it once", async () => {
+    queueResponses(
+      toResponse([messageItem("A plain-text answer.")], "A plain-text answer."),
+      toResponse([functionCallItem("submit_response", validSubmitArgs())])
+    );
+
+    const result = await answerAssistantQuestion("token", "user-1", "Q", {});
+
+    expect(result.headline).toBe("The answer is 42.");
+    expect(responsesCreateMock).toHaveBeenCalledTimes(2);
   });
 
   it("throws once the maximum tool-call loop is exceeded without ever reaching submit_response", async () => {

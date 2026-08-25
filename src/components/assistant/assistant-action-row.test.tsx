@@ -12,6 +12,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock }) }));
 const { fetchActivityTagsMock } = vi.hoisted(() => ({ fetchActivityTagsMock: vi.fn() }));
 vi.mock("@/lib/activity/client", () => ({ fetchActivityTags: fetchActivityTagsMock }));
 
+// This test suite covers action confirmation/gating behavior, not the Day
+// Detail dialog itself (see day-detail-provider.test.tsx for that) -- a
+// plain stub avoids needing a real QueryClientProvider ancestor here.
+const { openDayDetailMock } = vi.hoisted(() => ({ openDayDetailMock: vi.fn() }));
+vi.mock("./day-detail-provider", () => ({ useDayDetail: () => ({ openDayDetail: openDayDetailMock }) }));
+
 function renderActions(
   actions: AssistantAction[],
   providerProps: Partial<ComponentProps<typeof AssistantProvider>> = {}
@@ -66,7 +72,7 @@ describe("AssistantActionRow -- navigation", () => {
       }
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: "View day" }));
+    fireEvent.click(screen.getByRole("button", { name: "View raw data" }));
     expect(pushMock).toHaveBeenCalledWith("/data?from=2026-08-20&to=2026-08-20");
   });
 
@@ -77,7 +83,7 @@ describe("AssistantActionRow -- navigation", () => {
 
     await waitFor(() => expect(screen.getByTestId("open-state").textContent).toBe("open"));
 
-    fireEvent.click(screen.getByRole("button", { name: "View day" }));
+    fireEvent.click(screen.getByRole("button", { name: "View raw data" }));
 
     expect(screen.getByTestId("open-state").textContent).toBe("closed");
     expect(pushMock).toHaveBeenCalledWith("/data?from=2026-08-13&to=2026-08-13");
@@ -112,14 +118,22 @@ describe("AssistantActionRow -- the UI owns action button labels, not the model"
       }
     ]);
     expect(screen.queryByRole("button", { name: /View detailed data for August/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "View day" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "View raw data" })).not.toBeNull();
   });
 
-  it("distinguishes 'View day' (a specific date) from 'View data' (a range with no single date)", () => {
+  it("distinguishes 'View raw data' (a specific date, explicit raw-table navigation) from 'View data' (a range with no single date)", () => {
     renderActions([
       { type: "navigate", label: "x", destination: { page: "data", date: null, from: "2026-08-01", to: "2026-08-20" } }
     ]);
     expect(screen.queryByRole("button", { name: "View data" })).not.toBeNull();
+  });
+
+  it("open_day_detail always renders as 'View day' and opens the shared Day Detail dialog instead of navigating", () => {
+    renderActions([{ type: "open_day_detail", label: "x", date: "2026-08-13" }]);
+    const pushCallsBefore = pushMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "View day" }));
+    expect(openDayDetailMock).toHaveBeenCalledWith("2026-08-13");
+    expect(pushMock.mock.calls.length).toBe(pushCallsBefore);
   });
 
   it("normalizes disable_alert to 'Turn off alert' regardless of the model's own label", () => {
@@ -307,9 +321,16 @@ describe("AssistantActionRow -- gating", () => {
       { isDemo: true }
     );
 
-    expect(screen.queryByRole("button", { name: "View day" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "View raw data" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
     expect(screen.queryByText("Demo account is read-only.")).not.toBeNull();
+  });
+
+  it("open_day_detail stays available in the demo account and does NOT trigger the 'read-only' disclaimer -- it's a view action, not a mutation", () => {
+    renderActions([{ type: "open_day_detail", label: "View day", date: "2026-08-20" }], { isDemo: true });
+
+    expect(screen.queryByRole("button", { name: "View day" })).not.toBeNull();
+    expect(screen.queryByText("Demo account is read-only.")).toBeNull();
   });
 
   it("hides add_activity when Activities is disabled, and alert actions when Alerts is disabled", () => {

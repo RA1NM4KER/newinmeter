@@ -49,6 +49,13 @@ vi.mock("@/components/layout/push-notification-provider", () => ({
     refreshDeviceNotificationState: async () => undefined
   })
 }));
+// Same reasoning as the providers above -- DayDetailProvider's own
+// react-query fetch/dialog wiring isn't what this layout-focused test
+// exercises, and it needs a real QueryClientProvider ancestor that this
+// shell-only test intentionally doesn't set up.
+vi.mock("@/components/assistant/day-detail-provider", () => ({
+  DayDetailProvider: ({ children }: { children: ReactNode }) => children
+}));
 
 import { AppShell } from "./app-shell";
 

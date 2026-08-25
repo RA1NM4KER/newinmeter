@@ -2,11 +2,15 @@ import OpenAI from "openai";
 import { getOpenAiApiKey, getOpenAiModel, getOpenAiReasoningEffort } from "@/lib/env";
 import { buildAssistantSystemPrompt } from "./system-prompt";
 import { AssistantResponseJsonSchema, fallbackAssistantResponse, validateAssistantResponse } from "./response-schema";
+import { validateSemanticRules } from "./semantic-validation";
+import { checkDuplicateActivityProposals } from "./duplicate-activity-check";
+import { progressForToolNames } from "./progress-labels";
 import { createAssistantToolbox } from "./tools/index";
 import type {
   AssistantContext,
   AssistantConversationMessage,
   AssistantPermissions,
+  AssistantProgressStage,
   AssistantResponse,
   AssistantScope,
   ResponsesFunctionToolDefinition
@@ -119,7 +123,18 @@ export async function answerAssistantQuestion(
   scope: AssistantScope,
   history: AssistantConversationMessage[] = [],
   permissions: AssistantPermissions = { activitiesEnabled: false, alertsEnabled: false },
-  assistantContext: AssistantContext = {}
+  assistantContext: AssistantContext = {},
+  // Fired right before a batch of real (non-submit_response) tool calls
+  // executes -- see progress-labels.ts. Left undefined by every existing
+  // caller/test (plain-promise callers are unaffected); /api/assistant
+  // passes one to turn this into SSE progress frames. Never fired for
+  // submit_response itself or for repair/retry bookkeeping -- only real
+  // tool execution counts as progress.
+  onProgress?: (stage: AssistantProgressStage, label: string) => void,
+  // Forwarded to every OpenAI request this turn issues, so a client
+  // disconnect (dialog closed/unmounted mid-request) actually cancels the
+  // in-flight upstream call instead of finishing pointlessly server-side.
+  signal?: AbortSignal
 ): Promise<AssistantResponse> {
   const client = getClient();
   const model = getOpenAiModel();
@@ -139,34 +154,55 @@ export async function answerAssistantQuestion(
   const toolsUsed = new Set<string>();
   const includeReasoning = reasoningEffort !== "none" && modelSupportsReasoningEffort(model);
 
+  // One repair attempt for "model replied in plain text instead of calling
+  // submit_response" -- after that, a clean deterministic fallback is
+  // returned with zero raw model prose (spec: never render output_text).
+  let attemptedTextRepair = false;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-    const response = await client.responses.create({
-      model,
-      ...(includeReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
-      store: false,
-      tools,
-      tool_choice: "auto",
-      // Never expose chain-of-thought to the client -- only the model's own
-      // final text/tool-call output is ever read from `response` below;
-      // reasoning content is neither requested via `include` nor forwarded
-      // anywhere in this function's return value.
-      input
-    });
+    const response = await client.responses.create(
+      {
+        model,
+        ...(includeReasoning ? { reasoning: { effort: reasoningEffort } } : {}),
+        store: false,
+        tools,
+        tool_choice: "auto",
+        // Never expose chain-of-thought to the client -- only the model's own
+        // final text/tool-call output is ever read from `response` below;
+        // reasoning content is neither requested via `include` nor forwarded
+        // anywhere in this function's return value.
+        input
+      },
+      signal ? { signal } : undefined
+    );
 
     const functionCalls = response.output.filter(
       (item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call"
     );
 
     if (functionCalls.length === 0) {
-      // Model answered in plain text instead of calling submit_response --
-      // fail gracefully into a minimal, still-valid structured response
-      // rather than surfacing raw model prose as if it were the real
-      // contract (spec: "fail gracefully rather than rendering random
-      // model JSON").
-      console.warn("assistant_skipped_structured_response", { model, iteration });
-      const headline =
-        response.output_text?.trim().slice(0, 200) || "I couldn't find a clear answer for that -- could you rephrase?";
-      return { ...fallbackAssistantResponse(headline, resolvedScope), toolsUsed: Array.from(toolsUsed) };
+      // Model answered in plain text instead of calling submit_response.
+      // Raw output_text must NEVER reach the user (it bypasses every schema
+      // and semantic guarantee this file otherwise enforces) -- attempt one
+      // repair by explicitly instructing the model to call submit_response,
+      // then fail into a clean deterministic message with zero model prose.
+      console.warn("assistant_skipped_structured_response", { model, iteration, repaired: attemptedTextRepair });
+
+      if (!attemptedTextRepair) {
+        attemptedTextRepair = true;
+        input.push(...(response.output as unknown as OpenAI.Responses.ResponseInputItem[]));
+        input.push({
+          role: "system",
+          content:
+            "You did not call the submit_response tool. You MUST call submit_response now with your complete structured answer -- do not reply with plain text."
+        });
+        continue;
+      }
+
+      return {
+        ...fallbackAssistantResponse("I couldn't format that answer properly. Please try that question again.", resolvedScope),
+        toolsUsed: Array.from(toolsUsed)
+      };
     }
 
     // Echo this turn's full output back into input before appending tool
@@ -180,21 +216,37 @@ export async function answerAssistantQuestion(
 
     if (submitCall) {
       const parsed = parseJsonArguments(submitCall.arguments);
-      const validation = parsed.ok ? validateAssistantResponse(parsed.value) : null;
+      const structural = parsed.ok ? validateAssistantResponse(parsed.value) : null;
 
-      if (validation?.ok) {
-        return { ...validation.value, toolsUsed: Array.from(toolsUsed) };
+      // Semantic validation only runs once the response is structurally
+      // valid -- it checks WORDING (false-completion claims, causation
+      // overreach) and, via the async duplicate-activity check, real DB
+      // state, neither of which is meaningful against a malformed payload.
+      let semanticIssues: string[] = [];
+      if (structural?.ok) {
+        const wordingViolations = validateSemanticRules(structural.value);
+        const duplicateViolations = await checkDuplicateActivityProposals(structural.value, accessToken);
+        semanticIssues = [...wordingViolations, ...duplicateViolations].map(
+          (violation) => `${violation.rule}: ${violation.detail}`
+        );
+      }
+
+      if (structural?.ok && semanticIssues.length === 0) {
+        return { ...structural.value, toolsUsed: Array.from(toolsUsed) };
       }
 
       const isLastIteration = iteration === MAX_ITERATIONS - 1;
       const issues = !parsed.ok
         ? ["arguments were not valid JSON"]
-        : validation && !validation.ok
-          ? validation.issues
-          : [];
+        : structural && !structural.ok
+          ? structural.issues
+          : semanticIssues;
 
       if (isLastIteration) {
-        console.error("assistant_structured_response_invalid", issues);
+        console.error(
+          structural?.ok ? "assistant_semantic_response_invalid" : "assistant_structured_response_invalid",
+          issues
+        );
         return {
           ...fallbackAssistantResponse(
             "I couldn't put together a complete answer for that -- could you rephrase?",
@@ -204,14 +256,19 @@ export async function answerAssistantQuestion(
         };
       }
 
-      // One retry: tell the model exactly what was wrong so it can fix and
-      // resubmit, instead of silently discarding the turn.
+      // One retry: tell the model exactly what was wrong (structural OR
+      // semantic) so it can fix and resubmit, instead of silently
+      // discarding the turn.
       input.push(functionCallOutput(submitCall.call_id, { error: "invalid_response_shape", issues }));
 
       // Any other tool calls bundled into the same turn as submit_response
       // still need a matching function_call_output before the next
       // request, or the API rejects the whole turn.
       const otherCalls = functionCalls.filter((call) => call.name !== SUBMIT_RESPONSE_TOOL_NAME);
+      if (otherCalls.length > 0) {
+        const progress = progressForToolNames(otherCalls.map((call) => call.name));
+        if (progress) onProgress?.(progress.stage, progress.label);
+      }
       const outcomes = await Promise.all(otherCalls.map((call) => runToolCall(toolbox, call)));
       for (const outcome of outcomes) {
         if (outcome.used) {
@@ -225,6 +282,8 @@ export async function answerAssistantQuestion(
     // Ordinary read-tool calls -- independent, side-effect-free reads over
     // one memoized DashboardContext, safe to run concurrently (see
     // tools/index.ts's getContext()).
+    const progress = progressForToolNames(functionCalls.map((call) => call.name));
+    if (progress) onProgress?.(progress.stage, progress.label);
     const outcomes = await Promise.all(functionCalls.map((call) => runToolCall(toolbox, call)));
     for (const outcome of outcomes) {
       if (outcome.used) {

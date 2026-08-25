@@ -15,6 +15,30 @@ import { currentLocalDateString } from "@/lib/newinmeter/schedule";
 import type { AssistantTool } from "../types";
 import { EmptySchema } from "./schemas";
 
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+// Deterministic, server-computed threshold comparison -- the model must
+// never do this arithmetic itself (the exact bug this fixes: describing a
+// balance of R92.84 as "above" a R300 threshold). direction/
+// differenceFromThreshold describe where currentValue sits relative to
+// threshold in plain terms; conditionMet applies the TYPE-SPECIFIC fire
+// rule (some alerts fire on <, some on <=, some on >), which direction
+// alone doesn't capture.
+function compareToThreshold(
+  currentValue: number | null,
+  threshold: number | null
+): { direction: "above" | "below" | null; differenceFromThreshold: number | null } {
+  if (currentValue === null || threshold === null) {
+    return { direction: null, differenceFromThreshold: null };
+  }
+  return {
+    direction: currentValue < threshold ? "below" : currentValue > threshold ? "above" : null,
+    differenceFromThreshold: round2(currentValue - threshold)
+  };
+}
+
 export const getAlertStatusTool: AssistantTool = {
   definition: {
     type: "function",
@@ -94,6 +118,33 @@ export const getAlertStatusTool: AssistantTool = {
           break;
       }
 
+      const { direction, differenceFromThreshold } = hasThreshold
+        ? compareToThreshold(currentValue, threshold)
+        : { direction: null, differenceFromThreshold: null };
+
+      // Each threshold-bearing type's real fire rule -- NOT just "is
+      // currentValue below/above threshold" in general, since e.g.
+      // balance_runway fires at-or-below (not strictly below) and the
+      // spend/kWh/budget types fire on crossing ABOVE, not below.
+      let conditionMet: boolean | null = null;
+      if (currentValue !== null && threshold !== null) {
+        switch (type) {
+          case "low_balance":
+            conditionMet = currentValue < threshold;
+            break;
+          case "balance_runway":
+            conditionMet = currentValue <= threshold;
+            break;
+          case "daily_spend":
+          case "daily_kwh":
+          case "monthly_budget":
+            conditionMet = currentValue > threshold;
+            break;
+          default:
+            conditionMet = null;
+        }
+      }
+
       return {
         type,
         enabled,
@@ -103,6 +154,9 @@ export const getAlertStatusTool: AssistantTool = {
         needsAutoSync,
         currentValue,
         currentValueDisplay,
+        conditionMet,
+        direction,
+        differenceFromThreshold,
         ...extra
       };
     });

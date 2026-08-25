@@ -4,6 +4,7 @@ import { ArrowUp, Loader2, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FullscreenDialog } from "@/components/ui/fullscreen-dialog";
 import { AssistantMessage } from "./assistant-message";
+import { AssistantProgressIndicator } from "./assistant-progress-indicator";
 import { useAssistant } from "./assistant-provider";
 
 function buildStarterQuestions(isActivitiesEnabled: boolean, isAlertsEnabled: boolean) {
@@ -32,7 +33,7 @@ function DialogTitle() {
 }
 
 export function AssistantDialog() {
-  const { isOpen, close, turns, isPending, error, ask, isActivitiesEnabled, isAlertsEnabled, clearError } =
+  const { isOpen, close, turns, isPending, progress, error, ask, isActivitiesEnabled, isAlertsEnabled, clearError } =
     useAssistant();
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -66,12 +67,7 @@ export function AssistantDialog() {
               <AssistantMessage key={turn.id} onSuggestion={submit} turn={turn} />
             ))}
 
-            {isPending ? (
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Thinking...
-              </div>
-            ) : null}
+            {isPending ? <AssistantProgressIndicator label={progress?.label ?? null} /> : null}
 
             {error ? (
               <p className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">{error}</p>

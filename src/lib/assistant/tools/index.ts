@@ -6,6 +6,7 @@ import { compareCalendarMonthsTool } from "./compare-calendar-months";
 import { comparePreviousPeriodTool } from "./compare-previous-period";
 import { explainAlertTool } from "./explain-alert";
 import { explainDayTool } from "./explain-day";
+import { findActivitiesTool } from "./find-activities";
 import { getActivityReportTool } from "./get-activity-report";
 import { getAlertRecommendationsTool } from "./get-alert-recommendations";
 import { getAlertStatusTool } from "./get-alert-status";
@@ -17,6 +18,7 @@ import { getScopeOverviewTool } from "./get-scope-overview";
 import { getWaterOverviewTool } from "./get-water-overview";
 import { getTopDaysTool } from "./get-top-days";
 import { getTopHoursTool } from "./get-top-hours";
+import { inspectTimeWindowTool } from "./inspect-time-window";
 
 function pickScope(summary: DashboardSummary, scope: AssistantScope) {
   return {
@@ -68,13 +70,14 @@ export function createAssistantToolbox(
     getTopDaysTool,
     getTopHoursTool,
     explainDayTool,
+    inspectTimeWindowTool,
     getRecentTopupsTool,
     getWaterOverviewTool,
     getDataStatusTool,
     // Registered only when the account has Activities enabled -- the model
     // must never see this tool exists otherwise, not merely be refused when
     // it tries to call it.
-    ...(permissions.activitiesEnabled ? [getActivityReportTool] : []),
+    ...(permissions.activitiesEnabled ? [getActivityReportTool, findActivitiesTool] : []),
     // Same posture for Alerts: no alert tool exists in the model's tool
     // list at all when the Alerts feature is off for this account.
     ...(permissions.alertsEnabled

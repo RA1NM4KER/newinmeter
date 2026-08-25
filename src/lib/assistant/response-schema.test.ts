@@ -119,6 +119,79 @@ describe("validateAssistantResponse", () => {
     expect(validateAssistantResponse(tooManyMetrics).ok).toBe(false);
   });
 
+  it("accepts open_day_detail, update_activity, and delete_activity actions", () => {
+    const openDayDetail = validateAssistantResponse(
+      validPayload({ actions: [{ type: "open_day_detail", label: "View day", date: "2026-08-20" }] })
+    );
+    expect(openDayDetail.ok).toBe(true);
+
+    const updateActivity = validateAssistantResponse(
+      validPayload({
+        actions: [
+          {
+            type: "update_activity",
+            label: "Update activity",
+            activityId: "act-1",
+            date: "2026-08-20",
+            start: "18:00",
+            end: "19:00",
+            tags: ["geyser"],
+            note: null,
+            requiresConfirmation: true
+          }
+        ]
+      })
+    );
+    expect(updateActivity.ok).toBe(true);
+
+    const deleteActivity = validateAssistantResponse(
+      validPayload({
+        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "act-1", requiresConfirmation: true }]
+      })
+    );
+    expect(deleteActivity.ok).toBe(true);
+  });
+
+  it("rejects update_activity/delete_activity missing requiresConfirmation: true", () => {
+    const result = validateAssistantResponse(
+      validPayload({
+        actions: [{ type: "delete_activity", label: "Delete activity", activityId: "act-1" }]
+      })
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  describe("strengthened headline validation", () => {
+    it("rejects a headline over ~90 characters", () => {
+      const result = validateAssistantResponse(validPayload({ headline: "x".repeat(91) }));
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects a multi-line headline", () => {
+      const result = validateAssistantResponse(validPayload({ headline: "First line\nSecond line" }));
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects a headline prefixed with a schema label -- the exact malformed shape observed in manual testing", () => {
+      const result = validateAssistantResponse(
+        validPayload({ headline: "Headline: No new alert tonight due to timing rules" })
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects other schema-label prefixes case-insensitively", () => {
+      expect(validateAssistantResponse(validPayload({ headline: "metrics: Spend R84.20" })).ok).toBe(false);
+      expect(validateAssistantResponse(validPayload({ headline: "Body: This was unusual" })).ok).toBe(false);
+      expect(validateAssistantResponse(validPayload({ headline: "Actions: Add activity" })).ok).toBe(false);
+      expect(validateAssistantResponse(validPayload({ headline: "Suggestions: Why?" })).ok).toBe(false);
+    });
+
+    it("accepts a normal short single-line headline", () => {
+      const result = validateAssistantResponse(validPayload({ headline: "Aug 13 was unusually expensive" }));
+      expect(result.ok).toBe(true);
+    });
+  });
+
   it("returns readable issue strings on failure, for server-side logging", () => {
     const result = validateAssistantResponse({ headline: "" });
     expect(result.ok).toBe(false);

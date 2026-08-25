@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { activityValidationErrors, createActivity } from "@/lib/activity/data";
+import { activityValidationErrors, createActivity, deleteActivity, updateActivity } from "@/lib/activity/data";
 import {
   isHalfHourTime,
   isIsoDate,
@@ -53,6 +53,25 @@ const addActivitySchema = z.object({
   tags: z.array(z.string().trim().min(1).max(ACTIVITY_MAX_TAG_LENGTH)).min(1).max(ACTIVITY_MAX_TAGS)
 });
 
+// activityId is trusted only as an opaque lookup key -- ownership is
+// re-verified server-side by RLS inside updateActivity/deleteActivity
+// itself (see /api/activities/[id]/route.ts's identical pattern), not by
+// anything the model claimed.
+const updateActivitySchema = z.object({
+  type: z.literal("update_activity"),
+  activityId: z.string().min(1),
+  date: z.string().refine(isIsoDate, "Invalid date."),
+  start: z.string().refine(isHalfHourTime, "Invalid start time."),
+  end: z.string().refine((value) => isHalfHourTime(value) || value === "00:00", "Invalid end time."),
+  tags: z.array(z.string().trim().min(1).max(ACTIVITY_MAX_TAG_LENGTH)).min(1).max(ACTIVITY_MAX_TAGS),
+  note: z.string().max(280).nullable()
+});
+
+const deleteActivitySchema = z.object({
+  type: z.literal("delete_activity"),
+  activityId: z.string().min(1)
+});
+
 const setAlertSchema = z.object({
   type: z.literal("set_alert"),
   alertType: alertTypeEnum,
@@ -76,6 +95,8 @@ const syncSchema = z.object({ type: z.literal("sync") });
 
 const actionRequestSchema = z.discriminatedUnion("type", [
   addActivitySchema,
+  updateActivitySchema,
+  deleteActivitySchema,
   setAlertSchema,
   updateAlertSchema,
   disableAlertSchema,
@@ -122,6 +143,71 @@ async function handleAddActivity(session: AuthenticatedConnectionSession, body: 
     return NextResponse.json(
       { message: errors ? "Check the activity details." : "Failed to add activity.", errors },
       { status: errors ? 400 : 500 }
+    );
+  }
+}
+
+async function handleUpdateActivity(
+  session: AuthenticatedConnectionSession,
+  body: z.infer<typeof updateActivitySchema>
+) {
+  if (!(await hasFeatureAccess(session.userId, "activities"))) {
+    return NextResponse.json({ message: "Activities is not enabled for your account." }, { status: 403 });
+  }
+  if (session.connection.isDemo) {
+    return demoReadOnlyError();
+  }
+
+  const updates: ActivityInput = {
+    date: body.date,
+    allDay: false,
+    startTime: body.start,
+    endTime: body.end,
+    tags: body.tags,
+    note: body.note
+  };
+
+  try {
+    // Returns null for a not-found OR not-owned id -- RLS (via
+    // session.accessToken) is the sole ownership boundary, same as
+    // /api/activities/[id]/route.ts's PATCH.
+    const activity = await updateActivity(session.accessToken, session.connection.id, body.activityId, updates);
+    if (!activity) {
+      return NextResponse.json({ message: "Activity not found." }, { status: 404 });
+    }
+    return NextResponse.json({ activity });
+  } catch (error) {
+    const errors = activityValidationErrors(error);
+    return NextResponse.json(
+      { message: errors ? "Check the activity details." : "Failed to update activity.", errors },
+      { status: errors ? 400 : 500 }
+    );
+  }
+}
+
+async function handleDeleteActivity(
+  session: AuthenticatedConnectionSession,
+  body: z.infer<typeof deleteActivitySchema>
+) {
+  if (!(await hasFeatureAccess(session.userId, "activities"))) {
+    return NextResponse.json({ message: "Activities is not enabled for your account." }, { status: 403 });
+  }
+  if (session.connection.isDemo) {
+    return demoReadOnlyError();
+  }
+
+  try {
+    // Same RLS ownership boundary as update -- null means not found OR not
+    // owned, and both return an identical 404 so ownership can't be probed.
+    const activity = await deleteActivity(session.accessToken, body.activityId);
+    if (!activity) {
+      return NextResponse.json({ message: "Activity not found." }, { status: 404 });
+    }
+    return NextResponse.json({ activity });
+  } catch (error) {
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Failed to delete activity." },
+      { status: 500 }
     );
   }
 }
@@ -282,6 +368,12 @@ export async function POST(request: Request) {
     switch (parsed.data.type) {
       case "add_activity":
         response = await handleAddActivity(auth.session, parsed.data);
+        break;
+      case "update_activity":
+        response = await handleUpdateActivity(auth.session, parsed.data);
+        break;
+      case "delete_activity":
+        response = await handleDeleteActivity(auth.session, parsed.data);
         break;
       case "set_alert":
       case "update_alert":
