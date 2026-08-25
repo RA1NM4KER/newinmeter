@@ -92,18 +92,18 @@ function DemoLoginButton({ token }: { token: string }) {
   }
 
   return (
-    <div className="mt-1 flex flex-col items-center gap-1.5 border-t border-white/10 pt-4">
+    <div className="mt-1 flex flex-col items-start gap-1.5 border-t border-line pt-4">
       <button
         type="button"
         onClick={() => void handleClick()}
         disabled={isSubmitting}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-brandGreen/30 bg-brandGreen/10 px-5 text-sm font-medium text-brandGreen transition hover:bg-brandGreen/15 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-brandTeal/25 bg-accentSoft px-4 text-sm font-medium text-brandTeal outline-none transition hover:border-brandTeal/40 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
         Explore demo account
       </button>
-      <p className="text-xs text-white/35">View NewinMeter with synthetic data</p>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      <p className="text-xs text-muted">View NewinMeter with synthetic data</p>
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
     </div>
   );
 }
@@ -284,12 +284,12 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
 
   if (step === "code") {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-6 text-center">
-        <CheckCircle2 className="h-5 w-5 text-brandGreen" aria-hidden="true" />
+      <div className="flex flex-col items-center gap-3 border-t border-line py-5 text-center">
+        <CheckCircle2 className="h-5 w-5 text-accent" aria-hidden="true" />
         <div>
-          <p className="text-sm font-medium text-white">Check your email</p>
-          <p className="mt-1 text-xs text-white/45">
-            We sent a 6-digit sign-in code to <span className="font-medium text-white">{email}</span>
+          <p className="text-sm font-medium text-ink">Check your email</p>
+          <p className="mt-1 text-xs text-muted">
+            We sent a 6-digit sign-in code to <span className="font-medium text-ink">{email}</span>
           </p>
         </div>
 
@@ -298,7 +298,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
             aria-label="6-digit code"
             autoComplete="one-time-code"
             autoFocus
-            className="h-14 w-48 rounded-xl border border-white/10 bg-white/[0.04] text-center text-2xl font-semibold tracking-[0.5em] text-white outline-none transition focus:border-brandGreen"
+            className="h-14 w-48 rounded-lg border border-line bg-paper text-center text-2xl font-semibold tracking-[0.5em] text-ink outline-none transition focus:border-brandTeal focus:ring-2 focus:ring-accent/30"
             disabled={isVerifying}
             inputMode="numeric"
             maxLength={OTP_LENGTH}
@@ -308,15 +308,15 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
             value={code}
           />
 
-          <p className="text-xs text-white/35">Enter the code from your email to continue.</p>
+          <p className="text-xs text-muted">Enter the code from your email to continue.</p>
 
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          {!error && resendMessage ? <p className="text-sm text-brandGreen">{resendMessage}</p> : null}
+          {error ? <p className="text-sm text-red-700">{error}</p> : null}
+          {!error && resendMessage ? <p className="text-sm text-success">{resendMessage}</p> : null}
 
           <button
             type="submit"
             disabled={isVerifying || code.length !== OTP_LENGTH}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brandGreen text-sm font-semibold text-neutral-950 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brandTeal text-sm font-semibold text-white outline-none transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             Continue
@@ -328,15 +328,15 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
             type="button"
             onClick={() => void handleResend()}
             disabled={isResending || cooldownRemaining > 0}
-            className="text-xs font-medium text-brandGreen transition hover:opacity-80 disabled:cursor-not-allowed disabled:text-white/35"
+            className="rounded text-xs font-medium text-brandTeal outline-none transition hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-muted"
           >
             {cooldownRemaining > 0 ? `Resend code (${cooldownRemaining}s)` : "Resend code"}
           </button>
-          <span className="text-xs text-white/20">·</span>
+          <span className="text-xs text-line">·</span>
           <button
             type="button"
             onClick={handleUseDifferentEmail}
-            className="text-xs font-medium text-brandGreen transition hover:opacity-80"
+            className="rounded text-xs font-medium text-brandTeal outline-none transition hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
           >
             Use a different email
           </button>
@@ -351,47 +351,51 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
         type="button"
         onClick={() => void handleGoogleSignIn()}
         disabled={isGoogleLoading}
-        className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-white text-sm font-medium text-neutral-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ink/20 bg-paper text-sm font-medium text-ink outline-none transition hover:border-ink/40 hover:bg-canvas focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isGoogleLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <GoogleIcon />}
         Continue with Google
       </button>
 
       <div className="my-1 flex items-center gap-3">
-        <div className="h-px flex-1 bg-white/10" />
-        <span className="text-xs text-white/35">or</span>
-        <div className="h-px flex-1 bg-white/10" />
+        <div className="h-px flex-1 bg-line" />
+        <span className="text-xs text-muted">or</span>
+        <div className="h-px flex-1 bg-line" />
       </div>
 
       <form onSubmit={handleSubmitEmail} className="flex flex-col gap-3">
+        <label htmlFor="login-email" className="text-xs font-medium text-ink">
+          Email address
+        </label>
         <div className="relative">
           <Mail
             aria-hidden="true"
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
           />
           <input
+            id="login-email"
             type="email"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            className="h-12 w-full rounded-full border border-white/10 bg-white/[0.04] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-brandGreen"
+            className="h-11 w-full rounded-lg border border-line bg-paper pl-10 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal focus:ring-2 focus:ring-accent/30"
           />
         </div>
 
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
         <button
           type="submit"
           disabled={isSubmitting || !email}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brandGreen text-sm font-semibold text-neutral-950 transition hover:brightness-95 disabled:cursor-not-allowed"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brandTeal text-sm font-semibold text-white outline-none transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           Send code
           {!isSubmitting ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}
         </button>
 
-        <p className="mt-1 text-xs text-white/35">We&apos;ll email you a 6-digit code. No password to remember.</p>
+        <p className="mt-1 text-xs text-muted">We&apos;ll email you a 6-digit code. No password to remember.</p>
       </form>
 
       {demoToken ? <DemoLoginButton token={demoToken} /> : null}

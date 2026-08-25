@@ -38,4 +38,20 @@ describe("LoginPage demo-token gating", () => {
     render(<LoginPage searchParams={{ demo: "correct-token" }} />);
     expect(screen.queryByText("Explore demo account")).not.toBeNull();
   });
+
+  it("presents the product and keeps sign-in in the hero", () => {
+    render(<LoginPage searchParams={{}} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: /know where your prepaid electricity/i })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 2, name: "Sign in to NewinMeter" })).toBeDefined();
+    expect(screen.getByAltText(/dashboard showing balance, spend, electricity usage/i)).toBeDefined();
+  });
+
+  it("includes the three concise product-story sections", () => {
+    render(<LoginPage searchParams={{}} />);
+
+    expect(screen.getByRole("heading", { name: "See where your money went." })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Add context. Ask what changed." })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Get notified before your balance/i })).toBeDefined();
+  });
 });

@@ -61,6 +61,21 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+/* Keep the public front door paper-light even when an existing app preference
+   has placed the root document in dark mode. Scoped to /login only. */
+[data-public-auth] {
+  color-scheme: light;
+  --color-canvas: 246 246 246;
+  --color-paper: 255 255 255;
+  --color-ink: 24 24 24;
+  --color-muted: 96 101 98;
+  --color-line: 224 228 225;
+  --color-accent: 76 201 142;
+  --color-accent-soft: 214 250 231;
+  --color-success: 34 139 58;
+  --color-brand-teal: 1 99 113;
+}
+
 .fullscreen-glass {
   /* autoprefixer: off */
   top: 0;
