@@ -17,6 +17,10 @@ type BottomSheetProps = {
   // consumer with its own header-level action doesn't need to duplicate
   // this sheet's title row just to add one.
   headerAction?: ReactNode;
+  // Short sheets such as the mobile menu need less vertical padding than
+  // notification/install content. Keep the default unchanged for every
+  // existing consumer and opt into the tighter spacing explicitly.
+  contentPadding?: "default" | "compact";
 };
 
 // Bottom-anchored counterpart to FullscreenDialog -- for menus/content short
@@ -24,7 +28,14 @@ type BottomSheetProps = {
 // below it. Animation plumbing (visible state + rAF-triggered transition +
 // timeout-delayed unmount, body-scroll lock, Escape-to-close) mirrors
 // ManageDrawer, just with the slide axis swapped from X to Y.
-export function BottomSheet({ isOpen, onClose, title, children, headerAction }: BottomSheetProps) {
+export function BottomSheet({
+  isOpen,
+  onClose,
+  title,
+  children,
+  headerAction,
+  contentPadding = "default"
+}: BottomSheetProps) {
   const [visible, setVisible] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -100,7 +111,13 @@ export function BottomSheet({ isOpen, onClose, title, children, headerAction }: 
             </button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-5">
+        <div
+          className={`min-h-0 flex-1 overflow-auto px-5 ${
+            contentPadding === "compact"
+              ? "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-4"
+              : "pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-5"
+          }`}
+        >
           {children}
         </div>
       </div>

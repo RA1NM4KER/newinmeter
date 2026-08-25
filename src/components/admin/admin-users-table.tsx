@@ -4,7 +4,6 @@ import { Pencil, RefreshCw } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { Card } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
@@ -338,7 +337,9 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
         </div>
       )}
 
-      <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Match Data and Activities Table: edge-to-edge, borderless surface
+          below lg; normal floating card on desktop. */}
+      <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="relative min-h-0 flex-1">
           <div className="h-full overflow-auto" ref={tableScrollRef}>
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
@@ -414,7 +415,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
         </div>
 
         {error instanceof Error ? <p className="px-3 py-2 text-sm text-red-500">{error.message}</p> : null}
-      </Card>
+      </section>
 
       {selectedUser ? (
         <ManageDrawer

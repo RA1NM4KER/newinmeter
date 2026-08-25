@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
@@ -92,6 +92,44 @@ describe("AppShell viewport-height architecture", () => {
     const shell = container.firstElementChild as HTMLElement;
     expect(shell.className).toContain("h-[100dvh]");
     expect(shell.className).not.toContain("100svh");
+  });
+
+  it("/admin uses the full-bleed table main spacing below lg and restores bottom spacing at lg", () => {
+    setPathname("/admin");
+    const { container } = render(<AppShell>content</AppShell>);
+
+    const main = container.querySelector("main") as HTMLElement;
+    const classes = main.className.split(/\s+/);
+    expect(classes).toContain("lg:pb-5");
+    expect(classes).not.toContain("pb-5");
+  });
+
+  it("mobile menu uses substantial rows and a full-width account row without changing shared sidebar sizing", () => {
+    setPathname("/admin");
+    const { container } = render(
+      <AppShell isAdmin userEmail="a-very-long-email-address@example.com">
+        content
+      </AppShell>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const dialog = screen.getByRole("dialog");
+    const menu = within(dialog);
+    expect(menu.getByRole("heading", { name: "Menu" })).toBeTruthy();
+    const adminLink = menu.getByRole("link", { name: "Admin" });
+    const accountRow = menu.getByText("a-very-long-email-address@example.com").parentElement as HTMLElement;
+
+    expect(adminLink.className).toContain("min-h-12");
+    expect(adminLink.className).toContain("text-[0.9375rem]");
+    expect(adminLink.querySelector("svg")?.getAttribute("class")).toContain("h-5");
+    expect(accountRow.className).toContain("justify-between");
+    expect(menu.getByRole("button", { name: "Sign out" }).className).toContain("font-medium");
+
+    const sidebarAdminLink = within(container.querySelector("aside") as HTMLElement).getByRole("link", {
+      name: "Admin"
+    });
+    expect(sidebarAdminLink.className).toContain("text-sm");
+    expect(sidebarAdminLink.className).not.toContain("min-h-12");
   });
 
   it("regular pages (document-scrolling): shell is not fixed-height/overflow-hidden, and its min-height stays svh (the conservative floor for a page real users scroll)", () => {
