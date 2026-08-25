@@ -11,6 +11,7 @@ import type {
   AssistantConversationMessage,
   AssistantPermissions,
   AssistantProgressStage,
+  AssistantRequestTelemetry,
   AssistantResponse,
   AssistantScope,
   ResponsesFunctionToolDefinition
@@ -77,12 +78,13 @@ function parseJsonArguments(raw: string): ParsedJson {
   }
 }
 
-type ToolCallOutcome = { callId: string; toolName: string; payload: unknown; used: boolean };
+type ToolCallOutcome = { callId: string; toolName: string; payload: unknown; used: boolean; durationMs: number };
 
 async function runToolCall(
   toolbox: ReturnType<typeof createAssistantToolbox>,
   call: OpenAI.Responses.ResponseFunctionToolCall
 ): Promise<ToolCallOutcome> {
+  const startedAt = Date.now();
   const parsed = parseJsonArguments(call.arguments);
   const args =
     parsed.ok && typeof parsed.value === "object" && parsed.value !== null && !Array.isArray(parsed.value)
@@ -94,20 +96,22 @@ async function runToolCall(
       callId: call.call_id,
       toolName: call.name,
       payload: { error: "invalid_tool_arguments", tool: call.name },
-      used: false
+      used: false,
+      durationMs: Date.now() - startedAt
     };
   }
 
   try {
     const payload = await toolbox.execute(call.name, args);
-    return { callId: call.call_id, toolName: call.name, payload, used: true };
+    return { callId: call.call_id, toolName: call.name, payload, used: true, durationMs: Date.now() - startedAt };
   } catch (error) {
     const isUnknownTool = error instanceof Error && error.message.startsWith("Unknown assistant tool");
     return {
       callId: call.call_id,
       toolName: call.name,
       payload: { error: isUnknownTool ? "unknown_tool" : "tool_execution_failed", tool: call.name },
-      used: false
+      used: false,
+      durationMs: Date.now() - startedAt
     };
   }
 }
@@ -116,7 +120,12 @@ function functionCallOutput(callId: string, payload: unknown): OpenAI.Responses.
   return { type: "function_call_output", call_id: callId, output: JSON.stringify(payload) };
 }
 
-export async function answerAssistantQuestion(
+type TelemetryState = AssistantRequestTelemetry & {
+  startedAt: number;
+  toolResults: Array<{ toolName: string; payload: unknown }>;
+};
+
+async function answerAssistantQuestionInternal(
   accessToken: string,
   userId: string,
   question: string,
@@ -130,11 +139,12 @@ export async function answerAssistantQuestion(
   // passes one to turn this into SSE progress frames. Never fired for
   // submit_response itself or for repair/retry bookkeeping -- only real
   // tool execution counts as progress.
-  onProgress?: (stage: AssistantProgressStage, label: string) => void,
+  onProgress: ((stage: AssistantProgressStage, label: string) => void) | undefined,
   // Forwarded to every OpenAI request this turn issues, so a client
   // disconnect (dialog closed/unmounted mid-request) actually cancels the
   // in-flight upstream call instead of finishing pointlessly server-side.
-  signal?: AbortSignal
+  signal: AbortSignal | undefined,
+  telemetry: TelemetryState
 ): Promise<AssistantResponse> {
   const client = getClient();
   const model = getOpenAiModel();
@@ -160,6 +170,8 @@ export async function answerAssistantQuestion(
   let attemptedTextRepair = false;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    const modelStartedAt = Date.now();
+    telemetry.modelRounds += 1;
     const response = await client.responses.create(
       {
         model,
@@ -175,6 +187,11 @@ export async function answerAssistantQuestion(
       },
       signal ? { signal } : undefined
     );
+    const modelElapsed = Date.now() - modelStartedAt;
+    telemetry.modelDurationMs += modelElapsed;
+    if (telemetry.timeToFirstOpenAiResponseMs === null) {
+      telemetry.timeToFirstOpenAiResponseMs = Date.now() - telemetry.startedAt;
+    }
 
     const functionCalls = response.output.filter(
       (item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call"
@@ -190,6 +207,7 @@ export async function answerAssistantQuestion(
 
       if (!attemptedTextRepair) {
         attemptedTextRepair = true;
+        telemetry.skippedSubmitRepairs += 1;
         input.push(...(response.output as unknown as OpenAI.Responses.ResponseInputItem[]));
         input.push({
           role: "system",
@@ -200,7 +218,10 @@ export async function answerAssistantQuestion(
       }
 
       return {
-        ...fallbackAssistantResponse("I couldn't format that answer properly. Please try that question again.", resolvedScope),
+        ...fallbackAssistantResponse(
+          "I couldn't format that answer properly. Please try that question again.",
+          resolvedScope
+        ),
         toolsUsed: Array.from(toolsUsed)
       };
     }
@@ -224,7 +245,13 @@ export async function answerAssistantQuestion(
       // state, neither of which is meaningful against a malformed payload.
       let semanticIssues: string[] = [];
       if (structural?.ok) {
-        const wordingViolations = validateSemanticRules(structural.value);
+        const wordingViolations = validateSemanticRules({
+          response: structural.value,
+          toolsUsed,
+          question,
+          trustedContext: assistantContext,
+          toolResults: telemetry.toolResults
+        });
         const duplicateViolations = await checkDuplicateActivityProposals(structural.value, accessToken);
         semanticIssues = [...wordingViolations, ...duplicateViolations].map(
           (violation) => `${violation.rule}: ${violation.detail}`
@@ -232,6 +259,7 @@ export async function answerAssistantQuestion(
       }
 
       if (structural?.ok && semanticIssues.length === 0) {
+        telemetry.timeToFinalValidatedResponseMs = Date.now() - telemetry.startedAt;
         return { ...structural.value, toolsUsed: Array.from(toolsUsed) };
       }
 
@@ -256,6 +284,9 @@ export async function answerAssistantQuestion(
         };
       }
 
+      if (structural?.ok) telemetry.semanticRepairs += 1;
+      else telemetry.structuredRepairs += 1;
+
       // One retry: tell the model exactly what was wrong (structural OR
       // semantic) so it can fix and resubmit, instead of silently
       // discarding the turn.
@@ -269,10 +300,18 @@ export async function answerAssistantQuestion(
         const progress = progressForToolNames(otherCalls.map((call) => call.name));
         if (progress) onProgress?.(progress.stage, progress.label);
       }
+      const toolBatchStartedAt = Date.now();
       const outcomes = await Promise.all(otherCalls.map((call) => runToolCall(toolbox, call)));
+      if (otherCalls.length > 0) {
+        telemetry.toolExecutionBatches += 1;
+        telemetry.toolDurationMs += Date.now() - toolBatchStartedAt;
+      }
       for (const outcome of outcomes) {
+        telemetry.perToolDurationMs[outcome.toolName] =
+          (telemetry.perToolDurationMs[outcome.toolName] ?? 0) + outcome.durationMs;
         if (outcome.used) {
           toolsUsed.add(outcome.toolName);
+          telemetry.toolResults.push({ toolName: outcome.toolName, payload: outcome.payload });
         }
         input.push(functionCallOutput(outcome.callId, outcome.payload));
       }
@@ -284,14 +323,74 @@ export async function answerAssistantQuestion(
     // tools/index.ts's getContext()).
     const progress = progressForToolNames(functionCalls.map((call) => call.name));
     if (progress) onProgress?.(progress.stage, progress.label);
+    const toolBatchStartedAt = Date.now();
     const outcomes = await Promise.all(functionCalls.map((call) => runToolCall(toolbox, call)));
+    telemetry.toolExecutionBatches += 1;
+    telemetry.toolDurationMs += Date.now() - toolBatchStartedAt;
     for (const outcome of outcomes) {
+      telemetry.perToolDurationMs[outcome.toolName] =
+        (telemetry.perToolDurationMs[outcome.toolName] ?? 0) + outcome.durationMs;
       if (outcome.used) {
         toolsUsed.add(outcome.toolName);
+        telemetry.toolResults.push({ toolName: outcome.toolName, payload: outcome.payload });
       }
       input.push(functionCallOutput(outcome.callId, outcome.payload));
     }
   }
 
   throw new Error("Assistant exceeded the maximum tool-call loop.");
+}
+
+export async function answerAssistantQuestion(
+  accessToken: string,
+  userId: string,
+  question: string,
+  scope: AssistantScope,
+  history: AssistantConversationMessage[] = [],
+  permissions: AssistantPermissions = { activitiesEnabled: false, alertsEnabled: false },
+  assistantContext: AssistantContext = {},
+  onProgress?: (stage: AssistantProgressStage, label: string) => void,
+  signal?: AbortSignal,
+  onTelemetry?: (telemetry: AssistantRequestTelemetry) => void
+): Promise<AssistantResponse> {
+  const startedAt = Date.now();
+  const telemetry: TelemetryState = {
+    startedAt,
+    durationMs: 0,
+    timeToFirstOpenAiResponseMs: null,
+    modelRounds: 0,
+    modelDurationMs: 0,
+    toolExecutionBatches: 0,
+    toolDurationMs: 0,
+    toolsUsed: [],
+    perToolDurationMs: {},
+    semanticRepairs: 0,
+    structuredRepairs: 0,
+    skippedSubmitRepairs: 0,
+    timeToFinalValidatedResponseMs: null,
+    aborted: false,
+    model: getOpenAiModel(),
+    reasoningEffort: getOpenAiReasoningEffort(),
+    toolResults: []
+  };
+  try {
+    return await answerAssistantQuestionInternal(
+      accessToken,
+      userId,
+      question,
+      scope,
+      history,
+      permissions,
+      assistantContext,
+      onProgress,
+      signal,
+      telemetry
+    );
+  } finally {
+    telemetry.durationMs = Date.now() - startedAt;
+    telemetry.aborted = signal?.aborted ?? false;
+    telemetry.toolsUsed = Array.from(new Set(telemetry.toolResults.map((result) => result.toolName)));
+    const { startedAt: _startedAt, toolResults: _toolResults, ...publicTelemetry } = telemetry;
+    onTelemetry?.(publicTelemetry);
+  }
 }

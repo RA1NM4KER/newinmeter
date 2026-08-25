@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type {
   AssistantConversationMessage,
   AssistantProgressStage,
+  AssistantRecentActionResult,
   AssistantResponse,
   AssistantStreamEvent
 } from "@/lib/assistant/types";
@@ -50,6 +51,7 @@ type AssistantState = {
   close: () => void;
   ask: (question: string) => void;
   clearError: () => void;
+  recordRecentActionResult: (result: AssistantRecentActionResult) => void;
 };
 
 const AssistantContext = createContext<AssistantState | null>(null);
@@ -104,6 +106,12 @@ export function AssistantProvider({
   // "Ask AI". Cleared after the first question in a session so it never
   // silently reattaches to an unrelated later question.
   const pendingAlertEventIdRef = useRef<string | undefined>(undefined);
+  // Successful confirmation-card mutations write here. Keep a tiny bounded
+  // lifetime so immediate verification follow-ups can still use the exact
+  // executed result, without turning action internals into permanent chat.
+  const pendingRecentActionResultRef = useRef<
+    { result: AssistantRecentActionResult; remainingUses: number } | undefined
+  >(undefined);
   // The in-flight request's own controller, so close()/unmount can cancel
   // it -- a stream left running after the user navigated away would just
   // waste the upstream call and risk a stray late state update.
@@ -128,12 +136,19 @@ export function AssistantProvider({
 
       const alertEventId = pendingAlertEventIdRef.current;
       pendingAlertEventIdRef.current = undefined;
+      const recentActionEntry = pendingRecentActionResultRef.current;
+      const recentActionResult = recentActionEntry?.result;
+      if (recentActionEntry) {
+        recentActionEntry.remainingUses -= 1;
+        if (recentActionEntry.remainingUses <= 0) pendingRecentActionResultRef.current = undefined;
+      }
 
       const conversationHistory: AssistantConversationMessage[] = history
         .slice(-8)
         .map((turn) => ({ role: turn.role, content: turn.content }));
 
       (async () => {
+        let terminalState: "pending" | "success" | "error" = "pending";
         try {
           const result = await fetch(apiEndpoints.assistant, {
             method: "POST",
@@ -144,7 +159,7 @@ export function AssistantProvider({
               from: scope.from || undefined,
               to: scope.to || undefined,
               history: conversationHistory,
-              context: alertEventId ? { alertEventId } : undefined
+              context: alertEventId || recentActionResult ? { alertEventId, recentActionResult } : undefined
             })
           });
 
@@ -159,8 +174,6 @@ export function AssistantProvider({
           const reader = result.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
-          let settled = false;
-
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -171,10 +184,13 @@ export function AssistantProvider({
             for (const event of events) {
               if (controller.signal.aborted) return;
               if (event.type === "progress") {
+                if (terminalState !== "pending") continue;
                 setProgress({ stage: event.stage, label: event.label });
               } else if (event.type === "response") {
-                settled = true;
+                if (terminalState !== "pending") continue;
+                terminalState = "success";
                 setProgress(null);
+                setError("");
                 setTurns((current) => [
                   ...current,
                   {
@@ -188,7 +204,8 @@ export function AssistantProvider({
                   setScope(event.response.scope);
                 }
               } else if (event.type === "error") {
-                settled = true;
+                if (terminalState !== "pending") continue;
+                terminalState = "error";
                 setProgress(null);
                 setTurns((current) => current.filter((turn) => turn.id !== userTurn.id));
                 setError(event.message);
@@ -196,14 +213,19 @@ export function AssistantProvider({
             }
           }
 
-          if (!settled && !controller.signal.aborted) {
+          if (terminalState === "pending" && !controller.signal.aborted) {
             setTurns((current) => current.filter((turn) => turn.id !== userTurn.id));
             setError("Assistant request failed.");
           }
         } catch (requestError) {
-          if (controller.signal.aborted || (requestError instanceof DOMException && requestError.name === "AbortError")) {
+          if (
+            controller.signal.aborted ||
+            (requestError instanceof DOMException && requestError.name === "AbortError")
+          ) {
             return;
           }
+          if (terminalState !== "pending") return;
+          terminalState = "error";
           setTurns((current) => current.filter((turn) => turn.id !== userTurn.id));
           setError(requestError instanceof Error ? requestError.message : "Assistant request failed.");
         } finally {
@@ -261,6 +283,9 @@ export function AssistantProvider({
   }, []);
 
   const clearError = useCallback(() => setError(""), []);
+  const recordRecentActionResult = useCallback((result: AssistantRecentActionResult) => {
+    pendingRecentActionResultRef.current = { result, remainingUses: 3 };
+  }, []);
   const ask = useCallback((question: string) => submit(question, turns), [submit, turns]);
 
   const value = useMemo<AssistantState>(
@@ -278,7 +303,8 @@ export function AssistantProvider({
       open,
       close,
       ask,
-      clearError
+      clearError,
+      recordRecentActionResult
     }),
     [
       isOpen,
@@ -294,7 +320,8 @@ export function AssistantProvider({
       open,
       close,
       ask,
-      clearError
+      clearError,
+      recordRecentActionResult
     ]
   );
 

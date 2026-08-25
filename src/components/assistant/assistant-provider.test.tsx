@@ -32,7 +32,7 @@ const validResponse = {
 };
 
 function Harness() {
-  const { isPending, progress, error, turns, ask, open, close } = useAssistant();
+  const { isPending, progress, error, turns, ask, open, close, recordRecentActionResult } = useAssistant();
   return (
     <div>
       <p data-testid="pending">{String(isPending)}</p>
@@ -47,6 +47,24 @@ function Harness() {
       </button>
       <button onClick={() => ask("What happened?")} type="button">
         ask
+      </button>
+      <button
+        onClick={() =>
+          recordRecentActionResult({
+            type: "delete_activity",
+            success: true,
+            deletedActivity: {
+              id: "11111111-1111-4111-8111-111111111111",
+              startsAt: "2026-08-24T22:00:00",
+              endsAt: "2026-08-25T05:00:00",
+              allDay: false,
+              tags: ["geyser"]
+            }
+          })
+        }
+        type="button"
+      >
+        record action
       </button>
     </div>
   );
@@ -68,16 +86,18 @@ afterEach(() => {
 
 describe("AssistantProvider streaming", () => {
   it("parses started -> progress -> response frames, updating progress then clearing it once the final answer lands", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        sseBody([
-          frame({ type: "started" }),
-          frame({ type: "progress", stage: "usage", label: "Checking your usage…" }),
-          frame({ type: "response", response: validResponse })
-        ]),
-        { status: 200 }
-      )
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          sseBody([
+            frame({ type: "started" }),
+            frame({ type: "progress", stage: "usage", label: "Checking your usage…" }),
+            frame({ type: "response", response: validResponse })
+          ]),
+          { status: 200 }
+        )
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     renderHarness();
@@ -92,17 +112,19 @@ describe("AssistantProvider streaming", () => {
   });
 
   it("never puts progress events into turns/history -- only the final response event becomes a turn", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        sseBody([
-          frame({ type: "started" }),
-          frame({ type: "progress", stage: "usage", label: "Checking your usage…" }),
-          frame({ type: "progress", stage: "alerts", label: "Reviewing your alerts…" }),
-          frame({ type: "response", response: validResponse })
-        ]),
-        { status: 200 }
-      )
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          sseBody([
+            frame({ type: "started" }),
+            frame({ type: "progress", stage: "usage", label: "Checking your usage…" }),
+            frame({ type: "progress", stage: "alerts", label: "Reviewing your alerts…" }),
+            frame({ type: "response", response: validResponse })
+          ]),
+          { status: 200 }
+        )
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     renderHarness();
@@ -128,6 +150,89 @@ describe("AssistantProvider streaming", () => {
     await waitFor(() => expect(screen.getByTestId("error").textContent).toBe("Failed to answer."));
     expect(screen.getByTestId("turn-count").textContent).toBe("0");
     expect(screen.getByTestId("pending").textContent).toBe("false");
+  });
+
+  it("keeps success when a later error frame arrives", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            sseBody([
+              frame({ type: "response", response: validResponse }),
+              frame({ type: "error", message: "Failed to answer." })
+            ]),
+            { status: 200 }
+          )
+        )
+    );
+    renderHarness();
+    fireEvent.click(screen.getByText("ask"));
+    await waitFor(() => expect(screen.getByTestId("turn-count").textContent).toBe("2"));
+    expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
+  it("uses first terminal event when error precedes response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            sseBody([
+              frame({ type: "error", message: "Failed to answer." }),
+              frame({ type: "response", response: validResponse })
+            ]),
+            { status: 200 }
+          )
+        )
+    );
+    renderHarness();
+    fireEvent.click(screen.getByText("ask"));
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toBe("Failed to answer."));
+    expect(screen.getByTestId("turn-count").textContent).toBe("0");
+  });
+
+  it("ignores a malformed frame between progress and response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            sseBody([
+              frame({ type: "progress", stage: "usage", label: "Checking…" }),
+              "data: {bad json\n\n",
+              frame({ type: "response", response: validResponse })
+            ]),
+            { status: 200 }
+          )
+        )
+    );
+    renderHarness();
+    fireEvent.click(screen.getByText("ask"));
+    await waitFor(() => expect(screen.getByTestId("turn-count").textContent).toBe("2"));
+    expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
+  it("sends a successful action result as typed context on the next request", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(sseBody([frame({ type: "response", response: validResponse })]), { status: 200 })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    renderHarness();
+    fireEvent.click(screen.getByText("record action"));
+    fireEvent.click(screen.getByText("ask"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.context.recentActionResult).toMatchObject({
+      type: "delete_activity",
+      success: true,
+      deletedActivity: { id: "11111111-1111-4111-8111-111111111111" }
+    });
   });
 
   it("aborts the in-flight fetch when close() is called, and does not get stuck pending", async () => {

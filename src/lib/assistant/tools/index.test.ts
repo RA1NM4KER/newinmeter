@@ -13,6 +13,10 @@ vi.mock("@/lib/dashboard-data", () => ({
   loadDashboardDailyRollups: loadDashboardDailyRollupsMock,
   loadDashboardHourlyRollups: loadDashboardHourlyRollupsMock
 }));
+vi.mock("@/lib/activity/data", () => ({
+  loadActivities: vi.fn().mockResolvedValue([]),
+  loadActivityReport: vi.fn().mockResolvedValue({ rows: [], summary: {} })
+}));
 
 // The alert tools registered here (get-alert-status.ts etc.) pull in
 // @/lib/newinmeter/alerts, which imports @/lib/features (React 19's
@@ -138,5 +142,31 @@ describe("createAssistantToolbox shared dashboard context under concurrent execu
     expect(loadDashboardDailyRollupsMock).toHaveBeenCalledTimes(1);
     expect(loadDashboardHourlyRollupsMock).toHaveBeenCalledTimes(1);
     expect(overview).toMatchObject({ scope: { from: "2026-07-01", to: "2026-07-31" } });
+  });
+});
+
+describe("createAssistantToolbox base context", () => {
+  it("does not load dashboard analytics for find_activities", async () => {
+    loadDashboardSummaryMock.mockReset();
+    loadDashboardDailyRollupsMock.mockReset();
+    loadDashboardHourlyRollupsMock.mockReset();
+
+    const toolbox = createAssistantToolbox(
+      "token",
+      "user-42",
+      { from: "2026-08-24", to: "2026-08-24" },
+      { activitiesEnabled: true, alertsEnabled: false }
+    );
+    await toolbox.execute("find_activities", {
+      from: "2026-08-24",
+      to: "2026-08-24",
+      tag: null,
+      startTime: null,
+      endTime: null
+    });
+
+    expect(loadDashboardSummaryMock).not.toHaveBeenCalled();
+    expect(loadDashboardDailyRollupsMock).not.toHaveBeenCalled();
+    expect(loadDashboardHourlyRollupsMock).not.toHaveBeenCalled();
   });
 });

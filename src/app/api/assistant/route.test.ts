@@ -102,7 +102,7 @@ describe("POST /api/assistant", () => {
       { from: "2026-08-01", to: "2026-08-20" },
       [],
       { activitiesEnabled: true, alertsEnabled: true },
-      { alertEventId: undefined }
+      { alertEventId: undefined, recentActionResult: undefined }
     ]);
     // Positional args 8/9 are the onProgress callback and an AbortSignal.
     expect(typeof call[7]).toBe("function");
@@ -123,7 +123,7 @@ describe("POST /api/assistant", () => {
       {},
       [],
       { activitiesEnabled: true, alertsEnabled: false },
-      { alertEventId: undefined }
+      { alertEventId: undefined, recentActionResult: undefined }
     ]);
   });
 
@@ -138,8 +138,38 @@ describe("POST /api/assistant", () => {
       {},
       [],
       { activitiesEnabled: true, alertsEnabled: true },
-      { alertEventId: "event-123" }
+      { alertEventId: "event-123", recentActionResult: undefined }
     ]);
+  });
+
+  it("accepts and forwards only the narrow typed recent delete result", async () => {
+    const recentActionResult = {
+      type: "delete_activity",
+      success: true,
+      deletedActivity: {
+        id: "11111111-1111-4111-8111-111111111111",
+        startsAt: "2026-08-24T22:00:00",
+        endsAt: "2026-08-25T05:00:00",
+        allDay: false,
+        tags: ["geyser"]
+      }
+    };
+    await POST(request({ question: "Did you delete both?", context: { recentActionResult } }));
+    expect(mocks.answerAssistantQuestion.mock.calls[0][6]).toEqual({
+      alertEventId: undefined,
+      recentActionResult
+    });
+  });
+
+  it("rejects free-text or malformed recent action context", async () => {
+    const response = await POST(
+      request({
+        question: "Did you delete it?",
+        context: { recentActionResult: "I deleted everything" }
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.answerAssistantQuestion).not.toHaveBeenCalled();
   });
 
   it("streams started -> response, in order, with the full structured AssistantResponse as the final event", async () => {

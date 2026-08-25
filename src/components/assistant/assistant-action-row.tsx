@@ -10,7 +10,7 @@ import { THRESHOLD_ALERT_TYPES } from "@/lib/newinmeter/alert-types";
 import { resolveAssistantDestination } from "@/lib/assistant/navigation";
 import { apiEndpoints } from "@/lib/endpoints";
 import { formatCurrency } from "@/lib/format";
-import type { AssistantAction } from "@/lib/assistant/types";
+import type { AssistantAction, TrustedActivitySnapshot } from "@/lib/assistant/types";
 import { assistantActionIcon, assistantActionLabel } from "./action-presentation";
 import { useAssistant } from "./assistant-provider";
 import { useDayDetail } from "./day-detail-provider";
@@ -33,7 +33,7 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 const DEFAULT_TAG_PRESETS = ["geyser", "cooking", "heater", "pool pump"];
 const MAX_TAG_CHIPS = 6;
 
-type ActionResult = { ok: true; message: string } | { ok: false; message: string };
+type ActionResult = { ok: true; message: string; data: Record<string, unknown> } | { ok: false; message: string };
 
 async function postAction(body: Record<string, unknown>): Promise<ActionResult> {
   try {
@@ -46,10 +46,32 @@ async function postAction(body: Record<string, unknown>): Promise<ActionResult> 
     if (!response.ok) {
       return { ok: false, message: payload.message || "That didn't work. Please try again." };
     }
-    return { ok: true, message: "" };
+    return { ok: true, message: "", data: payload as Record<string, unknown> };
   } catch {
     return { ok: false, message: "Network error. Please try again." };
   }
+}
+
+function trustedActivitySnapshot(value: unknown): TrustedActivitySnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const activity = value as Record<string, unknown>;
+  if (
+    typeof activity.id !== "string" ||
+    typeof activity.startsAt !== "string" ||
+    typeof activity.endsAt !== "string" ||
+    typeof activity.allDay !== "boolean" ||
+    !Array.isArray(activity.tags) ||
+    !activity.tags.every((tag) => typeof tag === "string")
+  ) {
+    return null;
+  }
+  return {
+    id: activity.id,
+    startsAt: activity.startsAt,
+    endsAt: activity.endsAt,
+    allDay: activity.allDay,
+    tags: activity.tags
+  };
 }
 
 function ActionResultBanner({ result }: { result: ActionResult }) {
@@ -118,6 +140,7 @@ function AddActivityCard({
   action: Extract<AssistantAction, { type: "add_activity" }>;
   onDone: () => void;
 }) {
+  const { recordRecentActionResult } = useAssistant();
   const [accountTags, setAccountTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>(normalizeActivityTags(action.suggestedTags));
   const [customOpen, setCustomOpen] = useState(false);
@@ -171,7 +194,11 @@ function AddActivityCard({
       tags: selectedTags
     });
     setBusy(false);
-    setResult(outcome.ok ? { ok: true, message: "Activity added." } : outcome);
+    if (outcome.ok) {
+      const activity = trustedActivitySnapshot(outcome.data.activity);
+      if (activity) recordRecentActionResult({ type: "add_activity", success: true, activity });
+    }
+    setResult(outcome.ok ? { ...outcome, message: "Activity added." } : outcome);
   }
 
   if (result?.ok) {
@@ -238,6 +265,7 @@ function UpdateActivityCard({
   action: Extract<AssistantAction, { type: "update_activity" }>;
   onDone: () => void;
 }) {
+  const { recordRecentActionResult } = useAssistant();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
 
@@ -254,7 +282,11 @@ function UpdateActivityCard({
       note: action.note
     });
     setBusy(false);
-    setResult(outcome.ok ? { ok: true, message: "Activity updated." } : outcome);
+    if (outcome.ok) {
+      const activity = trustedActivitySnapshot(outcome.data.activity);
+      if (activity) recordRecentActionResult({ type: "update_activity", success: true, activity });
+    }
+    setResult(outcome.ok ? { ...outcome, message: "Activity updated." } : outcome);
   }
 
   if (result?.ok) {
@@ -297,6 +329,7 @@ function DeleteActivityCard({
   action: Extract<AssistantAction, { type: "delete_activity" }>;
   onDone: () => void;
 }) {
+  const { recordRecentActionResult } = useAssistant();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
 
@@ -305,7 +338,11 @@ function DeleteActivityCard({
     setBusy(true);
     const outcome = await postAction({ type: "delete_activity", activityId: action.activityId });
     setBusy(false);
-    setResult(outcome.ok ? { ok: true, message: "Activity deleted." } : outcome);
+    if (outcome.ok) {
+      const deletedActivity = trustedActivitySnapshot(outcome.data.activity);
+      if (deletedActivity) recordRecentActionResult({ type: "delete_activity", success: true, deletedActivity });
+    }
+    setResult(outcome.ok ? { ...outcome, message: "Activity deleted." } : outcome);
   }
 
   if (result?.ok) {
@@ -338,6 +375,7 @@ function AlertActionCard({
   action: Extract<AssistantAction, { type: "set_alert" | "update_alert" | "disable_alert" }>;
   onDone: () => void;
 }) {
+  const { recordRecentActionResult } = useAssistant();
   const hasThreshold = action.type !== "disable_alert" && THRESHOLD_ALERT_TYPES.includes(action.alertType);
   const [threshold, setThreshold] = useState(
     action.type !== "disable_alert" && action.threshold !== null ? String(action.threshold) : ""
@@ -373,8 +411,10 @@ function AlertActionCard({
       return;
     }
 
+    recordRecentActionResult({ type: action.type, success: true, alertType: action.alertType });
     setResult({
       ok: true,
+      data: outcome.data,
       message:
         action.type === "disable_alert"
           ? `${label} alert turned off.`
@@ -447,6 +487,7 @@ function AlertActionCard({
 }
 
 function SyncActionCard({ onDone }: { onDone: () => void }) {
+  const { recordRecentActionResult } = useAssistant();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
 
@@ -455,7 +496,8 @@ function SyncActionCard({ onDone }: { onDone: () => void }) {
     setBusy(true);
     const outcome = await postAction({ type: "sync" });
     setBusy(false);
-    setResult(outcome.ok ? { ok: true, message: "Data refreshed." } : outcome);
+    if (outcome.ok) recordRecentActionResult({ type: "sync", success: true });
+    setResult(outcome.ok ? { ...outcome, message: "Data refreshed." } : outcome);
   }
 
   if (result?.ok) {
@@ -524,7 +566,10 @@ function ActionButton({ action }: { action: AssistantAction }) {
     );
   }
 
-  if ((action.type === "add_activity" || action.type === "update_activity" || action.type === "delete_activity") && !isActivitiesEnabled) {
+  if (
+    (action.type === "add_activity" || action.type === "update_activity" || action.type === "delete_activity") &&
+    !isActivitiesEnabled
+  ) {
     return null;
   }
   if (

@@ -2,10 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { buildTestContext } from "../test-fixtures";
 import { findActivitiesTool } from "./find-activities";
 
-const { loadActivityReportMock } = vi.hoisted(() => ({ loadActivityReportMock: vi.fn() }));
-vi.mock("@/lib/activity/data", () => ({ loadActivityReport: loadActivityReportMock }));
+const { loadActivitiesMock } = vi.hoisted(() => ({ loadActivitiesMock: vi.fn() }));
+vi.mock("@/lib/activity/data", () => ({ loadActivities: loadActivitiesMock }));
 
-function row(overrides: Partial<{ id: string; date: string; startsAt: string; endsAt: string; allDay: boolean; tags: string[]; note: string | null }> = {}) {
+function row(
+  overrides: Partial<{
+    id: string;
+    date: string;
+    startsAt: string;
+    endsAt: string;
+    allDay: boolean;
+    tags: string[];
+    note: string | null;
+  }> = {}
+) {
   return {
     id: "act-1",
     date: "2026-08-20",
@@ -20,10 +30,13 @@ function row(overrides: Partial<{ id: string; date: string; startsAt: string; en
 
 describe("find_activities", () => {
   it("returns real activity ids -- the only tool that does, unlike get_activity_report", async () => {
-    loadActivityReportMock.mockResolvedValue({ rows: [row()] });
+    loadActivitiesMock.mockResolvedValue([row()]);
     const context = buildTestContext([], [], { from: "2026-08-01", to: "2026-08-20" });
 
-    const result = (await findActivitiesTool.handler({ from: null, to: null, tag: null, startTime: null, endTime: null }, async () => context)) as {
+    const result = (await findActivitiesTool.handler(
+      { from: null, to: null, tag: null, startTime: null, endTime: null },
+      async () => context
+    )) as {
       activities: Array<{ id: string }>;
     };
 
@@ -41,12 +54,10 @@ describe("find_activities", () => {
   });
 
   it("filters by a time-of-day window across the returned rows", async () => {
-    loadActivityReportMock.mockResolvedValue({
-      rows: [
-        row({ id: "morning", startsAt: "2026-08-20T07:00:00", endsAt: "2026-08-20T08:00:00" }),
-        row({ id: "evening", startsAt: "2026-08-20T19:00:00", endsAt: "2026-08-20T20:00:00" })
-      ]
-    });
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "morning", startsAt: "2026-08-20T07:00:00", endsAt: "2026-08-20T08:00:00" }),
+      row({ id: "evening", startsAt: "2026-08-20T19:00:00", endsAt: "2026-08-20T20:00:00" })
+    ]);
     const context = buildTestContext([], [], { from: "2026-08-01", to: "2026-08-20" });
 
     const result = (await findActivitiesTool.handler(
@@ -58,21 +69,23 @@ describe("find_activities", () => {
   });
 
   it("filters by tag", async () => {
-    loadActivityReportMock.mockResolvedValue({ rows: [row({ id: "match", tags: ["oven"] })] });
+    loadActivitiesMock.mockResolvedValue([row({ id: "match", tags: ["oven"] })]);
     const context = buildTestContext([], [], { from: "2026-08-01", to: "2026-08-20" });
 
-    await findActivitiesTool.handler({ from: null, to: null, tag: "oven", startTime: null, endTime: null }, async () => context);
+    await findActivitiesTool.handler(
+      { from: null, to: null, tag: "oven", startTime: null, endTime: null },
+      async () => context
+    );
 
-    expect(loadActivityReportMock).toHaveBeenCalledWith("test-token", {
+    expect(loadActivitiesMock).toHaveBeenCalledWith("test-token", {
       from: "2026-08-01",
       to: "2026-08-20",
-      tags: ["oven"],
-      utility: "all"
+      tags: ["oven"]
     });
   });
 
   it("caps results and reports truncation metadata", async () => {
-    loadActivityReportMock.mockResolvedValue({ rows: Array.from({ length: 25 }, (_, i) => row({ id: `act-${i}` })) });
+    loadActivitiesMock.mockResolvedValue(Array.from({ length: 25 }, (_, i) => row({ id: `act-${i}` })));
     const context = buildTestContext([], [], { from: "2026-08-01", to: "2026-08-20" });
 
     const result = (await findActivitiesTool.handler(
@@ -83,5 +96,68 @@ describe("find_activities", () => {
     expect(result.activities).toHaveLength(20);
     expect(result.metadata.matchedCount).toBe(25);
     expect(result.metadata.truncated).toBe(true);
+  });
+
+  it("matches an Aug 24 22:00-05:00 Activity against the same overnight query", async () => {
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "overnight", date: "2026-08-24", startsAt: "2026-08-24T22:00:00", endsAt: "2026-08-25T05:00:00" })
+    ]);
+    const context = buildTestContext([], [], { from: "2026-08-24", to: "2026-08-24" });
+    const result = (await findActivitiesTool.handler(
+      { from: "2026-08-24", to: "2026-08-24", tag: "geyser", startTime: "22:00", endTime: "05:00" },
+      async () => context
+    )) as { activities: Array<{ id: string }> };
+    expect(result.activities.map((item) => item.id)).toEqual(["overnight"]);
+  });
+
+  it("matches the overnight Activity through a 23:00-00:30 subwindow", async () => {
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "overnight", startsAt: "2026-08-24T22:00:00", endsAt: "2026-08-25T05:00:00" })
+    ]);
+    const context = buildTestContext([], [], { from: "2026-08-24", to: "2026-08-24" });
+    const result = (await findActivitiesTool.handler(
+      { from: "2026-08-24", to: "2026-08-24", tag: null, startTime: "23:00", endTime: "00:30" },
+      async () => context
+    )) as { activities: Array<{ id: string }> };
+    expect(result.activities.map((item) => item.id)).toEqual(["overnight"]);
+  });
+
+  it("matches an Activity started the previous date through an Aug 25 after-midnight query", async () => {
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "overnight", startsAt: "2026-08-24T22:00:00", endsAt: "2026-08-25T05:00:00" })
+    ]);
+    const context = buildTestContext([], [], { from: "2026-08-25", to: "2026-08-25" });
+    const result = (await findActivitiesTool.handler(
+      { from: "2026-08-25", to: "2026-08-25", tag: null, startTime: "01:00", endTime: "02:00" },
+      async () => context
+    )) as { activities: Array<{ id: string }> };
+    expect(result.activities.map((item) => item.id)).toEqual(["overnight"]);
+  });
+
+  it("matches a contained 22:30-23:30 Activity and excludes unrelated daytime activity", async () => {
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "contained", startsAt: "2026-08-24T22:30:00", endsAt: "2026-08-24T23:30:00" }),
+      row({ id: "daytime", startsAt: "2026-08-24T10:00:00", endsAt: "2026-08-24T11:00:00" })
+    ]);
+    const context = buildTestContext([], [], { from: "2026-08-24", to: "2026-08-24" });
+    const result = (await findActivitiesTool.handler(
+      { from: "2026-08-24", to: "2026-08-24", tag: null, startTime: "22:00", endTime: "05:00" },
+      async () => context
+    )) as { activities: Array<{ id: string }> };
+    expect(result.activities.map((item) => item.id)).toEqual(["contained"]);
+  });
+
+  it("uses half-open boundaries consistently and lets all-day Activities overlap", async () => {
+    loadActivitiesMock.mockResolvedValue([
+      row({ id: "ends-at-start", startsAt: "2026-08-24T21:00:00", endsAt: "2026-08-24T22:00:00" }),
+      row({ id: "starts-at-end", startsAt: "2026-08-25T05:00:00", endsAt: "2026-08-25T06:00:00" }),
+      row({ id: "all-day", startsAt: "2026-08-24T00:00:00", endsAt: "2026-08-25T00:00:00", allDay: true })
+    ]);
+    const context = buildTestContext([], [], { from: "2026-08-24", to: "2026-08-24" });
+    const result = (await findActivitiesTool.handler(
+      { from: "2026-08-24", to: "2026-08-24", tag: null, startTime: "22:00", endTime: "05:00" },
+      async () => context
+    )) as { activities: Array<{ id: string }> };
+    expect(result.activities.map((item) => item.id)).toEqual(["all-day"]);
   });
 });

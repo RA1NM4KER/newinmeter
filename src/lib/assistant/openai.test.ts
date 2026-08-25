@@ -389,6 +389,113 @@ describe("answerAssistantQuestion", () => {
     expect(issues.some((issue) => issue.includes("mutation_completion_claim"))).toBe(true);
   });
 
+  it("applies Activity causation validation from actual tool provenance without emitted Activity evidence", async () => {
+    queueResponses(
+      toResponse([functionCallItem("get_activity_report", "{}", "tool-call")]),
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({ headline: "Geyser Activity using 2.8 kWh" }),
+          "bad-submit"
+        )
+      ]),
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({ headline: "2.8 kWh overlapped the geyser Activity" }),
+          "fixed-submit"
+        )
+      ])
+    );
+    executeMock.mockResolvedValue({ activities: [{ tags: ["geyser"] }] });
+
+    const result = await answerAssistantQuestion("token", "user-1", "What caused the spike?", {});
+    expect(result.headline).toBe("2.8 kWh overlapped the geyser Activity");
+    expect(responsesCreateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("recovers from a user date correction by re-querying Aug 24 and returning a valid answer", async () => {
+    queueResponses(
+      toResponse([
+        functionCallItem(
+          "find_activities",
+          JSON.stringify({ from: "2026-08-24", to: "2026-08-24", tag: "geyser", startTime: "22:00", endTime: "05:00" })
+        )
+      ]),
+      toResponse([
+        functionCallItem("submit_response", validSubmitArgs({ headline: "You're right — yesterday was Aug 24" }))
+      ])
+    );
+    executeMock.mockResolvedValue({ activities: [] });
+
+    const result = await answerAssistantQuestion(
+      "token",
+      "user-1",
+      "yesterday was August 24",
+      {},
+      [{ role: "assistant", content: "I checked Aug 23." }],
+      { activitiesEnabled: true, alertsEnabled: false }
+    );
+
+    expect(executeMock).toHaveBeenCalledWith(
+      "find_activities",
+      expect.objectContaining({ from: "2026-08-24", to: "2026-08-24" })
+    );
+    expect(result.headline).toContain("Aug 24");
+  });
+
+  it("repairs false plural deletion verification when one matching Activity remains", async () => {
+    const deletedActivity = {
+      id: "11111111-1111-4111-8111-111111111111",
+      startsAt: "2026-08-24T22:00:00",
+      endsAt: "2026-08-25T05:00:00",
+      allDay: false,
+      tags: ["geyser"]
+    };
+    queueResponses(
+      toResponse([functionCallItem("find_activities", "{}")]),
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({ headline: "Geyser activities were removed" }),
+          "bad-submit"
+        )
+      ]),
+      toResponse([
+        functionCallItem(
+          "submit_response",
+          validSubmitArgs({
+            headline: "Only the 22:00–05:00 Activity was deleted",
+            body: [{ heading: null, text: "The 22:30–23:30 geyser Activity still remains." }]
+          }),
+          "fixed-submit"
+        )
+      ])
+    );
+    executeMock.mockResolvedValue({
+      activities: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          startsAt: "2026-08-24T22:30:00",
+          endsAt: "2026-08-24T23:30:00",
+          tags: ["geyser"]
+        }
+      ]
+    });
+
+    const result = await answerAssistantQuestion(
+      "token",
+      "user-1",
+      "did you delete both?",
+      {},
+      [],
+      { activitiesEnabled: true, alertsEnabled: false },
+      { recentActionResult: { type: "delete_activity", success: true, deletedActivity } }
+    );
+    expect(result.headline).toContain("Only");
+    expect(result.body[0].text).toContain("still remains");
+  });
+
   it("calls onProgress with the mapped stage/label right before a batch of real tool calls executes, never with a raw tool name", async () => {
     queueResponses(
       toResponse([functionCallItem("tool_a", "{}")]),
@@ -473,5 +580,40 @@ describe("answerAssistantQuestion", () => {
     const requestBody = responsesCreateMock.mock.calls[0][0];
     const systemMessage = requestBody.input[0];
     expect(systemMessage.content).toContain("event-123");
+  });
+
+  it("reports model/tool/repair latency telemetry without raw question data", async () => {
+    queueResponses(
+      toResponse([functionCallItem("tool_a", "{}")]),
+      toResponse([functionCallItem("submit_response", validSubmitArgs())])
+    );
+    executeMock.mockResolvedValue({ ok: true });
+    const onTelemetry = vi.fn();
+
+    await answerAssistantQuestion(
+      "token",
+      "user-1",
+      "private question",
+      {},
+      [],
+      undefined,
+      {},
+      undefined,
+      undefined,
+      onTelemetry
+    );
+
+    expect(onTelemetry).toHaveBeenCalledTimes(1);
+    expect(onTelemetry.mock.calls[0][0]).toMatchObject({
+      modelRounds: 2,
+      toolExecutionBatches: 1,
+      toolsUsed: ["tool_a"],
+      semanticRepairs: 0,
+      structuredRepairs: 0,
+      skippedSubmitRepairs: 0,
+      model: "gpt-test",
+      reasoningEffort: "low"
+    });
+    expect(JSON.stringify(onTelemetry.mock.calls[0][0])).not.toContain("private question");
   });
 });

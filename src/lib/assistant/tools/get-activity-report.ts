@@ -117,6 +117,7 @@ function resolveDateField(explicitValue: unknown, scopeFallback: string): DateFi
 }
 
 export const getActivityReportTool: AssistantTool = {
+  contextMode: "base",
   definition: {
     type: "function",
     name: "get_activity_report",

@@ -55,6 +55,18 @@ function renderWithOpenHarness(actions: AssistantAction[]) {
   );
 }
 
+function ActionThenAskHarness({ action }: { action: AssistantAction }) {
+  const { ask } = useAssistant();
+  return (
+    <>
+      <AssistantActionRow actions={[action]} />
+      <button onClick={() => ask("Did you delete both?")} type="button">
+        Ask follow-up
+      </button>
+    </>
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -138,7 +150,12 @@ describe("AssistantActionRow -- the UI owns action button labels, not the model"
 
   it("normalizes disable_alert to 'Turn off alert' regardless of the model's own label", () => {
     renderActions([
-      { type: "disable_alert", label: "Add activity label for high evening usage", alertType: "low_balance", requiresConfirmation: true }
+      {
+        type: "disable_alert",
+        label: "Add activity label for high evening usage",
+        alertType: "low_balance",
+        requiresConfirmation: true
+      }
     ]);
     expect(screen.queryByRole("button", { name: "Turn off alert" })).not.toBeNull();
   });
@@ -219,6 +236,83 @@ describe("AssistantActionRow -- mutation confirmation", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({ type: "set_alert", alertType: "daily_spend", threshold: 70 });
+  });
+
+  it("turns the successful delete API payload into trusted context for the next assistant request", async () => {
+    const deletedActivity = {
+      id: "11111111-1111-4111-8111-111111111111",
+      startsAt: "2026-08-24T22:00:00",
+      endsAt: "2026-08-25T05:00:00",
+      allDay: false,
+      tags: ["geyser"],
+      color: "#0f766e",
+      note: "not forwarded"
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ activity: deletedActivity }) })
+      .mockResolvedValueOnce(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `data: ${JSON.stringify({
+                    type: "response",
+                    response: {
+                      headline: "One remains",
+                      metrics: [],
+                      body: [],
+                      evidence: [],
+                      visualizations: [],
+                      actions: [],
+                      suggestions: [],
+                      scope: { from: "2026-08-24", to: "2026-08-24" },
+                      toolsUsed: ["find_activities"]
+                    }
+                  })}\n\n`
+                )
+              );
+              controller.close();
+            }
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AssistantProvider isEnabled isActivitiesEnabled isAlertsEnabled isDemo={false}>
+        <ActionThenAskHarness
+          action={{
+            type: "delete_activity",
+            label: "Delete",
+            activityId: deletedActivity.id,
+            requiresConfirmation: true
+          }}
+        />
+      </AssistantProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete activity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.queryByText("Activity deleted.")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Ask follow-up" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body.context.recentActionResult).toEqual({
+      type: "delete_activity",
+      success: true,
+      deletedActivity: {
+        id: deletedActivity.id,
+        startsAt: deletedActivity.startsAt,
+        endsAt: deletedActivity.endsAt,
+        allDay: false,
+        tags: ["geyser"]
+      }
+    });
+    expect(JSON.stringify(body.context)).not.toContain("not forwarded");
+    expect(JSON.stringify(body.context)).not.toContain("color");
   });
 });
 
@@ -303,7 +397,13 @@ describe("AssistantActionRow -- add_activity", () => {
 
     await waitFor(() => expect(screen.queryByText("Activity added.")).not.toBeNull());
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body).toMatchObject({ type: "add_activity", date: "2026-08-20", start: "18:00", end: "19:00", tags: ["geyser"] });
+    expect(body).toMatchObject({
+      type: "add_activity",
+      date: "2026-08-20",
+      start: "18:00",
+      end: "19:00",
+      tags: ["geyser"]
+    });
   });
 });
 

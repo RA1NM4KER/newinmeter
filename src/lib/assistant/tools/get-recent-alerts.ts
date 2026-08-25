@@ -3,6 +3,7 @@ import type { AssistantTool } from "../types";
 import { GetRecentAlertsSchema } from "./schemas";
 
 export const getRecentAlertsTool: AssistantTool = {
+  contextMode: "base",
   definition: {
     type: "function",
     name: "get_recent_alerts",

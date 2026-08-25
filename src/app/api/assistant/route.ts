@@ -1,9 +1,15 @@
-import type { AssistantConversationMessage, AssistantProgressStage, AssistantStreamEvent } from "@/lib/assistant/types";
+import type {
+  AssistantConversationMessage,
+  AssistantProgressStage,
+  AssistantRequestTelemetry,
+  AssistantStreamEvent
+} from "@/lib/assistant/types";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { answerAssistantQuestion } from "@/lib/assistant/openai";
 import { requireConnectedSession } from "@/lib/auth/session";
 import { hasFeatureAccess } from "@/lib/features";
+import { ALERT_TYPES } from "@/lib/newinmeter/alert-types";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +33,39 @@ const requestSchema = z.object({
   // explain_alert's own tool handler, not here.
   context: z
     .object({
-      alertEventId: z.string().trim().min(1).max(200).optional()
+      alertEventId: z.string().trim().min(1).max(200).optional(),
+      recentActionResult: z
+        .discriminatedUnion("type", [
+          z.object({
+            type: z.enum(["add_activity", "update_activity"]),
+            success: z.literal(true),
+            activity: z.object({
+              id: z.string().uuid(),
+              startsAt: z.string().max(40),
+              endsAt: z.string().max(40),
+              allDay: z.boolean(),
+              tags: z.array(z.string().max(30)).max(10)
+            })
+          }),
+          z.object({
+            type: z.literal("delete_activity"),
+            success: z.literal(true),
+            deletedActivity: z.object({
+              id: z.string().uuid(),
+              startsAt: z.string().max(40),
+              endsAt: z.string().max(40),
+              allDay: z.boolean(),
+              tags: z.array(z.string().max(30)).max(10)
+            })
+          }),
+          z.object({
+            type: z.enum(["set_alert", "update_alert", "disable_alert"]),
+            success: z.literal(true),
+            alertType: z.enum(ALERT_TYPES as [(typeof ALERT_TYPES)[number], ...(typeof ALERT_TYPES)[number][]])
+          }),
+          z.object({ type: z.literal("sync"), success: z.literal(true) })
+        ])
+        .optional()
     })
     .optional()
 });
@@ -104,9 +142,13 @@ export async function POST(request: Request) {
           { from: body.from, to: body.to },
           (body.history ?? []) as AssistantConversationMessage[],
           { activitiesEnabled, alertsEnabled },
-          { alertEventId: body.context?.alertEventId },
+          {
+            alertEventId: body.context?.alertEventId,
+            recentActionResult: body.context?.recentActionResult
+          },
           (stage: AssistantProgressStage, label: string) => send({ type: "progress", stage, label }),
-          request.signal
+          request.signal,
+          (telemetry: AssistantRequestTelemetry) => console.info("assistant_response_completed", telemetry)
         );
         send({ type: "response", response: result });
       } catch (error) {

@@ -18,6 +18,24 @@ export type AssistantPermissions = {
   alertsEnabled: boolean;
 };
 
+export type TrustedActivitySnapshot = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  tags: string[];
+};
+
+// Generated from a successful /api/assistant/actions response. This stays
+// separate from conversational prose so the model can distinguish what the
+// app actually executed from what it merely proposed or discussed.
+export type AssistantRecentActionResult =
+  | { type: "add_activity"; success: true; activity: TrustedActivitySnapshot }
+  | { type: "update_activity"; success: true; activity: TrustedActivitySnapshot }
+  | { type: "delete_activity"; success: true; deletedActivity: TrustedActivitySnapshot }
+  | { type: "set_alert" | "update_alert" | "disable_alert"; success: true; alertType: AlertType }
+  | { type: "sync"; success: true };
+
 // Trusted, typed context the UI attaches to a request -- never something the
 // model infers from natural language. Currently only used by the "Ask AI"
 // affordance on a notification: the alertEventId travels here, not baked
@@ -25,11 +43,30 @@ export type AssistantPermissions = {
 // explain-alert.ts / getAlertEventDetail) regardless of what the user typed.
 export type AssistantContext = {
   alertEventId?: string;
+  recentActionResult?: AssistantRecentActionResult;
 };
 
-export type AssistantToolHandler = (
+export type AssistantRequestTelemetry = {
+  durationMs: number;
+  timeToFirstOpenAiResponseMs: number | null;
+  modelRounds: number;
+  modelDurationMs: number;
+  toolExecutionBatches: number;
+  toolDurationMs: number;
+  toolsUsed: string[];
+  perToolDurationMs: Record<string, number>;
+  semanticRepairs: number;
+  structuredRepairs: number;
+  skippedSubmitRepairs: number;
+  timeToFinalValidatedResponseMs: number | null;
+  aborted: boolean;
+  model: string;
+  reasoningEffort: string;
+};
+
+export type AssistantToolHandler<TContext extends AssistantBaseContext = DashboardContext> = (
   args: Record<string, unknown>,
-  getContext: () => Promise<DashboardContext>
+  getContext: () => Promise<TContext>
 ) => Promise<unknown>;
 
 // Flat function-tool shape the Responses API expects (openai npm SDK's
@@ -42,23 +79,30 @@ export type ResponsesFunctionToolDefinition = {
   strict: boolean;
 };
 
-export type AssistantTool = {
-  definition: ResponsesFunctionToolDefinition;
-  handler: AssistantToolHandler;
-};
+export type AssistantTool =
+  | {
+      definition: ResponsesFunctionToolDefinition;
+      handler: AssistantToolHandler<DashboardContext>;
+      contextMode?: "dashboard";
+    }
+  | {
+      definition: ResponsesFunctionToolDefinition;
+      handler: AssistantToolHandler<AssistantBaseContext>;
+      contextMode: "base";
+    };
 
-export type DashboardContext = {
+export type AssistantBaseContext = {
   accessToken: string;
   userId: string;
   permissions: AssistantPermissions;
+  scope: { from: string; to: string };
+};
+
+export type DashboardContext = AssistantBaseContext & {
   summary: DashboardSummary;
   dailyRows: DailyRollupRow[];
   hourlyRows: HourlyRollupRow[];
   analytics: Analytics;
-  scope: {
-    from: string;
-    to: string;
-  };
 };
 
 // ---------------------------------------------------------------------------

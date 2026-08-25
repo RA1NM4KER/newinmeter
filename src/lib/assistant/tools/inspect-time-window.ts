@@ -34,7 +34,7 @@ export const inspectTimeWindowTool: AssistantTool = {
     type: "function",
     name: "inspect_time_window",
     description:
-      "Answer a question about a SPECIFIC time window on a specific day (e.g. 'what happened around 7pm?') directly, using real half-hour interval data for that exact window -- use this instead of explain_day when the user names a specific time, not just a date.",
+      "Complete answer source for a SPECIFIC time window on a specific day (e.g. 'what happened around 7pm?'), including exact interval data and Activity overlaps. Use this instead of explain_day/get_top_hours when the user names a time; do not fetch whole-day context unless explicitly requested.",
     parameters: InspectTimeWindowSchema,
     strict: true
   },

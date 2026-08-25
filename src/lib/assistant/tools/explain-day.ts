@@ -6,7 +6,8 @@ export const explainDayTool: AssistantTool = {
   definition: {
     type: "function",
     name: "explain_day",
-    description: "Explain one specific day using its daily rollup and top half-hour intervals.",
+    description:
+      "Primary tool for why one specific day was expensive/unusual. Returns its rollup (including completeness) and top half-hour intervals; do not add get_data_status unless this result is missing/incomplete and freshness matters.",
     parameters: ExplainDaySchema,
     strict: true
   },

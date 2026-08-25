@@ -1,7 +1,7 @@
 import { createAnalytics } from "@/lib/analytics";
 import { loadDashboardDailyRollups, loadDashboardHourlyRollups, loadDashboardSummary } from "@/lib/dashboard-data";
 import type { DashboardSummary } from "@/lib/types";
-import type { AssistantPermissions, AssistantScope, AssistantToolHandler, DashboardContext } from "../types";
+import type { AssistantBaseContext, AssistantPermissions, AssistantScope, DashboardContext } from "../types";
 import { compareCalendarMonthsTool } from "./compare-calendar-months";
 import { comparePreviousPeriodTool } from "./compare-previous-period";
 import { explainAlertTool } from "./explain-alert";
@@ -34,12 +34,29 @@ export function createAssistantToolbox(
   permissions: AssistantPermissions
 ) {
   let contextPromise: Promise<DashboardContext> | null = null;
+  let summaryPromise: Promise<DashboardSummary> | null = null;
+
+  function getSummary() {
+    if (!summaryPromise) summaryPromise = loadDashboardSummary(accessToken);
+    return summaryPromise;
+  }
+
+  async function getBaseContext(): Promise<AssistantBaseContext> {
+    const resolvedScope =
+      scope.from && scope.to ? { from: scope.from, to: scope.to } : pickScope(await getSummary(), scope);
+    return {
+      accessToken,
+      userId,
+      permissions,
+      scope: resolvedScope
+    };
+  }
 
   async function getContext() {
     if (!contextPromise) {
       contextPromise = (async () => {
         const [summary, dailyRows, hourlyRows] = await Promise.all([
-          loadDashboardSummary(accessToken),
+          getSummary(),
           loadDashboardDailyRollups(accessToken),
           loadDashboardHourlyRollups(accessToken)
         ]);
@@ -85,9 +102,9 @@ export function createAssistantToolbox(
       : [])
   ];
 
-  const toolHandlers = Object.fromEntries(toolSet.map((tool) => [tool.definition.name, tool.handler])) as Record<
+  const registeredTools = Object.fromEntries(toolSet.map((tool) => [tool.definition.name, tool])) as Record<
     string,
-    AssistantToolHandler
+    (typeof toolSet)[number]
   >;
 
   const tools = toolSet.map((tool) => tool.definition);
@@ -95,13 +112,16 @@ export function createAssistantToolbox(
   return {
     tools,
     async execute(name: string, args: Record<string, unknown>) {
-      const handler = toolHandlers[name];
+      const tool = registeredTools[name];
 
-      if (!handler) {
+      if (!tool) {
         throw new Error(`Unknown assistant tool: ${name}`);
       }
 
-      return handler(args, getContext);
+      if (tool.contextMode === "base") {
+        return tool.handler(args, getBaseContext);
+      }
+      return tool.handler(args, getContext);
     }
   };
 }

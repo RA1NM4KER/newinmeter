@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { checkActivityCausationClaims, checkMutationCompletionClaims, validateSemanticRules } from "./semantic-validation";
+import {
+  checkActivityCausationClaims,
+  checkDeleteVerificationClaims,
+  checkMutationCompletionClaims,
+  validateSemanticRules
+} from "./semantic-validation";
 import type { AssistantResponsePayload } from "./response-schema";
 
 function payload(overrides: Partial<AssistantResponsePayload> = {}): AssistantResponsePayload {
@@ -50,7 +55,13 @@ describe("checkMutationCompletionClaims", () => {
       payload({
         headline: "Your daily-spend alert is now set to R150",
         actions: [
-          { type: "set_alert", label: "Set alert", alertType: "daily_spend", threshold: 150, requiresConfirmation: true }
+          {
+            type: "set_alert",
+            label: "Set alert",
+            alertType: "daily_spend",
+            threshold: 150,
+            requiresConfirmation: true
+          }
         ]
       })
     );
@@ -62,7 +73,13 @@ describe("checkMutationCompletionClaims", () => {
       payload({
         headline: "Ready to set your daily-spend alert to R150",
         actions: [
-          { type: "set_alert", label: "Set alert", alertType: "daily_spend", threshold: 150, requiresConfirmation: true }
+          {
+            type: "set_alert",
+            label: "Set alert",
+            alertType: "daily_spend",
+            threshold: 150,
+            requiresConfirmation: true
+          }
         ]
       })
     );
@@ -151,18 +168,125 @@ describe("checkActivityCausationClaims", () => {
 
   it("flags 'responsible for' and 'drove' as causation overreach", () => {
     expect(
-      checkActivityCausationClaims(payload({ headline: "The geyser was responsible for this", evidence: activityEvidence }))
+      checkActivityCausationClaims(
+        payload({ headline: "The geyser was responsible for this", evidence: activityEvidence })
+      )
     ).toHaveLength(1);
     expect(
       checkActivityCausationClaims(payload({ headline: "The geyser drove the spike", evidence: activityEvidence }))
     ).toHaveLength(1);
   });
+
+  it("uses actual Activity tool provenance even when model emits no Activity evidence", () => {
+    expect(
+      checkActivityCausationClaims(
+        payload({ body: [{ heading: null, text: "A geyser Activity using 2.8 kWh cost R10.01." }] }),
+        ["get_activity_report"],
+        [{ toolName: "get_activity_report", payload: { activities: [{ tags: ["geyser"] }] } }]
+      )
+    ).toHaveLength(1);
+  });
+
+  it("rejects exact live causing phrasing but permits tariff causation", () => {
+    expect(
+      checkActivityCausationClaims(
+        payload({
+          body: [
+            { heading: null, text: "High electricity use overlapped your geyser Activity, causing the highest spend." }
+          ]
+        }),
+        ["find_activities"],
+        [{ toolName: "find_activities", payload: { activities: [{ tags: ["geyser"] }] } }]
+      )
+    ).toHaveLength(1);
+    expect(
+      checkActivityCausationClaims(payload({ headline: "A tariff increase caused a higher cost per kWh" }), [
+        "find_activities"
+      ])
+    ).toEqual([]);
+  });
+
+  it("accepts whole-home usage clearly scoped to the labelled period", () => {
+    expect(
+      checkActivityCausationClaims(
+        payload({ body: [{ heading: null, text: "2.8 kWh was recorded during the period labelled geyser." }] }),
+        ["get_activity_report"]
+      )
+    ).toEqual([]);
+  });
+});
+
+describe("checkDeleteVerificationClaims", () => {
+  const trustedContext = {
+    recentActionResult: {
+      type: "delete_activity" as const,
+      success: true as const,
+      deletedActivity: {
+        id: "11111111-1111-4111-8111-111111111111",
+        startsAt: "2026-08-24T22:00:00",
+        endsAt: "2026-08-25T05:00:00",
+        allDay: false,
+        tags: ["geyser"]
+      }
+    }
+  };
+
+  it("rejects claiming all removed when another matching Activity remains", () => {
+    expect(
+      checkDeleteVerificationClaims({
+        response: payload({ headline: "Geyser activities were removed" }),
+        question: "now check if it was deleted properly",
+        trustedContext,
+        toolResults: [
+          {
+            toolName: "find_activities",
+            payload: {
+              activities: [
+                {
+                  id: "22222222-2222-4222-8222-222222222222",
+                  startsAt: "2026-08-24T22:30:00",
+                  endsAt: "2026-08-24T23:30:00"
+                }
+              ]
+            }
+          }
+        ]
+      })
+    ).toHaveLength(1);
+  });
+
+  it("accepts exact deleted scope plus explicit remaining Activity", () => {
+    expect(
+      checkDeleteVerificationClaims({
+        response: payload({
+          headline: "Only the 22:00–05:00 Activity was deleted",
+          body: [{ heading: null, text: "The 22:30–23:30 geyser Activity still remains." }]
+        }),
+        question: "did you delete both?",
+        trustedContext,
+        toolResults: [
+          {
+            toolName: "find_activities",
+            payload: {
+              activities: [
+                {
+                  id: "22222222-2222-4222-8222-222222222222",
+                  startsAt: "2026-08-24T22:30:00",
+                  endsAt: "2026-08-24T23:30:00"
+                }
+              ]
+            }
+          }
+        ]
+      })
+    ).toEqual([]);
+  });
 });
 
 describe("validateSemanticRules", () => {
   it("combines both mutation-completion and causation checks", () => {
-    const result = validateSemanticRules(
-      payload({
+    const result = validateSemanticRules({
+      response: payload({
         headline: "Added the Activity, which caused the spike",
         evidence: [{ type: "activity", activityId: "act-1", label: "Geyser" }],
         actions: [
@@ -177,13 +301,16 @@ describe("validateSemanticRules", () => {
           }
         ]
       })
-    );
-    expect(result.map((v) => v.rule).sort()).toEqual(["activity_causation_claim", "mutation_completion_claim:add_activity"]);
+    });
+    expect(result.map((v) => v.rule).sort()).toEqual([
+      "activity_causation_claim",
+      "mutation_completion_claim:add_activity"
+    ]);
   });
 
   it("returns no violations for a clean, correctly-worded response", () => {
-    const result = validateSemanticRules(
-      payload({
+    const result = validateSemanticRules({
+      response: payload({
         headline: "Ready to add this as an Activity",
         evidence: [{ type: "activity", activityId: "act-1", label: "Geyser" }],
         actions: [
@@ -198,7 +325,7 @@ describe("validateSemanticRules", () => {
           }
         ]
       })
-    );
+    });
     expect(result).toEqual([]);
   });
 });
