@@ -1,26 +1,48 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { AssistantEvidence } from "@/lib/assistant/types";
 
-// Quiet, informational-only pills -- "based on" evidence, not a control.
-// Deliberately not a button: this replaces the old "Used: tool_a, tool_b"
-// developer text with something a user actually understands, without
-// pretending each chip is interactive when the underlying data is already
-// woven into the answer/visualization above it.
+// Evidence must never compete with the answer -- collapsed by default
+// behind a tiny "Sources · N" disclosure, not a row of "BASED ON" pills.
+// Generic, non-specific entries (e.g. a model restating the active
+// scope as if it were a source) are filtered out defensively -- the system
+// prompt already asks the model not to emit these, this is the backstop.
+function isMeaningfulEvidence(item: AssistantEvidence): boolean {
+  const label = item.label.trim().toLowerCase();
+  if (!label) return false;
+  return !/^(dashboard scope|active scope|selected range|current scope|date range)\b/.test(label);
+}
+
 export function EvidenceRow({ evidence }: { evidence: AssistantEvidence[] }) {
-  if (evidence.length === 0) {
+  const [expanded, setExpanded] = useState(false);
+  const items = evidence.filter(isMeaningfulEvidence);
+
+  if (items.length === 0) {
     return null;
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-muted/80">Based on</span>
-      {evidence.map((item, index) => (
-        <span
-          className="inline-flex items-center rounded-full border border-line bg-canvas px-2 py-0.5 text-[0.6875rem] font-medium text-muted"
-          key={`${item.type}-${index}`}
-        >
-          {item.label}
-        </span>
-      ))}
+    <div>
+      <button
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1 text-[0.75rem] text-muted/70 transition hover:text-muted"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
+        Sources · {items.length}
+        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded ? (
+        <ul className="mt-1.5 flex flex-col gap-0.5">
+          {items.map((item, index) => (
+            <li className="text-[0.75rem] text-muted" key={`${item.type}-${index}`}>
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

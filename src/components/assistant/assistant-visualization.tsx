@@ -27,12 +27,16 @@ function ChartFrame({ children, loading, empty }: { children: ReactNode; loading
   return <div className="h-36 w-full">{children}</div>;
 }
 
+function isHourHighlighted(hour: number, highlights: { fromHour: number; toHour: number }[]): boolean {
+  return highlights.some((range) => hour >= range.fromHour && hour < range.toHour);
+}
+
 function HourlyUsageChart({
   date,
-  highlight
+  highlights
 }: {
   date: string;
-  highlight: { fromHour: number; toHour: number } | null;
+  highlights: { fromHour: number; toHour: number; label: string | null }[];
 }) {
   const [rows, setRows] = useState<IntervalRollupRow[] | null>(null);
 
@@ -60,34 +64,47 @@ function HourlyUsageChart({
     }
   }
   const hasData = (rows?.length ?? 0) > 0;
+  const labeledHighlights = highlights.filter((range) => range.label);
 
   return (
-    <ChartFrame loading={rows === null} empty={rows !== null && !hasData}>
-      <ResponsiveContainer height="100%" width="100%">
-        <BarChart data={hourly} margin={chartMargin}>
-          <CartesianGrid stroke={chartColors.line} vertical={false} />
-          <XAxis dataKey="hour" interval={3} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <YAxis hide />
-          <Tooltip
-            contentStyle={chartTooltipStyle}
-            formatter={(value) => [formatKwh(Number(value)), "usage"]}
-            labelFormatter={(hour) => `${hour}:00`}
-          />
-          <Bar dataKey="kwh" radius={[3, 3, 0, 0]}>
-            {hourly.map((point) => (
-              <Cell
-                fill={
-                  highlight && point.hour >= highlight.fromHour && point.hour < highlight.toHour
-                    ? chartColors.accent
-                    : chartColors.usage
-                }
-                key={point.hour}
+    <div>
+      <ChartFrame loading={rows === null} empty={rows !== null && !hasData}>
+        <ResponsiveContainer height="100%" width="100%">
+          <BarChart data={hourly} margin={chartMargin}>
+            <CartesianGrid stroke={chartColors.line} vertical={false} />
+            <XAxis dataKey="hour" interval={3} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+            <YAxis hide />
+            <Tooltip
+              contentStyle={chartTooltipStyle}
+              formatter={(value) => [formatKwh(Number(value)), "usage"]}
+              labelFormatter={(hour) => `${hour}:00`}
+            />
+            <Bar dataKey="kwh" radius={[3, 3, 0, 0]}>
+              {hourly.map((point) => (
+                <Cell
+                  fill={isHourHighlighted(point.hour, highlights) ? chartColors.spend : chartColors.usage}
+                  key={point.hour}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartFrame>
+      {labeledHighlights.length ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {labeledHighlights.map((range, index) => (
+            <span className="flex items-center gap-1.5 text-[0.6875rem] text-muted" key={index}>
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: chartColors.spend }}
               />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartFrame>
+              {range.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -212,10 +229,10 @@ function PeriodComparisonView({
 
 export function AssistantVisualizationCard({ visualization }: { visualization: AssistantVisualization }) {
   return (
-    <div className="rounded-md border border-line/70 bg-canvas/30 p-3">
+    <div className="rounded-lg bg-canvas/50 p-3">
       {visualization.title ? <p className="mb-2 text-xs font-medium text-muted">{visualization.title}</p> : null}
       {visualization.type === "hourly_usage" ? (
-        <HourlyUsageChart date={visualization.date} highlight={visualization.highlight} />
+        <HourlyUsageChart date={visualization.date} highlights={visualization.highlights} />
       ) : visualization.type === "daily_usage" ? (
         <DailyUsageChart from={visualization.from} to={visualization.to} highlightDate={visualization.highlightDate} />
       ) : (

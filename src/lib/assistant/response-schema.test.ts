@@ -3,15 +3,23 @@ import {
   AssistantResponseJsonSchema,
   AssistantResponseSchema,
   fallbackAssistantResponse,
+  normalizeVisualizations,
   validateAssistantResponse
 } from "./response-schema";
 
 function validPayload(overrides: Record<string, unknown> = {}) {
   return {
-    answer: "You used 12 kWh yesterday.",
+    headline: "Aug 13 was unusually expensive",
+    metrics: [{ label: "Spend", value: "R84.20" }],
+    body: [{ heading: "20:00-22:00", text: "This was the largest evening spike." }],
     evidence: [{ type: "day", date: "2026-08-20", label: "Aug 20" }],
     visualizations: [
-      { type: "hourly_usage", date: "2026-08-20", highlight: { fromHour: 18, toHour: 21 }, title: null }
+      {
+        type: "hourly_usage",
+        date: "2026-08-20",
+        highlights: [{ fromHour: 18, toHour: 21, label: "Evening spike" }],
+        title: null
+      }
     ],
     actions: [
       { type: "navigate", label: "View day", destination: { page: "data", date: "2026-08-20", from: null, to: null } }
@@ -30,7 +38,9 @@ describe("validateAssistantResponse", () => {
 
   it("accepts the minimal empty-arrays shape", () => {
     const result = validateAssistantResponse({
-      answer: "Hello.",
+      headline: "Hello.",
+      metrics: [],
+      body: [],
       evidence: [],
       visualizations: [],
       actions: [],
@@ -40,9 +50,9 @@ describe("validateAssistantResponse", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects a missing answer", () => {
+  it("rejects a missing headline", () => {
     const payload = validPayload();
-    delete (payload as Record<string, unknown>).answer;
+    delete (payload as Record<string, unknown>).headline;
     expect(validateAssistantResponse(payload).ok).toBe(false);
   });
 
@@ -89,20 +99,102 @@ describe("validateAssistantResponse", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rejects more than 4 actions, 6 evidence items, or 3 visualizations (the compact-UI caps)", () => {
+  it("rejects more than 4 actions, 6 evidence items, 3 visualizations, 3 metrics, 3 body blocks, or 3 suggestions (the compact-UI caps)", () => {
     const tooManyActions = validPayload({
       actions: Array.from({ length: 5 }, () => ({ type: "sync", label: "Sync", requiresConfirmation: true }))
     });
     expect(validateAssistantResponse(tooManyActions).ok).toBe(false);
+
+    const tooManySuggestions = validPayload({ suggestions: ["a", "b", "c", "d"] });
+    expect(validateAssistantResponse(tooManySuggestions).ok).toBe(false);
+
+    const tooManyMetrics = validPayload({
+      metrics: [
+        { label: "a", value: "1" },
+        { label: "b", value: "2" },
+        { label: "c", value: "3" },
+        { label: "d", value: "4" }
+      ]
+    });
+    expect(validateAssistantResponse(tooManyMetrics).ok).toBe(false);
   });
 
   it("returns readable issue strings on failure, for server-side logging", () => {
-    const result = validateAssistantResponse({ answer: "" });
+    const result = validateAssistantResponse({ headline: "" });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.issues.length).toBeGreaterThan(0);
-      expect(result.issues.some((issue) => issue.includes("answer"))).toBe(true);
+      expect(result.issues.some((issue) => issue.includes("headline"))).toBe(true);
     }
+  });
+
+  it("merges duplicate same-date hourly_usage visualizations into one chart with combined highlights", () => {
+    const result = validateAssistantResponse(
+      validPayload({
+        visualizations: [
+          {
+            type: "hourly_usage",
+            date: "2026-08-13",
+            highlights: [{ fromHour: 9, toHour: 10, label: "Morning" }],
+            title: "Morning"
+          },
+          {
+            type: "hourly_usage",
+            date: "2026-08-13",
+            highlights: [{ fromHour: 20, toHour: 22, label: "Evening" }],
+            title: null
+          }
+        ]
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.visualizations).toHaveLength(1);
+      const [chart] = result.value.visualizations;
+      expect(chart.type).toBe("hourly_usage");
+      if (chart.type === "hourly_usage") {
+        expect(chart.highlights).toEqual([
+          { fromHour: 9, toHour: 10, label: "Morning" },
+          { fromHour: 20, toHour: 22, label: "Evening" }
+        ]);
+        expect(chart.title).toBe("Morning");
+      }
+    }
+  });
+});
+
+describe("normalizeVisualizations", () => {
+  it("is a no-op for already-distinct visualizations", () => {
+    const input = validPayload().visualizations as ReturnType<typeof normalizeVisualizations>;
+    expect(normalizeVisualizations(input)).toHaveLength(1);
+  });
+
+  it("drops an exact-duplicate highlight window instead of listing it twice", () => {
+    const merged = normalizeVisualizations([
+      { type: "hourly_usage", date: "2026-08-13", highlights: [{ fromHour: 18, toHour: 21, label: "Evening" }], title: null },
+      { type: "hourly_usage", date: "2026-08-13", highlights: [{ fromHour: 18, toHour: 21, label: "Evening" }], title: null }
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].type).toBe("hourly_usage");
+    if (merged[0].type === "hourly_usage") {
+      expect(merged[0].highlights).toHaveLength(1);
+    }
+  });
+
+  it("dedupes daily_usage visualizations by from/to", () => {
+    const merged = normalizeVisualizations([
+      { type: "daily_usage", from: "2026-08-01", to: "2026-08-20", highlightDate: "2026-08-13", title: null },
+      { type: "daily_usage", from: "2026-08-01", to: "2026-08-20", highlightDate: "2026-08-13", title: "again" }
+    ]);
+    expect(merged).toHaveLength(1);
+  });
+
+  it("keeps hourly_usage visualizations for different dates as separate charts", () => {
+    const merged = normalizeVisualizations([
+      { type: "hourly_usage", date: "2026-08-13", highlights: [], title: null },
+      { type: "hourly_usage", date: "2026-08-14", highlights: [], title: null }
+    ]);
+    expect(merged).toHaveLength(2);
   });
 });
 
@@ -113,6 +205,8 @@ describe("fallbackAssistantResponse", () => {
       to: "2026-08-20"
     });
     expect(validateAssistantResponse(fallback).ok).toBe(true);
+    expect(fallback.metrics).toEqual([]);
+    expect(fallback.body).toEqual([]);
     expect(fallback.evidence).toEqual([]);
     expect(fallback.visualizations).toEqual([]);
     expect(fallback.actions).toEqual([]);

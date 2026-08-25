@@ -71,7 +71,9 @@ function toResponse(output: unknown[], outputText = "") {
 
 function validSubmitArgs(overrides: Partial<Omit<AssistantResponse, "toolsUsed">> = {}) {
   return JSON.stringify({
-    answer: "The answer is 42.",
+    headline: "The answer is 42.",
+    metrics: [],
+    body: [],
     evidence: [],
     visualizations: [],
     actions: [],
@@ -121,7 +123,7 @@ describe("answerAssistantQuestion", () => {
 
     const result = await answerAssistantQuestion("token", "user-1", "What is the answer?", {});
 
-    expect(result.answer).toBe("The answer is 42.");
+    expect(result.headline).toBe("The answer is 42.");
     expect(result.toolsUsed).toEqual([]);
     expect(executeMock).not.toHaveBeenCalled();
   });
@@ -214,14 +216,14 @@ describe("answerAssistantQuestion", () => {
     queueResponses(
       toResponse([
         { type: "reasoning", id: "r1", summary: [{ type: "summary_text", text: "secret chain of thought" }] },
-        functionCallItem("submit_response", validSubmitArgs({ answer: "Public answer only." }))
+        functionCallItem("submit_response", validSubmitArgs({ headline: "Public answer only." }))
       ])
     );
 
     const result = await answerAssistantQuestion("token", "user-1", "Q", {});
 
     expect(JSON.stringify(result)).not.toContain("secret chain of thought");
-    expect(result.answer).toBe("Public answer only.");
+    expect(result.headline).toBe("Public answer only.");
   });
 
   it("executes multiple read-tool calls from one turn and maps each result to its own call_id, then submits", async () => {
@@ -318,13 +320,13 @@ describe("answerAssistantQuestion", () => {
 
   it("retries once when submit_response's arguments fail schema validation, then returns the corrected structured answer", async () => {
     queueResponses(
-      toResponse([functionCallItem("submit_response", JSON.stringify({ answer: "" }), "call-1")]),
-      toResponse([functionCallItem("submit_response", validSubmitArgs({ answer: "Fixed answer." }), "call-2")])
+      toResponse([functionCallItem("submit_response", JSON.stringify({ headline: "" }), "call-1")]),
+      toResponse([functionCallItem("submit_response", validSubmitArgs({ headline: "Fixed answer." }), "call-2")])
     );
 
     const result = await answerAssistantQuestion("token", "user-1", "Q", {});
 
-    expect(result.answer).toBe("Fixed answer.");
+    expect(result.headline).toBe("Fixed answer.");
     const secondRequestInput = responsesCreateMock.mock.calls[1][0].input;
     const errorOutput = secondRequestInput.find(
       (item: { type?: string; call_id?: string }) => item.type === "function_call_output" && item.call_id === "call-1"
@@ -334,13 +336,13 @@ describe("answerAssistantQuestion", () => {
 
   it("falls back to a minimal valid response, never throwing raw model JSON, when submit_response's arguments never validate", async () => {
     const bodies = Array.from({ length: 8 }, (_, index) =>
-      toResponse([functionCallItem("submit_response", JSON.stringify({ answer: "" }), `call-${index}`)])
+      toResponse([functionCallItem("submit_response", JSON.stringify({ headline: "" }), `call-${index}`)])
     );
     queueResponses(...bodies);
 
     const result = await answerAssistantQuestion("token", "user-1", "Q", {});
 
-    expect(result.answer.length).toBeGreaterThan(0);
+    expect(result.headline.length).toBeGreaterThan(0);
     expect(result.evidence).toEqual([]);
     expect(result.actions).toEqual([]);
   });
@@ -350,7 +352,7 @@ describe("answerAssistantQuestion", () => {
 
     const result = await answerAssistantQuestion("token", "user-1", "Q", {});
 
-    expect(result.answer).toBe("A plain-text answer.");
+    expect(result.headline).toBe("A plain-text answer.");
     expect(result.evidence).toEqual([]);
     expect(result.visualizations).toEqual([]);
     expect(result.actions).toEqual([]);

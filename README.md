@@ -133,20 +133,34 @@ own zod validator in a test) -- it never replies with free-form text as the real
 
 ```ts
 type AssistantResponse = {
-  answer: string;
+  headline: string;                    // one short, concrete conclusion
+  metrics: { label: string; value: string }[]; // 0-3 key numbers backing the headline
+  body: { heading: string | null; text: string }[]; // 0-3 short explanatory blocks, no markdown
   evidence: AssistantEvidence[];       // day / period / activity / alert / data_status references
   visualizations: AssistantVisualization[]; // hourly_usage / daily_usage / period_comparison
   actions: AssistantAction[];          // navigate, or a proposed mutation (see below)
-  suggestions: string[];               // up to 4 follow-up questions
+  suggestions: string[];               // 0-2 follow-up questions
   scope: { from: string; to: string };
 };
 ```
 
-The model chooses *which* visualization and *what to highlight*; the client resolves the actual
-numbers from the app's own existing endpoints (`/api/day-intervals`, `/api/daily-rollups`) --
-the model never supplies chart data itself. If the model skips `submit_response` (plain text) or
-its arguments fail validation (one retry, then give up), the server falls back to a minimal,
-still-valid response rather than rendering raw model output.
+The response is rendered as structured hierarchy (headline, then metrics, then body blocks, then
+the chart, then actions), never as one prose paragraph -- see `src/components/assistant/
+assistant-message.tsx`. The model chooses *which* visualization and *what to highlight*; the
+client resolves the actual numbers from the app's own existing endpoints (`/api/day-intervals`,
+`/api/daily-rollups`) -- the model never supplies chart data itself. An `hourly_usage`
+visualization carries a `highlights` **array** (each with an optional short `label`), not a single
+window, so a day with two contributing periods (e.g. a morning peak and an evening peak) renders
+as one chart with two highlighted ranges -- `normalizeVisualizations` (`response-schema.ts`) also
+merges/dedupes same-date `hourly_usage` entries the model might otherwise emit separately, so the
+UI never shows two near-identical full-day charts. If the model skips `submit_response` (plain
+text) or its arguments fail validation (one retry, then give up), the server falls back to a
+minimal, still-valid response rather than rendering raw model output.
+
+Action buttons render the UI's own short canonical label per action type/shape (e.g. "View day"
+vs "View data", "Set alert", "Turn off alert") -- never the model's own free-form `label` text,
+which can be long enough to wrap badly on a narrow phone (see
+`src/components/assistant/action-presentation.ts`).
 
 ### Read tools (registered per-request based on feature access)
 

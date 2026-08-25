@@ -25,7 +25,9 @@ function request(body: unknown) {
 }
 
 const validAssistantResponse = {
-  answer: "You used 12 kWh yesterday.",
+  headline: "You used 12 kWh yesterday.",
+  metrics: [],
+  body: [],
   evidence: [],
   visualizations: [],
   actions: [],

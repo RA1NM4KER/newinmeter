@@ -20,13 +20,20 @@ const AssistantEvidenceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("data_status"), label: z.string().min(1) })
 ]);
 
+// One highlighted window on an hourly chart -- an array of these lets one
+// day with a morning peak AND an evening peak render as a single chart with
+// two highlighted ranges, instead of two near-identical full-day charts.
+const AssistantHighlightSchema = z.object({
+  fromHour: z.number().int().min(0).max(23),
+  toHour: z.number().int().min(1).max(24),
+  label: z.string().max(40).nullable()
+});
+
 const AssistantVisualizationSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("hourly_usage"),
     date: z.string().min(1),
-    highlight: z
-      .object({ fromHour: z.number().int().min(0).max(23), toHour: z.number().int().min(1).max(24) })
-      .nullable(),
+    highlights: z.array(AssistantHighlightSchema).max(3),
     title: z.string().nullable()
   }),
   z.object({
@@ -91,12 +98,27 @@ const AssistantActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sync"), label: z.string().min(1), requiresConfirmation: z.literal(true) })
 ]);
 
+// A short, optionally-headed explanatory block -- e.g. heading "20:00-22:00",
+// text "This was the largest evening spike." Structured fields instead of
+// markdown so the UI, not the model, controls typography/spacing.
+const AssistantBodyBlockSchema = z.object({
+  heading: z.string().max(60).nullable(),
+  text: z.string().min(1).max(280)
+});
+
+const AssistantMetricSchema = z.object({
+  label: z.string().min(1).max(40),
+  value: z.string().min(1).max(40)
+});
+
 export const AssistantResponseSchema = z.object({
-  answer: z.string().min(1).max(4000),
+  headline: z.string().min(1).max(140),
+  metrics: z.array(AssistantMetricSchema).max(3),
+  body: z.array(AssistantBodyBlockSchema).max(3),
   evidence: z.array(AssistantEvidenceSchema).max(6),
   visualizations: z.array(AssistantVisualizationSchema).max(3),
   actions: z.array(AssistantActionSchema).max(4),
-  suggestions: z.array(z.string().min(1).max(140)).max(4),
+  suggestions: z.array(z.string().min(1).max(80)).max(3),
   scope: z.object({ from: z.string(), to: z.string() })
 });
 
@@ -106,10 +128,60 @@ export type AssistantResponseValidation =
   | { ok: true; value: AssistantResponsePayload }
   | { ok: false; issues: string[] };
 
+// Same-date hourly_usage entries are merged into one chart (union of
+// highlight windows, deduped and capped) instead of rendering as separate
+// near-identical 24-hour charts -- the model sometimes emits one per
+// contributing period even though the system prompt asks for one. Other
+// visualization types are deduped by their own identifying fields. Order of
+// first appearance is preserved.
+export function normalizeVisualizations(
+  visualizations: AssistantResponsePayload["visualizations"]
+): AssistantResponsePayload["visualizations"] {
+  const hourlyByDate = new Map<string, Extract<AssistantResponsePayload["visualizations"][number], { type: "hourly_usage" }>>();
+  const seenKeys = new Set<string>();
+  const result: AssistantResponsePayload["visualizations"] = [];
+
+  for (const visualization of visualizations) {
+    if (visualization.type === "hourly_usage") {
+      const existing = hourlyByDate.get(visualization.date);
+      if (existing) {
+        const merged = [...existing.highlights];
+        for (const highlight of visualization.highlights) {
+          const isDuplicate = merged.some(
+            (candidate) => candidate.fromHour === highlight.fromHour && candidate.toHour === highlight.toHour
+          );
+          if (!isDuplicate && merged.length < 3) {
+            merged.push(highlight);
+          }
+        }
+        existing.highlights = merged;
+        existing.title = existing.title ?? visualization.title;
+        continue;
+      }
+      const clone = { ...visualization, highlights: [...visualization.highlights] };
+      hourlyByDate.set(visualization.date, clone);
+      result.push(clone);
+      continue;
+    }
+
+    const key =
+      visualization.type === "daily_usage"
+        ? `daily_usage:${visualization.from}:${visualization.to}`
+        : `period_comparison:${visualization.currentFrom}:${visualization.currentTo}:${visualization.previousFrom}:${visualization.previousTo}`;
+    if (seenKeys.has(key)) {
+      continue;
+    }
+    seenKeys.add(key);
+    result.push(visualization);
+  }
+
+  return result;
+}
+
 export function validateAssistantResponse(raw: unknown): AssistantResponseValidation {
   const result = AssistantResponseSchema.safeParse(raw);
   if (result.success) {
-    return { ok: true, value: result.data };
+    return { ok: true, value: { ...result.data, visualizations: normalizeVisualizations(result.data.visualizations) } };
   }
   return { ok: false, issues: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) };
 }
@@ -120,11 +192,13 @@ export function validateAssistantResponse(raw: unknown): AssistantResponseValida
 // rendering random model JSON" (see openai.ts). Never fabricates evidence,
 // visualizations, or actions.
 export function fallbackAssistantResponse(
-  answer: string,
+  headline: string,
   scope: { from: string; to: string }
 ): AssistantResponsePayload {
   return {
-    answer,
+    headline,
+    metrics: [],
+    body: [],
     evidence: [],
     visualizations: [],
     actions: [],
@@ -189,6 +263,17 @@ const evidenceSchema = {
   ]
 } as const;
 
+const highlightSchema = {
+  type: "object",
+  properties: {
+    fromHour: { type: "integer", minimum: 0, maximum: 23 },
+    toHour: { type: "integer", minimum: 1, maximum: 24 },
+    label: NULLABLE_STRING
+  },
+  required: ["fromHour", "toHour", "label"],
+  additionalProperties: false
+} as const;
+
 const visualizationSchema = {
   anyOf: [
     {
@@ -196,23 +281,10 @@ const visualizationSchema = {
       properties: {
         type: { type: "string", const: "hourly_usage" },
         date: { type: "string" },
-        highlight: {
-          anyOf: [
-            {
-              type: "object",
-              properties: {
-                fromHour: { type: "integer", minimum: 0, maximum: 23 },
-                toHour: { type: "integer", minimum: 1, maximum: 24 }
-              },
-              required: ["fromHour", "toHour"],
-              additionalProperties: false
-            },
-            { type: "null" }
-          ]
-        },
+        highlights: { type: "array", items: highlightSchema, maxItems: 3 },
         title: NULLABLE_STRING
       },
-      required: ["type", "date", "highlight", "title"],
+      required: ["type", "date", "highlights", "title"],
       additionalProperties: false
     },
     {
@@ -345,6 +417,20 @@ const actionSchema = {
   ]
 } as const;
 
+const bodyBlockSchema = {
+  type: "object",
+  properties: { heading: NULLABLE_STRING, text: { type: "string" } },
+  required: ["heading", "text"],
+  additionalProperties: false
+} as const;
+
+const metricSchema = {
+  type: "object",
+  properties: { label: { type: "string" }, value: { type: "string" } },
+  required: ["label", "value"],
+  additionalProperties: false
+} as const;
+
 // Parameters for the submit_response function tool -- see openai.ts. The
 // model must call this exactly once to finish, instead of replying with
 // plain assistant text, so every final answer is app-validated shape, not
@@ -352,15 +438,31 @@ const actionSchema = {
 export const AssistantResponseJsonSchema = {
   type: "object",
   properties: {
-    answer: { type: "string", description: "Concise, grounded answer in plain language. No markdown headers." },
+    headline: {
+      type: "string",
+      description: "One short, concrete conclusion (under ~12 words), e.g. 'Aug 13 was unusually expensive'. No markdown."
+    },
+    metrics: {
+      type: "array",
+      items: metricSchema,
+      maxItems: 3,
+      description: "0-3 key numbers backing the headline, e.g. {label: 'Spend', value: 'R84.20'}."
+    },
+    body: {
+      type: "array",
+      items: bodyBlockSchema,
+      maxItems: 3,
+      description:
+        "0-3 short explanatory blocks (1-2 sentences each). Use `heading` for a short label like a time range when useful, otherwise null."
+    },
     evidence: { type: "array", items: evidenceSchema, maxItems: 6 },
     visualizations: { type: "array", items: visualizationSchema, maxItems: 3 },
     actions: { type: "array", items: actionSchema, maxItems: 4 },
     suggestions: {
       type: "array",
       items: { type: "string" },
-      maxItems: 4,
-      description: "Up to 4 short, natural follow-up questions the user might ask next."
+      maxItems: 3,
+      description: "0-2 short (under 6 words) natural follow-up questions. Keep this list small."
     },
     scope: {
       type: "object",
@@ -369,6 +471,6 @@ export const AssistantResponseJsonSchema = {
       additionalProperties: false
     }
   },
-  required: ["answer", "evidence", "visualizations", "actions", "suggestions", "scope"],
+  required: ["headline", "metrics", "body", "evidence", "visualizations", "actions", "suggestions", "scope"],
   additionalProperties: false
 } as const;

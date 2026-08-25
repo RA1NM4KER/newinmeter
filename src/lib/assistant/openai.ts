@@ -164,8 +164,9 @@ export async function answerAssistantQuestion(
       // contract (spec: "fail gracefully rather than rendering random
       // model JSON").
       console.warn("assistant_skipped_structured_response", { model, iteration });
-      const answer = response.output_text?.trim() || "I couldn't find a clear answer for that -- could you rephrase?";
-      return { ...fallbackAssistantResponse(answer, resolvedScope), toolsUsed: Array.from(toolsUsed) };
+      const headline =
+        response.output_text?.trim().slice(0, 200) || "I couldn't find a clear answer for that -- could you rephrase?";
+      return { ...fallbackAssistantResponse(headline, resolvedScope), toolsUsed: Array.from(toolsUsed) };
     }
 
     // Echo this turn's full output back into input before appending tool

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AssistantConversationMessage, AssistantResponse } from "@/lib/assistant/types";
+import { flattenAssistantResponseText } from "@/lib/assistant/response-text";
 import { apiEndpoints } from "@/lib/endpoints";
 
 export type AssistantTurn = {
@@ -110,7 +111,7 @@ export function AssistantProvider({
           const payload = (await result.json()) as AssistantResponse;
           setTurns((current) => [
             ...current,
-            { id: nextTurnId(), role: "assistant", content: payload.answer, response: payload }
+            { id: nextTurnId(), role: "assistant", content: flattenAssistantResponseText(payload), response: payload }
           ]);
           if (payload.scope.from && payload.scope.to) {
             setScope(payload.scope);
