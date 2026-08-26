@@ -21,12 +21,6 @@ export type AdminFeaturesApiResponse = {
   features: FeatureRow[];
 };
 
-export type AdminPageClientProps = {
-  currentUserId: string;
-  initialUsers: AdminUsersApiResponse;
-  initialFeatures: AdminFeaturesApiResponse;
-};
-
 export type AdminUsersTableProps = {
   currentUserId: string;
   initialData: AdminUsersApiResponse;

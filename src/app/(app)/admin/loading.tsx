@@ -5,34 +5,27 @@ import { Card } from "@/components/ui/card";
 
 export default function AdminLoading() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
-      <div className="hidden shrink-0 sm:block">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Admin</h1>
-        <p className="mt-1 text-sm text-muted">Manage user access and feature rollout.</p>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <StatStripSkeleton />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <StatStripSkeleton />
-
-        <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
-                <tr>
-                  {adminUsersColumns.map((column) => (
-                    <th className="px-4 py-3 font-medium" key={column.id}>
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                <TableSkeletonRows rowCount={8} />
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+      <Card className="flex h-0 min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
+            <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
+              <tr>
+                {adminUsersColumns.map((column) => (
+                  <th className="px-4 py-3 font-medium" key={column.id}>
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              <TableSkeletonRows rowCount={8} />
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }

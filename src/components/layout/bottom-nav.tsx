@@ -19,6 +19,10 @@ type BottomNavProps = NavPermissions & {
   overlay?: boolean;
 };
 
+function isNavItemActive(pathname: string, href: string) {
+  return pathname === href || (href === "/admin" && pathname.startsWith("/admin/"));
+}
+
 // On lockViewport pages: a shrink-0 flex sibling of <main> inside the
 // shell's fixed-height (100dvh) flex column, so it just claims its own row
 // and <main> shrinks to fit -- no manual bottom padding needed there. On
@@ -49,7 +53,7 @@ export function BottomNav({ isAdmin, isActivitiesEnabled, isLiveMeterEnabled, on
     >
       {items.map((item) => {
         const href = item.preserveDateRange ? queryHref(item.href, dateParams) : item.href;
-        const isActive = pathname === item.href;
+        const isActive = isNavItemActive(pathname, item.href);
         // nav-items.ts guarantees bottomIcon on every bottomNav:true item.
         const Icon = item.bottomIcon!;
 

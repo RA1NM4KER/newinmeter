@@ -9,6 +9,10 @@ import { buildNavItems, type NavPermissions } from "./nav-items";
 
 const ACTIVITIES_SEEN_KEY = "activities-nav-seen";
 
+function isNavItemActive(pathname: string, href: string) {
+  return pathname === href || (href === "/admin" && pathname.startsWith("/admin/"));
+}
+
 // The desktop sidebar rail. Mobile has its own bottom nav bar (bottom-nav.tsx)
 // plus a compact overflow menu (BottomSheet in app-shell.tsx) instead of a
 // drawer-sized version of this, so this only ever needs the compact styling.
@@ -54,7 +58,7 @@ export function SidebarNav({
     <nav className="flex flex-col gap-1">
       {items.map((item) => {
         const href = item.preserveDateRange ? queryHref(item.href, dateParams) : item.href;
-        const isActive = pathname === item.href;
+        const isActive = isNavItemActive(pathname, item.href);
         const Icon = item.icon;
 
         return (

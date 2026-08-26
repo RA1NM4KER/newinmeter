@@ -125,12 +125,11 @@ export function AppShell({
   const [isActivitiesTableTab, setIsActivitiesTableTab] = useState(false);
   const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const pathname = usePathname();
-  const lockViewport =
-    pathname === "/data" || pathname === "/admin" || (pathname === "/activities" && isActivitiesTableTab);
-  // Data, Admin users, and the Activities Table tab go edge-to-edge and
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const lockViewport = pathname === "/data" || isAdminRoute || (pathname === "/activities" && isActivitiesTableTab);
+  // Data, Admin sections, and the Activities Table tab go edge-to-edge and
   // borderless below lg; each table restores its floating card shell at lg+.
-  const isFullBleedTable =
-    pathname === "/data" || pathname === "/admin" || (pathname === "/activities" && isActivitiesTableTab);
+  const isFullBleedTable = pathname === "/data" || isAdminRoute || (pathname === "/activities" && isActivitiesTableTab);
 
   // Mobile header rolls away on scroll-down, back on scroll-up. Two possible
   // scroll sources feed the same delta logic below: <main> itself (lockViewport
