@@ -65,6 +65,13 @@ describe("toCSVString", () => {
     const dataLine = csv.split("\n")[1];
     expect(dataLine).not.toContain("null");
   });
+
+  it("exports the persisted water band to CSV", () => {
+    const csv = toCSVString([
+      energyRow({ chargeKind: "water", tariffBand: "12 - 20", usageUnit: "kL", waterKl: 0.5, usageAmount: 0.5 })
+    ]);
+    expect(csv.split("\n")[1].split(",")[2]).toBe("12 - 20");
+  });
 });
 
 describe("toXLSXBuffer", () => {
@@ -86,5 +93,15 @@ describe("toXLSXBuffer", () => {
     expect(data).toHaveLength(1);
     expect(data[0].Period).toBe("2026-07-25 14:00");
     expect(data[0].Band).toBe("0 - 50");
+  });
+
+  it("exports a persisted water band", () => {
+    const buffer = toXLSXBuffer([
+      energyRow({ chargeKind: "water", tariffBand: "12 - 20", usageUnit: "kL", waterKl: 0.5, usageAmount: 0.5 })
+    ]);
+    const workbook = read(buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const [record] = utils.sheet_to_json<Record<string, unknown>>(sheet);
+    expect(record.Band).toBe("12 - 20");
   });
 });

@@ -217,6 +217,7 @@ export function buildEnergyRowsUpsertBatch(
         capture_dt: row.capture_dt,
         charge_label: row.charge_label,
         tariff_band: resolveTariffBand({
+          kind: row.charge_label.trim().toLowerCase().startsWith("water:") ? "water" : "energy",
           chargeLabel: row.charge_label,
           tariffProfile,
           periodDate: row.period_dt,

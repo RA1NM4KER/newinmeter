@@ -21,7 +21,7 @@ describe("getTariffProfile", () => {
 
 describe("resolveTariffBand", () => {
   const derived = (periodDate: string, tariff: number, tariffProfile: string | null = "newinbosch_2026_27") =>
-    resolveTariffBand({ chargeLabel: "Energy Charge:", tariffProfile, periodDate, tariff });
+    resolveTariffBand({ kind: "energy", chargeLabel: "Energy Charge:", tariffProfile, periodDate, tariff });
 
   it.each([
     ["Energy Charge: 0 - 50", "0 - 50"],
@@ -29,9 +29,9 @@ describe("resolveTariffBand", () => {
     ["Energy Charge: 300 - 600", "300 - 600"],
     ["Energy Charge: 600 -", "600 -"]
   ])("preserves an explicit upstream band in %s", (chargeLabel, expected) => {
-    expect(resolveTariffBand({ chargeLabel, tariffProfile: null, periodDate: "2026-01-01", tariff: 999 })).toBe(
-      expected
-    );
+    expect(
+      resolveTariffBand({ kind: "energy", chargeLabel, tariffProfile: null, periodDate: "2026-01-01", tariff: 999 })
+    ).toBe(expected);
   });
 
   it.each([
@@ -69,6 +69,7 @@ describe("resolveTariffBand", () => {
     expect(derived("2026-08-20", 9.999)).toBeNull();
     expect(
       resolveTariffBand({
+        kind: "energy",
         chargeLabel: "Water: 0 - 6",
         tariffProfile: "newinbosch_2026_27",
         periodDate: "2026-08-20",
@@ -80,12 +81,59 @@ describe("resolveTariffBand", () => {
   it("lets an explicit label win over a conflicting derived rate", () => {
     expect(
       resolveTariffBand({
+        kind: "energy",
         chargeLabel: "Energy Charge: 600 -",
         tariffProfile: "newinbosch_2026_27",
         periodDate: "2026-08-20",
         tariff: 1.978
       })
     ).toBe("600 -");
+  });
+
+  describe("water", () => {
+    const water = (
+      chargeLabel: string,
+      tariff: number,
+      periodDate = "2026-08-20",
+      tariffProfile: string | null = "newinbosch_2026_27"
+    ) => resolveTariffBand({ kind: "water", chargeLabel, tariffProfile, periodDate, tariff });
+
+    it.each([
+      ["Water: 0 - 6", "0 - 6"],
+      ["Water: 6 - 12", "6 - 12"],
+      ["Water: 12 - 20", "12 - 20"],
+      ["Water: 12 - 18", "12 - 18"],
+      ["Water: 20 - 25", "20 - 25"],
+      ["Water: 25 - 40", "25 - 40"],
+      ["Water: 40 - 70", "40 - 70"]
+    ])("preserves explicit %s", (chargeLabel, expected) => {
+      expect(water(chargeLabel, 999, "2025-06-30", null)).toBe(expected);
+    });
+
+    it.each([
+      [9.821, "0 - 6"],
+      [14.8695, "6 - 12"],
+      [25.1505, "12 - 20"],
+      [44.735, "20 - 25"],
+      [62.169, "25 - 40"]
+    ])("maps 2026/27 VAT-inclusive rate %s", (tariff, expected) => {
+      expect(water("Water:", tariff)).toBe(expected);
+    });
+
+    it("returns null for unknown profiles and rates", () => {
+      expect(water("Water:", 9.821, "2026-08-20", null)).toBeNull();
+      expect(water("Water:", 99.999)).toBeNull();
+    });
+
+    it("lets an explicit label beat derivation", () => {
+      expect(water("Water: 12 - 18", 9.821)).toBe("12 - 18");
+    });
+
+    it("honours the water schedule boundaries", () => {
+      expect(water("Water:", 9.821, "2026-06-30")).toBeNull();
+      expect(water("Water:", 9.821, "2026-07-01")).toBe("0 - 6");
+      expect(water("Water:", 9.821, "2027-07-01")).toBeNull();
+    });
   });
 });
 

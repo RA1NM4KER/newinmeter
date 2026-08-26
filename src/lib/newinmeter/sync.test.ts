@@ -131,4 +131,23 @@ describe("buildEnergyRowsUpsertBatch", () => {
     );
     expect(record.tariff_band).toBe("300 - 600");
   });
+
+  it("persists a resolved water tariff_band in the same ingestion batch", () => {
+    const [record] = buildEnergyRowsUpsertBatch(
+      "conn-1",
+      [
+        row({
+          charge_label: "Water:",
+          period_dt: "2026-08-08 22:00",
+          water_kl: "0.02",
+          tariff: "25.1505",
+          cost: "0.50"
+        })
+      ],
+      "run-1",
+      "newinbosch_2026_27",
+      "2026-08-26T12:00:00Z"
+    );
+    expect(record.tariff_band).toBe("12 - 20");
+  });
 });

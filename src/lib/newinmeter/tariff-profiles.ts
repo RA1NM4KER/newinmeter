@@ -31,10 +31,18 @@ export type TariffProfile = {
 };
 
 export type TariffLedgerRateSchedule = {
+  kind: TariffBandKind;
   effectiveFrom: string;
   effectiveTo?: string; // exclusive ISO date
-  // VAT-inclusive rates as LiveMopay stores them, aligned with `bands`.
-  rates: number[];
+  bands: TariffLedgerBand[];
+};
+
+export type TariffBandKind = "energy" | "water";
+
+export type TariffLedgerBand = {
+  label: string;
+  // VAT-inclusive rate as stored by LiveMopay.
+  rate: number;
 };
 
 // Official Newinbosch 2026/27 tariff, effective 2026-07-01. Bands are
@@ -58,10 +66,45 @@ export const NEWINBOSCH_2026_27: TariffProfile = {
     // ledger transitions across several connections occur at 50/300/600 kWh,
     // establishing the band correspondence without treating the rates as the
     // later official schedule.
-    { effectiveFrom: "2026-07-01", effectiveTo: "2026-08-01", rates: [2.3805, 3.0475, 4.301, 5.06] },
+    {
+      kind: "energy",
+      effectiveFrom: "2026-07-01",
+      effectiveTo: "2026-08-01",
+      bands: [
+        { label: "0 - 50", rate: 2.3805 },
+        { label: "50 - 300", rate: 3.0475 },
+        { label: "300 - 600", rate: 4.301 },
+        { label: "600 -", rate: 5.06 }
+      ]
+    },
     // Official profile rates above, including 15% VAT as supplied by the
     // ledger API from August onward.
-    { effectiveFrom: "2026-08-01", effectiveTo: "2027-07-01", rates: [1.978, 2.5415, 3.5765, 4.232] }
+    {
+      kind: "energy",
+      effectiveFrom: "2026-08-01",
+      effectiveTo: "2027-07-01",
+      bands: [
+        { label: "0 - 50", rate: 1.978 },
+        { label: "50 - 300", rate: 2.5415 },
+        { label: "300 - 600", rate: 3.5765 },
+        { label: "600 -", rate: 4.232 }
+      ]
+    },
+    {
+      kind: "water",
+      effectiveFrom: "2026-07-01",
+      effectiveTo: "2027-07-01",
+      // Only rates observed and transition-verified in production are listed.
+      // The 40 - 70 rate is intentionally absent until its 2026/27 value is
+      // established; an explicit upstream label still resolves it.
+      bands: [
+        { label: "0 - 6", rate: 9.821 },
+        { label: "6 - 12", rate: 14.8695 },
+        { label: "12 - 20", rate: 25.1505 },
+        { label: "20 - 25", rate: 44.735 },
+        { label: "25 - 40", rate: 62.169 }
+      ]
+    }
   ]
 };
 
@@ -75,15 +118,18 @@ export function getTariffProfile(key: string | null | undefined): TariffProfile 
 }
 
 const RATE_EPSILON = 0.0001;
-const EXPLICIT_ENERGY_BAND_RE = /^Energy Charge:\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)?\s*$/i;
+const EXPLICIT_BAND_RE = /^(Energy Charge|Water):\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)?\s*$/i;
 
-export function explicitTariffBand(chargeLabel: string): string | null {
-  const match = chargeLabel.trim().match(EXPLICIT_ENERGY_BAND_RE);
+export function explicitTariffBand(chargeLabel: string, kind: TariffBandKind): string | null {
+  const match = chargeLabel.trim().match(EXPLICIT_BAND_RE);
   if (!match) return null;
-  return `${match[1]} -${match[2] ? ` ${match[2]}` : ""}`;
+  const labelKind: TariffBandKind = match[1].toLowerCase() === "water" ? "water" : "energy";
+  if (labelKind !== kind) return null;
+  return `${match[2]} -${match[3] ? ` ${match[3]}` : ""}`;
 }
 
 export type TariffBandResolutionInput = {
+  kind: TariffBandKind;
   chargeLabel: string;
   tariffProfile: string | null | undefined;
   periodDate: string;
@@ -93,9 +139,10 @@ export type TariffBandResolutionInput = {
 // One resolver for ingestion and backfill. An explicit upstream band always
 // wins; otherwise a rate is meaningful only inside its profile/date schedule.
 export function resolveTariffBand(input: TariffBandResolutionInput): string | null {
-  const explicit = explicitTariffBand(input.chargeLabel);
+  const explicit = explicitTariffBand(input.chargeLabel, input.kind);
   if (explicit) return explicit;
-  if (!input.chargeLabel.trim().toLowerCase().startsWith("energy charge:")) return null;
+  const expectedPrefix = input.kind === "energy" ? "energy charge:" : "water:";
+  if (!input.chargeLabel.trim().toLowerCase().startsWith(expectedPrefix)) return null;
 
   const profile = getTariffProfile(input.tariffProfile);
   const tariff = Number(input.tariff);
@@ -103,17 +150,16 @@ export function resolveTariffBand(input: TariffBandResolutionInput): string | nu
   if (!profile || !Number.isFinite(tariff) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
 
   const schedule = profile.ledgerRateSchedules.find(
-    (candidate) => date >= candidate.effectiveFrom && (!candidate.effectiveTo || date < candidate.effectiveTo)
+    (candidate) =>
+      candidate.kind === input.kind &&
+      date >= candidate.effectiveFrom &&
+      (!candidate.effectiveTo || date < candidate.effectiveTo)
   );
-  if (!schedule || schedule.rates.length !== profile.bands.length) return null;
+  if (!schedule) return null;
 
-  const matches = schedule.rates
-    .map((rate, index) => ({ rate, index }))
-    .filter(({ rate }) => Math.abs(rate - tariff) <= RATE_EPSILON);
+  const matches = schedule.bands.filter(({ rate }) => Math.abs(rate - tariff) <= RATE_EPSILON);
   if (matches.length !== 1) return null;
-
-  const band = profile.bands[matches[0].index];
-  return `${band.fromKwh} -${band.toKwh === null ? "" : ` ${band.toKwh}`}`;
+  return matches[0].label;
 }
 
 export type BandPosition = {
