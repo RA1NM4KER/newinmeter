@@ -42,7 +42,7 @@ export type EnergyRowsPage = {
 const sortColumnByKey: Record<SortKey, string> = {
   period: "period_ts",
   type: "charge_label",
-  band: "charge_label",
+  band: "tariff_band",
   kwh: "usage_qty",
   tariff: "tariff",
   amount: "cost",
@@ -67,7 +67,7 @@ export function searchFilterOrClause(value: string) {
     return "";
   }
 
-  return `charge_label.ilike.*${escaped}*,period_dt.ilike.*${escaped}*,capture_dt.ilike.*${escaped}*`;
+  return `charge_label.ilike.*${escaped}*,tariff_band.ilike.*${escaped}*,period_dt.ilike.*${escaped}*,capture_dt.ilike.*${escaped}*`;
 }
 
 export function orderClauseForQuery(sortKey?: SortKey, sortDirection?: SortDirection) {
@@ -88,7 +88,7 @@ export function orderClauseForQuery(sortKey?: SortKey, sortDirection?: SortDirec
 
 export function queryPathForPage({ from, to, chargeType, search, sortKey, sortDirection }: EnergyRowsPageQuery) {
   const params = new URLSearchParams();
-  params.set("select", "capture_dt,charge_label,period_dt,kwh,water_kl,tariff,cost,balance");
+  params.set("select", "capture_dt,charge_label,tariff_band,period_dt,kwh,water_kl,tariff,cost,balance");
   params.set("order", orderClauseForQuery(sortKey, sortDirection));
 
   if (from) {

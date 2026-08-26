@@ -10,6 +10,7 @@ import {
   refreshLiveMopaySession,
   type NewinmeterCsvRow
 } from "./web";
+import { resolveTariffBand } from "./tariff-profiles";
 
 const BATCH_SIZE = 500;
 
@@ -197,40 +198,61 @@ async function deleteMisparsedRefundTopups(connectionId: string, matchers: Refun
   return removed.length;
 }
 
+export function buildEnergyRowsUpsertBatch(
+  connectionId: string,
+  rows: NewinmeterCsvRow[],
+  runId: string,
+  tariffProfile: string | null,
+  syncedAt: string
+) {
+  const batchSeen = new Set<string>();
+  return dedupeNewinmeterRows(rows).flatMap((row) => {
+    const key = newinmeterLedgerKey(row);
+    if (batchSeen.has(key)) return [];
+    batchSeen.add(key);
+    const sourceTs = row.source_ts.trim();
+    return [
+      {
+        connection_id: connectionId,
+        capture_dt: row.capture_dt,
+        charge_label: row.charge_label,
+        tariff_band: resolveTariffBand({
+          chargeLabel: row.charge_label,
+          tariffProfile,
+          periodDate: row.period_dt,
+          tariff: row.tariff
+        }),
+        period_dt: row.period_dt,
+        kwh: row.kwh,
+        water_kl: row.water_kl,
+        tariff: row.tariff,
+        cost: row.cost,
+        balance: row.balance,
+        source_ts: sourceTs || null,
+        sync_run_id: runId,
+        last_seen_at: syncedAt
+      }
+    ];
+  });
+}
+
 async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string) {
   const syncedAt = nowIso();
   const onConflict = encodeURIComponent("connection_id,charge_label,period_dt,cost,balance");
+  const connectionRows = await adminSupabaseFetch<Array<{ tariff_profile: string | null }>>(
+    `/livemopay_connections?select=tariff_profile&id=eq.${encodeURIComponent(connectionId)}&limit=1`
+  );
+  const tariffProfile = connectionRows[0]?.tariff_profile ?? null;
   let total = 0;
 
   for (let index = 0; index < rows.length; index += BATCH_SIZE) {
-    const batchRows = dedupeNewinmeterRows(rows.slice(index, index + BATCH_SIZE));
-    const batchSeen = new Set<string>();
-    const batch = batchRows.flatMap((row) => {
-      const key = newinmeterLedgerKey(row);
-      if (batchSeen.has(key)) {
-        return [];
-      }
-
-      batchSeen.add(key);
-      const sourceTs = row.source_ts.trim();
-
-      return [
-        {
-          connection_id: connectionId,
-          capture_dt: row.capture_dt,
-          charge_label: row.charge_label,
-          period_dt: row.period_dt,
-          kwh: row.kwh,
-          water_kl: row.water_kl,
-          tariff: row.tariff,
-          cost: row.cost,
-          balance: row.balance,
-          source_ts: sourceTs || null,
-          sync_run_id: runId,
-          last_seen_at: syncedAt
-        }
-      ];
-    });
+    const batch = buildEnergyRowsUpsertBatch(
+      connectionId,
+      rows.slice(index, index + BATCH_SIZE),
+      runId,
+      tariffProfile,
+      syncedAt
+    );
 
     if (!batch.length) {
       continue;

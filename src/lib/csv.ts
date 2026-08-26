@@ -2,6 +2,7 @@ import type { EnergyRow } from "./types";
 export type EnergyRecordInput = {
   capture_dt: string;
   charge_label: string;
+  tariff_band?: string | null;
   period_dt: string;
   kwh: string | number;
   water_kl?: string | number;
@@ -52,6 +53,7 @@ export function toEnergyRow(row: EnergyRecordInput): EnergyRow {
     captureDateTime: row.capture_dt,
     ledgerTimestamp: chargeKind === "topup" || chargeKind === "refund" ? periodDt.getTime() : captureDt.getTime(),
     chargeLabel: row.charge_label,
+    tariffBand: row.tariff_band ?? null,
     periodTimestamp: periodDt.getTime(),
     periodDateTime,
     periodDate: periodDateTime.slice(0, 10),

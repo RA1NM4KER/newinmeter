@@ -22,6 +22,11 @@ describe("toEnergyRow", () => {
     expect(row.usageAmount).toBe(1.5);
   });
 
+  it("exposes the persisted tariff band", () => {
+    expect(toEnergyRow(record({ tariff_band: "300 - 600" })).tariffBand).toBe("300 - 600");
+    expect(toEnergyRow(record({})).tariffBand).toBeNull();
+  });
+
   it("classifies a water charge row", () => {
     const row = toEnergyRow(record({ charge_label: "Water: Block 1", water_kl: "0.25" }));
     expect(row.chargeKind).toBe("water");

@@ -27,6 +27,14 @@ export type TariffProfile = {
   dailyBasicCharge: number;
   dailyReadingCharge: number;
   bands: TariffBand[];
+  ledgerRateSchedules: TariffLedgerRateSchedule[];
+};
+
+export type TariffLedgerRateSchedule = {
+  effectiveFrom: string;
+  effectiveTo?: string; // exclusive ISO date
+  // VAT-inclusive rates as LiveMopay stores them, aligned with `bands`.
+  rates: number[];
 };
 
 // Official Newinbosch 2026/27 tariff, effective 2026-07-01. Bands are
@@ -44,6 +52,16 @@ export const NEWINBOSCH_2026_27: TariffProfile = {
     { fromKwh: 50, toKwh: 300, ratePerKwh: 2.21 },
     { fromKwh: 300, toKwh: 600, ratePerKwh: 3.11 },
     { fromKwh: 600, toKwh: null, ratePerKwh: 3.68 }
+  ],
+  ledgerRateSchedules: [
+    // LiveMopay applied this distinct four-block set during July. Production
+    // ledger transitions across several connections occur at 50/300/600 kWh,
+    // establishing the band correspondence without treating the rates as the
+    // later official schedule.
+    { effectiveFrom: "2026-07-01", effectiveTo: "2026-08-01", rates: [2.3805, 3.0475, 4.301, 5.06] },
+    // Official profile rates above, including 15% VAT as supplied by the
+    // ledger API from August onward.
+    { effectiveFrom: "2026-08-01", effectiveTo: "2027-07-01", rates: [1.978, 2.5415, 3.5765, 4.232] }
   ]
 };
 
@@ -54,6 +72,48 @@ const TARIFF_PROFILES: Record<string, TariffProfile> = {
 export function getTariffProfile(key: string | null | undefined): TariffProfile | null {
   if (!key) return null;
   return TARIFF_PROFILES[key] ?? null;
+}
+
+const RATE_EPSILON = 0.0001;
+const EXPLICIT_ENERGY_BAND_RE = /^Energy Charge:\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)?\s*$/i;
+
+export function explicitTariffBand(chargeLabel: string): string | null {
+  const match = chargeLabel.trim().match(EXPLICIT_ENERGY_BAND_RE);
+  if (!match) return null;
+  return `${match[1]} -${match[2] ? ` ${match[2]}` : ""}`;
+}
+
+export type TariffBandResolutionInput = {
+  chargeLabel: string;
+  tariffProfile: string | null | undefined;
+  periodDate: string;
+  tariff: number | string;
+};
+
+// One resolver for ingestion and backfill. An explicit upstream band always
+// wins; otherwise a rate is meaningful only inside its profile/date schedule.
+export function resolveTariffBand(input: TariffBandResolutionInput): string | null {
+  const explicit = explicitTariffBand(input.chargeLabel);
+  if (explicit) return explicit;
+  if (!input.chargeLabel.trim().toLowerCase().startsWith("energy charge:")) return null;
+
+  const profile = getTariffProfile(input.tariffProfile);
+  const tariff = Number(input.tariff);
+  const date = input.periodDate.slice(0, 10);
+  if (!profile || !Number.isFinite(tariff) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+
+  const schedule = profile.ledgerRateSchedules.find(
+    (candidate) => date >= candidate.effectiveFrom && (!candidate.effectiveTo || date < candidate.effectiveTo)
+  );
+  if (!schedule || schedule.rates.length !== profile.bands.length) return null;
+
+  const matches = schedule.rates
+    .map((rate, index) => ({ rate, index }))
+    .filter(({ rate }) => Math.abs(rate - tariff) <= RATE_EPSILON);
+  if (matches.length !== 1) return null;
+
+  const band = profile.bands[matches[0].index];
+  return `${band.fromKwh} -${band.toKwh === null ? "" : ` ${band.toKwh}`}`;
 }
 
 export type BandPosition = {
@@ -74,8 +134,9 @@ export type BandPosition = {
 // own "kWh per month" band description.
 export function resolveMonthlyBand(profile: TariffProfile, monthKwh: number): BandPosition {
   const band =
-    profile.bands.find((candidate) => monthKwh >= candidate.fromKwh && (candidate.toKwh === null || monthKwh < candidate.toKwh)) ??
-    profile.bands[profile.bands.length - 1];
+    profile.bands.find(
+      (candidate) => monthKwh >= candidate.fromKwh && (candidate.toKwh === null || monthKwh < candidate.toKwh)
+    ) ?? profile.bands[profile.bands.length - 1];
 
   if (band.toKwh === null) {
     return { currentBand: band, nextThresholdKwh: null, warningDistanceKwh: null };

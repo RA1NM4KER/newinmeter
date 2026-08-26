@@ -10,6 +10,7 @@ function energyRow(overrides: Partial<EnergyRow>): EnergyRow {
     captureDateTime: "2026-07-25 14:30",
     ledgerTimestamp: 0,
     chargeLabel: "Energy Charge: Block 1",
+    tariffBand: "0 - 50",
     periodTimestamp: 0,
     periodDateTime: "2026-07-25T14:00",
     periodDate: "2026-07-25",
@@ -38,18 +39,18 @@ describe("toCSVString", () => {
     expect(lines).toHaveLength(3);
   });
 
-  it("wraps a field containing a comma in quotes", () => {
-    const csv = toCSVString([energyRow({ chargeLabel: "Energy Charge: Block 1, Peak" })]);
-    expect(csv).toContain('"Energy Charge: Block 1, Peak"');
+  it("exports the persisted band and wraps commas", () => {
+    const csv = toCSVString([energyRow({ tariffBand: "Block 1, Peak" })]);
+    expect(csv).toContain('"Block 1, Peak"');
   });
 
   it("escapes embedded quotes by doubling them", () => {
-    const csv = toCSVString([energyRow({ chargeLabel: 'Odd "label"' })]);
+    const csv = toCSVString([energyRow({ tariffBand: 'Odd "label"' })]);
     expect(csv).toContain('"Odd ""label"""');
   });
 
   it("wraps a field containing a newline in quotes", () => {
-    const csv = toCSVString([energyRow({ chargeLabel: "line one\nline two" })]);
+    const csv = toCSVString([energyRow({ tariffBand: "line one\nline two" })]);
     expect(csv).toContain('"line one\nline two"');
   });
 
@@ -84,5 +85,6 @@ describe("toXLSXBuffer", () => {
     const data = utils.sheet_to_json<Record<string, unknown>>(sheet);
     expect(data).toHaveLength(1);
     expect(data[0].Period).toBe("2026-07-25 14:00");
+    expect(data[0].Band).toBe("0 - 50");
   });
 });

@@ -9,7 +9,7 @@ describe("searchFilterOrClause", () => {
 
   it("builds an ilike OR clause across the searchable columns", () => {
     expect(searchFilterOrClause("top up")).toBe(
-      "charge_label.ilike.*top up*,period_dt.ilike.*top up*,capture_dt.ilike.*top up*"
+      "charge_label.ilike.*top up*,tariff_band.ilike.*top up*,period_dt.ilike.*top up*,capture_dt.ilike.*top up*"
     );
   });
 
@@ -17,12 +17,14 @@ describe("searchFilterOrClause", () => {
     // A literal "*" in the search term would otherwise let a user widen
     // their own ilike pattern arbitrarily (e.g. "*" alone would match
     // everything) -- confirm it's stripped, not passed through.
-    expect(searchFilterOrClause("a*b")).toBe("charge_label.ilike.*ab*,period_dt.ilike.*ab*,capture_dt.ilike.*ab*");
+    expect(searchFilterOrClause("a*b")).toBe(
+      "charge_label.ilike.*ab*,tariff_band.ilike.*ab*,period_dt.ilike.*ab*,capture_dt.ilike.*ab*"
+    );
   });
 
   it("trims surrounding whitespace before building the clause", () => {
     expect(searchFilterOrClause("  fee  ")).toBe(
-      "charge_label.ilike.*fee*,period_dt.ilike.*fee*,capture_dt.ilike.*fee*"
+      "charge_label.ilike.*fee*,tariff_band.ilike.*fee*,period_dt.ilike.*fee*,capture_dt.ilike.*fee*"
     );
   });
 });
@@ -43,10 +45,9 @@ describe("orderClauseForQuery", () => {
   });
 
   it("uses a distinct column mapping for type vs band despite sharing the same source column", () => {
-    // Both "type" and "band" sort by charge_label under the hood -- confirm
-    // that mapping is intentional and both keys still produce a valid clause.
+    // Band uses the persisted derived column, while type retains the raw label.
     expect(orderClauseForQuery("type", "asc")).toContain("charge_label.asc");
-    expect(orderClauseForQuery("band", "asc")).toContain("charge_label.asc");
+    expect(orderClauseForQuery("band", "asc")).toContain("tariff_band.asc");
   });
 });
 
@@ -54,7 +55,9 @@ describe("queryPathForPage", () => {
   it("builds a base path with select and order params", () => {
     const path = queryPathForPage({});
     expect(path.startsWith("/energy_rows?")).toBe(true);
-    expect(path).toContain("select=capture_dt%2Ccharge_label%2Cperiod_dt%2Ckwh%2Cwater_kl%2Ctariff%2Ccost%2Cbalance");
+    expect(path).toContain(
+      "select=capture_dt%2Ccharge_label%2Ctariff_band%2Cperiod_dt%2Ckwh%2Cwater_kl%2Ctariff%2Ccost%2Cbalance"
+    );
   });
 
   it("adds inclusive from/to date bounds", () => {

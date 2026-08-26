@@ -8,6 +8,7 @@
     "refresh": "python3 legacy/adb-ingestion/refresh_and_sync.py",
     "refresh:emulator": "legacy/adb-ingestion/refresh_with_emulator.sh",
     "backfill:legacy-owner": "tsx --env-file=.env.local scripts/backfill-legacy-owner.ts",
+    "backfill:tariff-bands": "tsx --conditions=react-server --env-file=.env.local scripts/backfill-tariff-bands.ts",
     "create:meter-device": "tsx --conditions=react-server --env-file=.env.local scripts/create-meter-device.ts",
     "seed:demo-account": "tsx --conditions=react-server --env-file=.env.local scripts/seed-demo-account.ts",
     "start": "next start",

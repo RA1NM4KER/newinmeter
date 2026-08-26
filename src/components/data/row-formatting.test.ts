@@ -10,6 +10,7 @@ function row(overrides: Partial<EnergyRow>): EnergyRow {
     captureDateTime: "2026-07-25 14:00",
     ledgerTimestamp: 0,
     chargeLabel: "Energy Charge: Block 1",
+    tariffBand: null,
     periodTimestamp: 0,
     periodDateTime: "2026-07-25T14:00",
     periodDate: "2026-07-25",

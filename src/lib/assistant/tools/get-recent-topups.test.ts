@@ -18,6 +18,7 @@ function topupRow(overrides: Partial<EnergyRow>): EnergyRow {
     captureDateTime: "2026-07-01 10:00",
     ledgerTimestamp: 0,
     chargeLabel: "Top Up",
+    tariffBand: null,
     periodTimestamp: 0,
     periodDateTime: "2026-07-01T10:00",
     periodDate: "2026-07-01",

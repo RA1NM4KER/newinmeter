@@ -198,13 +198,9 @@ export function DataTable() {
       },
       {
         id: "band",
-        accessorFn: (row) => row.chargeLabel,
+        accessorFn: (row) => row.tariffBand,
         header: dataTableColumnLabel.band,
-        cell: ({ row }) => (
-          <span className="text-muted">
-            {row.original.chargeLabel.replace("Energy Charge: ", "").replace("Water: ", "")}
-          </span>
-        )
+        cell: ({ row }) => <span className="text-muted">{row.original.tariffBand ?? ""}</span>
       },
       {
         id: "kwh",

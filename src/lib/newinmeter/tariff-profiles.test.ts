@@ -3,7 +3,8 @@ import {
   NEWINBOSCH_2026_27,
   getTariffProfile,
   isApproachingNextBand,
-  resolveMonthlyBand
+  resolveMonthlyBand,
+  resolveTariffBand
 } from "./tariff-profiles";
 
 describe("getTariffProfile", () => {
@@ -15,6 +16,76 @@ describe("getTariffProfile", () => {
     expect(getTariffProfile("some_future_estate")).toBeNull();
     expect(getTariffProfile(null)).toBeNull();
     expect(getTariffProfile(undefined)).toBeNull();
+  });
+});
+
+describe("resolveTariffBand", () => {
+  const derived = (periodDate: string, tariff: number, tariffProfile: string | null = "newinbosch_2026_27") =>
+    resolveTariffBand({ chargeLabel: "Energy Charge:", tariffProfile, periodDate, tariff });
+
+  it.each([
+    ["Energy Charge: 0 - 50", "0 - 50"],
+    ["Energy Charge: 50 - 300", "50 - 300"],
+    ["Energy Charge: 300 - 600", "300 - 600"],
+    ["Energy Charge: 600 -", "600 -"]
+  ])("preserves an explicit upstream band in %s", (chargeLabel, expected) => {
+    expect(resolveTariffBand({ chargeLabel, tariffProfile: null, periodDate: "2026-01-01", tariff: 999 })).toBe(
+      expected
+    );
+  });
+
+  it.each([
+    [1.978, "0 - 50"],
+    [2.5415, "50 - 300"],
+    [3.5765, "300 - 600"],
+    [4.232, "600 -"]
+  ])("maps August VAT-inclusive rate %s", (tariff, expected) => {
+    expect(derived("2026-08-01 00:00", tariff)).toBe(expected);
+  });
+
+  it.each([
+    [2.3805, "0 - 50"],
+    [3.0475, "50 - 300"],
+    [4.301, "300 - 600"],
+    [5.06, "600 -"]
+  ])("maps the verified July ledger rate %s", (tariff, expected) => {
+    expect(derived("2026-07-15", tariff)).toBe(expected);
+  });
+
+  it("uses the schedule effective-date boundary", () => {
+    expect(derived("2026-07-31", 2.3805)).toBe("0 - 50");
+    expect(derived("2026-08-01", 2.3805)).toBeNull();
+    expect(derived("2026-07-31", 1.978)).toBeNull();
+    expect(derived("2026-08-01", 1.978)).toBe("0 - 50");
+    expect(derived("2027-07-01", 1.978)).toBeNull();
+  });
+
+  it("allows small decimal representation differences", () => {
+    expect(derived("2026-08-20", 3.57650001)).toBe("300 - 600");
+  });
+
+  it("returns null for unknown profiles, rates, and non-energy rows", () => {
+    expect(derived("2026-08-20", 1.978, null)).toBeNull();
+    expect(derived("2026-08-20", 9.999)).toBeNull();
+    expect(
+      resolveTariffBand({
+        chargeLabel: "Water: 0 - 6",
+        tariffProfile: "newinbosch_2026_27",
+        periodDate: "2026-08-20",
+        tariff: 1.978
+      })
+    ).toBeNull();
+  });
+
+  it("lets an explicit label win over a conflicting derived rate", () => {
+    expect(
+      resolveTariffBand({
+        chargeLabel: "Energy Charge: 600 -",
+        tariffProfile: "newinbosch_2026_27",
+        periodDate: "2026-08-20",
+        tariff: 1.978
+      })
+    ).toBe("600 -");
   });
 });
 

@@ -20,7 +20,7 @@ function toExportRows(rows: EnergyRow[]): ExportRow[] {
   return rows.map((row) => ({
     Period: row.periodDateTime.replace("T", " "),
     Type: row.chargeKind,
-    Band: row.chargeLabel,
+    Band: row.tariffBand ?? "",
     Usage: row.usageAmount,
     "Usage unit": row.usageUnit ?? "",
     Tariff: row.tariff,

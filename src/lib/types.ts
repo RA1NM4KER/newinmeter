@@ -4,6 +4,7 @@ export type EnergyRow = {
   captureDateTime: string;
   ledgerTimestamp: number;
   chargeLabel: string;
+  tariffBand: string | null;
   periodTimestamp: number;
   periodDateTime: string;
   periodDate: string;

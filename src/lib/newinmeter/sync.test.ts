@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRefundTopupDeletePath, refundTopupMatchers } from "@/lib/newinmeter/sync";
+import { buildEnergyRowsUpsertBatch, buildRefundTopupDeletePath, refundTopupMatchers } from "@/lib/newinmeter/sync";
 import type { NewinmeterCsvRow } from "@/lib/newinmeter/web";
 
 function row(overrides: Partial<NewinmeterCsvRow>): NewinmeterCsvRow {
@@ -110,5 +110,25 @@ describe("buildRefundTopupDeletePath", () => {
     expect(decoded).toContain('source_ts.eq."2026-08-08T20:00:30.0071950Z"');
     expect(decoded).toContain('source_ts.eq."2026-08-09T06:30:00.0000000Z"');
     expect(decoded).toContain("cost.eq.12.50");
+  });
+});
+
+describe("buildEnergyRowsUpsertBatch", () => {
+  it("persists a resolved tariff_band in the shared ingestion batch", () => {
+    const [record] = buildEnergyRowsUpsertBatch(
+      "conn-1",
+      [
+        row({
+          charge_label: "Energy Charge:",
+          period_dt: "2026-08-08 22:00",
+          tariff: "3.5765",
+          cost: "1.00"
+        })
+      ],
+      "run-1",
+      "newinbosch_2026_27",
+      "2026-08-26T12:00:00Z"
+    );
+    expect(record.tariff_band).toBe("300 - 600");
   });
 });
