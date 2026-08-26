@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { chartColors, chartMargin } from "@/components/charts/chart-config";
-import { ChartTooltip } from "@/components/charts/chart-tooltip";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { formatCurrency, formatKwh } from "@/lib/format";
 import { buildDailyRollupsUrl, buildDayIntervalsUrl } from "@/lib/endpoints";
 import type { AssistantVisualization } from "@/lib/assistant/types";
@@ -75,7 +75,8 @@ function HourlyUsageChart({
             <CartesianGrid stroke={chartColors.line} vertical={false} />
             <XAxis dataKey="hour" interval={3} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
             <YAxis hide />
-            <ChartTooltip
+            <Tooltip
+              {...chartTooltipProps}
               formatter={(value) => [formatKwh(Number(value)), "usage"]}
               labelFormatter={(hour) => `${hour}:00`}
             />
@@ -140,7 +141,10 @@ function DailyUsageChart({ from, to, highlightDate }: { from: string; to: string
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis dataKey="date" interval="preserveStartEnd" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
           <YAxis hide />
-          <ChartTooltip formatter={(value) => [formatCurrency(Number(value)), "spend"]} />
+          <Tooltip
+            {...chartTooltipProps}
+            formatter={(value) => [formatCurrency(Number(value)), "spend"]}
+          />
           <Bar dataKey="spend" radius={[3, 3, 0, 0]}>
             {data.map((point) => (
               <Cell

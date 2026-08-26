@@ -1,10 +1,10 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency, formatKwh } from "@/lib/format";
 import { chartColors, chartMargin } from "./chart-config";
 import { ChartShell } from "./chart-shell";
-import { ChartTooltip } from "./chart-tooltip";
+import { chartTooltipProps } from "./chart-tooltip";
 import type { HourlyChartProps } from "./types";
 
 export function HourlyChart({ data, metric, title }: HourlyChartProps) {
@@ -15,7 +15,8 @@ export function HourlyChart({ data, metric, title }: HourlyChartProps) {
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis dataKey="hour" interval={2} tickLine={false} axisLine={false} />
           <YAxis tickLine={false} axisLine={false} width={48} />
-          <ChartTooltip
+          <Tooltip
+            {...chartTooltipProps}
             formatter={(value) => [
               metric === "spend" ? formatCurrency(Number(value)) : formatKwh(Number(value)),
               metric

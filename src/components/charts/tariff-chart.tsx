@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { roundedCeiling } from "@/lib/day-breakdown";
 import { formatCurrencyAxisTick, formatTariffForUnit } from "@/lib/format";
 import { DropdownSelect, type DropdownOption } from "@/components/ui/dropdown-select";
 import { chartColors, chartMargin } from "./chart-config";
 import { ChartShell } from "./chart-shell";
-import { ChartTooltip } from "./chart-tooltip";
+import { chartTooltipProps } from "./chart-tooltip";
 import type { TariffChartProps } from "./types";
 
 type TariffUtility = "electricity" | "water";
@@ -56,7 +56,10 @@ export function TariffChart({ electricity, water }: TariffChartProps) {
             axisLine={false}
             width={52}
           />
-          <ChartTooltip formatter={(value) => [formatTariffForUnit(Number(value), utilityUnit[utility]), "Tariff"]} />
+          <Tooltip
+            {...chartTooltipProps}
+            formatter={(value) => [formatTariffForUnit(Number(value), utilityUnit[utility]), "Tariff"]}
+          />
           <Area
             type="monotone"
             dataKey="tariff"
