@@ -40,6 +40,16 @@ describe("AdminSectionTabs", () => {
     expect(mocks.push).toHaveBeenCalledWith("/admin/diagnostics", { scroll: false });
   });
 
+  it("keeps Engagement in the shared shell and prefetches its route", () => {
+    render(<AdminSectionTabs />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Engagement" }));
+
+    expect(screen.getByRole("tab", { name: "Engagement" }).getAttribute("aria-selected")).toBe("true");
+    expect(mocks.push).toHaveBeenCalledWith("/admin/engagement", { scroll: false });
+    expect(mocks.prefetch).toHaveBeenCalledWith("/admin/engagement");
+  });
+
   it("navigates from Diagnostics back to Users through the same shell", () => {
     mocks.pathname = "/admin/diagnostics";
     render(<AdminSectionTabs />);

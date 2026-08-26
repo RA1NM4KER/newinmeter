@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   requireConnectedSession: vi.fn(),
   hasFeatureAccess: vi.fn(),
   enforceRateLimit: vi.fn(),
-  answerAssistantQuestion: vi.fn()
+  answerAssistantQuestion: vi.fn(),
+  recordAiFeatureUsage: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireConnectedSession }));
@@ -15,6 +16,7 @@ vi.mock("@/lib/rate-limit", () => ({
   rateLimitHeaders: () => ({})
 }));
 vi.mock("@/lib/assistant/openai", () => ({ answerAssistantQuestion: mocks.answerAssistantQuestion }));
+vi.mock("@/lib/engagement", () => ({ recordAiFeatureUsage: mocks.recordAiFeatureUsage }));
 
 import { POST } from "./route";
 
@@ -55,6 +57,7 @@ describe("POST /api/assistant", () => {
     mocks.hasFeatureAccess.mockResolvedValue(true);
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
     mocks.answerAssistantQuestion.mockResolvedValue(validAssistantResponse);
+    mocks.recordAiFeatureUsage.mockResolvedValue(undefined);
   });
 
   it("requires authentication", async () => {
@@ -179,6 +182,25 @@ describe("POST /api/assistant", () => {
 
     const events = await readSseEvents(response);
     expect(events[0]).toEqual({ type: "started" });
+    expect(events.at(-1)).toEqual({ type: "response", response: validAssistantResponse });
+    expect(mocks.recordAiFeatureUsage).toHaveBeenCalledWith("user-a");
+  });
+
+  it("does not count failed AI requests as feature adoption", async () => {
+    mocks.answerAssistantQuestion.mockRejectedValue(new Error("Model failed."));
+
+    const response = await POST(request({ question: "Q" }));
+    await readSseEvents(response);
+
+    expect(mocks.recordAiFeatureUsage).not.toHaveBeenCalled();
+  });
+
+  it("still delivers a successful answer when adoption tracking is unavailable", async () => {
+    mocks.recordAiFeatureUsage.mockRejectedValue(new Error("Database unavailable."));
+
+    const response = await POST(request({ question: "Q" }));
+    const events = await readSseEvents(response);
+
     expect(events.at(-1)).toEqual({ type: "response", response: validAssistantResponse });
   });
 

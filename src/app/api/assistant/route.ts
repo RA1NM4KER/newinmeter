@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { answerAssistantQuestion } from "@/lib/assistant/openai";
 import { requireConnectedSession } from "@/lib/auth/session";
+import { recordAiFeatureUsage } from "@/lib/engagement";
 import { hasFeatureAccess } from "@/lib/features";
 import { ALERT_TYPES } from "@/lib/newinmeter/alert-types";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
@@ -150,6 +151,12 @@ export async function POST(request: Request) {
           request.signal,
           (telemetry: AssistantRequestTelemetry) => console.info("assistant_response_completed", telemetry)
         );
+        // Adoption is recorded only after a valid AI response exists. This
+        // stores no prompt/response content and must never make a successful
+        // answer fail if the lightweight counter is temporarily unavailable.
+        await recordAiFeatureUsage(auth.session.userId).catch(() => {
+          console.error("newinmeter_ai_usage_tracking_failed");
+        });
         send({ type: "response", response: result });
       } catch (error) {
         if (request.signal.aborted) {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 export type AppShellProps = {
   children: ReactNode;
+  userId?: string;
   userEmail?: string | null;
   isAdmin?: boolean;
   isActivitiesEnabled?: boolean;

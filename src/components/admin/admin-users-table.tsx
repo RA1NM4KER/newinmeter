@@ -21,7 +21,7 @@ import { StatStripSkeleton, StatTile } from "./stat-tile";
 import { TableSkeletonRows } from "./table-skeleton-rows";
 import type { AdminUsersApiResponse, AdminUsersTableProps, FeatureDraft } from "./types";
 
-const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const RECENT_SYNC_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const roleOptions = [
   { label: "Admin", value: "admin" },
@@ -91,7 +91,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
         (user) =>
           user.lastRunStatus === "success" &&
           user.lastRunAt &&
-          now - new Date(user.lastRunAt).getTime() < ACTIVE_WINDOW_MS
+          now - new Date(user.lastRunAt).getTime() < RECENT_SYNC_WINDOW_MS
       ).length
     };
   }, [data?.rows]);
@@ -318,8 +318,8 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
           <StatTile
             label={
               <>
-                <span className="sm:hidden">Active</span>
-                <span className="hidden sm:inline">Active (7d)</span>
+                <span className="sm:hidden">Synced</span>
+                <span className="hidden sm:inline">Synced (7d)</span>
               </>
             }
             value={stats.active}

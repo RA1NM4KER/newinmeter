@@ -56,6 +56,9 @@ vi.mock("@/components/layout/push-notification-provider", () => ({
 vi.mock("@/components/assistant/day-detail-provider", () => ({
   DayDetailProvider: ({ children }: { children: ReactNode }) => children
 }));
+vi.mock("@/components/engagement/foreground-activity-tracker", () => ({
+  ForegroundActivityTracker: () => <span data-testid="foreground-activity-tracker" />
+}));
 
 import { AppShell } from "./app-shell";
 
@@ -149,5 +152,25 @@ describe("AppShell viewport-height architecture", () => {
     const aside = container.querySelector("aside") as HTMLElement;
     expect(aside.className).toContain("lg:h-[100dvh]");
     expect(aside.className).not.toContain("100svh");
+  });
+
+  it("tracks foreground use only for real non-admin, non-demo users", () => {
+    setPathname("/");
+    const { rerender } = render(<AppShell userId="real-user">content</AppShell>);
+    expect(screen.queryByTestId("foreground-activity-tracker")).toBeTruthy();
+
+    rerender(
+      <AppShell isAdmin userId="admin-user">
+        content
+      </AppShell>
+    );
+    expect(screen.queryByTestId("foreground-activity-tracker")).toBeNull();
+
+    rerender(
+      <AppShell isDemo userId="demo-user">
+        content
+      </AppShell>
+    );
+    expect(screen.queryByTestId("foreground-activity-tracker")).toBeNull();
   });
 });

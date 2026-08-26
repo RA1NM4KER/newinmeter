@@ -82,7 +82,8 @@ export async function adminSupabaseRawResponse(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
-  prefer?: string
+  prefer?: string,
+  range?: string
 ): Promise<Response> {
   const key = getSupabaseServiceRoleKey();
 
@@ -92,7 +93,8 @@ export async function adminSupabaseRawResponse(
       apikey: key,
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      ...(prefer ? { Prefer: prefer } : {})
+      ...(prefer ? { Prefer: prefer } : {}),
+      ...(range ? { Range: range } : {})
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store"
@@ -111,6 +113,26 @@ export async function adminSupabaseRequest<T>(
 
 export async function adminSupabaseFetch<T>(path: string): Promise<T> {
   return adminSupabaseRequest<T>("GET", path);
+}
+
+export async function adminSupabaseFetchAllPages<T>(path: string): Promise<T[]> {
+  const rows: T[] = [];
+
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const response = await adminSupabaseRawResponse(
+      "GET",
+      path,
+      undefined,
+      undefined,
+      `${offset}-${offset + PAGE_SIZE - 1}`
+    );
+    const page = await readJsonOrThrow<T[]>(response, `GET ${path}`);
+    rows.push(...page);
+
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
 // Exact row count via PostgREST's Content-Range header, without pulling any
