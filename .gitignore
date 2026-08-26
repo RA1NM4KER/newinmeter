@@ -7,6 +7,7 @@ dist
 !.env.example
 .secrets/
 *.log
+*.har
 .idea
 __pycache__
 *.pyc

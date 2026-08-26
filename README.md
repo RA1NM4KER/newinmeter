@@ -133,20 +133,20 @@ own zod validator in a test) -- it never replies with free-form text as the real
 
 ```ts
 type AssistantResponse = {
-  headline: string;                    // one short, concrete conclusion
+  headline: string; // one short, concrete conclusion
   metrics: { label: string; value: string }[]; // 0-3 key numbers backing the headline
   body: { heading: string | null; text: string }[]; // 0-3 short explanatory blocks, no markdown
-  evidence: AssistantEvidence[];       // day / period / activity / alert / data_status references
+  evidence: AssistantEvidence[]; // day / period / activity / alert / data_status references
   visualizations: AssistantVisualization[]; // hourly_usage / daily_usage / period_comparison
-  actions: AssistantAction[];          // navigate, or a proposed mutation (see below)
-  suggestions: string[];               // 0-2 follow-up questions
+  actions: AssistantAction[]; // navigate, or a proposed mutation (see below)
+  suggestions: string[]; // 0-2 follow-up questions
   scope: { from: string; to: string };
 };
 ```
 
 The response is rendered as structured hierarchy (headline, then metrics, then body blocks, then
 the chart, then actions), never as one prose paragraph -- see `src/components/assistant/
-assistant-message.tsx`. The model chooses *which* visualization and *what to highlight*; the
+assistant-message.tsx`. The model chooses _which_ visualization and _what to highlight_; the
 client resolves the actual numbers from the app's own existing endpoints (`/api/day-intervals`,
 `/api/daily-rollups`) -- the model never supplies chart data itself. An `hourly_usage`
 visualization carries a `highlights` **array** (each with an optional short `label`), not a single
@@ -229,6 +229,12 @@ table of every user, where they can:
 `requireAdminSession` (`src/lib/auth/session.ts`) is the shared guard -- every admin route/page
 resolves the caller and checks their role from that one place, never trusting a role passed in
 from the client.
+
+`/admin/diagnostics` adds the admin-only operational view: overall health, the daily LiveMopay
+contract canary, scheduler heartbeat, per-connection failure/staleness state, recent
+`capture_runs`, push-subscription count, and a deduplicated system-event feed. It never selects or
+serializes LiveMopay/Firebase credentials or upstream account/property/device identifiers. See
+`docs/admin-diagnostics.md` for health rules and production setup.
 
 Activities is opt-in (`activities_enabled` defaults to `false`) while the feature is being tested
 with one user before a wider rollout. `requireActivitiesSession` wraps `requireConnectedSession`
@@ -484,13 +490,13 @@ multi-user support:
 
 - `src/app` - App Router pages; `(app)` route group (`/`, `/data`, `/settings`, `/admin`) shares
   one layout/sidebar, plus `/login`, `/connect`, `/auth/callback`, `/privacy`, `/terms`
-- `src/app/api/admin` - admin-only routes: list users, set role, set AI-assistant permission
+- `src/app/api/admin` - admin-only routes: users, feature rollout, and Diagnostics
 - `src/app/api/account/delete` - self-service account + data deletion
 - `src/app/api/livemopay` - LiveMopay connection routes (connect, select-account, disconnect, status)
 - `src/app/api` - sync, assistant, export, energy-rows, day-intervals routes (all authenticated,
   all rate-limited)
 - `src/app/api/assistant/actions` - server-side execution for a user-confirmed assistant-proposed mutation (add Activity, set/disable an alert, sync) -- never called by the model directly
-- `src/components/admin` - admin user list/role/permission table
+- `src/components/admin` - admin users/features UI and responsive Diagnostics view
 - `src/components/auth`, `src/components/connect` - sign-in and LiveMopay connection UI
 - `src/components/assistant` - global assistant provider/dialog (mounted once in `app-shell.tsx`), rich response rendering (evidence chips, visualization cards, action confirmation cards), and the dashboard trigger button
 - `src/components/dashboard` - dashboard controls and insight sections
@@ -502,6 +508,8 @@ multi-user support:
 - `src/components/layout/document-shell.tsx` - shared layout for the static `/privacy`, `/terms` pages
 - `src/lib/supabase` - browser/server/admin Supabase client boundaries
 - `src/lib/auth` - authenticated-session resolution, including `requireAdminSession`
+- `src/lib/diagnostics` - health classification, safe operational events, scheduler heartbeat,
+  admin push targeting, and the bounded daily LiveMopay contract canary
 - `src/lib/user-roles.ts` - role/permission reads and writes (`user_roles` table)
 - `src/lib/rate-limit.ts` - Upstash-backed per-user rate limiting
 - `src/lib/assistant` - Responses API tool loop (`openai.ts`), system prompt, structured response

@@ -2,21 +2,16 @@
 
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { queryHref } from "@/lib/url-query";
+import { AdminSectionTabs } from "./admin-section-tabs";
 import { AdminFeaturesPanel } from "./admin-features-panel";
 import { AdminUsersTable } from "./admin-users-table";
 import type { AdminPageClientProps } from "./types";
 
 type AdminTabId = "users" | "features";
 
-const adminTabs: Array<{ id: AdminTabId; label: string }> = [
-  { id: "users", label: "Users" },
-  { id: "features", label: "Features" }
-];
-
 function isAdminTabId(value: string): value is AdminTabId {
-  return adminTabs.some((tab) => tab.id === value);
+  return value === "users" || value === "features";
 }
 
 // Same shallow-URL tab pattern as Settings (settings-page-client.tsx): a
@@ -46,7 +41,7 @@ export function AdminPageClient({ currentUserId, initialUsers, initialFeatures }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <UnderlineTabs tabs={adminTabs} activeId={activeTab} onChange={(id) => setActiveTab(id as AdminTabId)} />
+      <AdminSectionTabs activeId={activeTab} onLocalChange={setActiveTab} />
 
       <div className={activeTab === "users" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
         <AdminUsersTable currentUserId={currentUserId} initialData={initialUsers} />

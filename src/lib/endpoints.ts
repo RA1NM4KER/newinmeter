@@ -3,6 +3,7 @@ const apiBase = "/api";
 export const apiEndpoints = {
   adminUsers: `${apiBase}/admin/users`,
   adminFeatures: `${apiBase}/admin/features`,
+  adminDiagnostics: `${apiBase}/admin/diagnostics`,
   activities: `${apiBase}/activities`,
   activityReport: `${apiBase}/activity-report`,
   activityExport: `${apiBase}/activity-export`,

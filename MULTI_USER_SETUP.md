@@ -268,6 +268,7 @@ stored in Supabase Vault once per environment. Do this after applying the migrat
 
    Until both secrets exist, the pg_cron tick is a safe no-op (it logs and returns rather than
    erroring) -- nothing breaks in the meantime, automatic syncing just doesn't start yet.
+
 3. Verify: `select * from cron.job where jobname = 'newinmeter-auto-sync-worker';` should show the
    scheduled job, and `select * from cron.job_run_details order by start_time desc limit 5;` should
    show recent runs succeeding once the Vault secrets are in place.
@@ -303,3 +304,54 @@ work rather than adding a new cron job: the three fresh-data alerts run right af
 sync (manual or automatic, via `evaluateAlertsAfterSync`); `data_delayed` runs inside the existing
 `/api/cron/stale-check` tick. See the migration file and `alerts.ts`'s own comments for the full
 dedup/threshold-reset design.
+
+## 19. Admin Diagnostics and LiveMopay canary
+
+Apply `20260825220423_admin_diagnostics.sql`. It adds service-role-only `system_events` and
+`system_health_state` tables, a backward-compatible `capture_runs.trigger` column, and the daily
+`newinmeter-livemopay-canary` pg_cron job. It does not backfill, reschedule, or immediately claim
+any user connection.
+
+Set these server-only deployment variables using a dedicated LiveMopay test account with recent
+ledger activity:
+
+```text
+NEWINMETER_CANARY_EMAIL=<dedicated canary login>
+NEWINMETER_CANARY_PASSWORD=<dedicated canary password>
+NEWINMETER_CANARY_ACCOUNT_ID=<the canary account selected from discovery>
+```
+
+Never prefix them with `NEXT_PUBLIC_`. The job uses credentials and tokens only in memory and
+stores only the checked step, attempt count, and ledger/parser row counts.
+
+The migration reuses the existing `newinmeter_auto_sync_secret` Vault value (the deployed
+`CRON_SECRET`) and needs one additional URL secret. Create it once in each Supabase project:
+
+```sql
+select vault.create_secret(
+  'https://your-deployment.vercel.app/api/cron/livemopay-canary',
+  'newinmeter_livemopay_canary_url'
+);
+```
+
+The canary runs at `30 2 * * *` (02:30 UTC / 04:30 Africa/Johannesburg), once daily. Verify both
+jobs without exposing Vault values:
+
+```sql
+select jobname, schedule, active
+from cron.job
+where jobname in ('newinmeter-auto-sync-worker', 'newinmeter-livemopay-canary');
+
+select jobid, status, start_time, end_time
+from cron.job_run_details
+order by start_time desc
+limit 20;
+```
+
+Open `/admin/diagnostics` as an admin after the first scheduler tick and canary run. Until the URL
+or environment variables are configured, the canary correctly remains critical/not-yet-run.
+Operational pushes reuse the existing VAPID setup and go only to users whose `user_roles.role` is
+`admin`.
+
+See `docs/admin-diagnostics.md` for the exact health thresholds, event deduplication, push
+conditions, and current scheduler-watchdog limitation.

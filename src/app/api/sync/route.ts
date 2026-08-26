@@ -10,6 +10,11 @@ import {
   replaceConnectionRefreshToken
 } from "@/lib/newinmeter/connection";
 import { evaluateAlertsAfterSync } from "@/lib/newinmeter/alerts";
+import {
+  reportConnectionReauthenticationRequired,
+  reportConnectionSyncFailure,
+  reportConnectionSyncSuccess
+} from "@/lib/diagnostics/operations";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
 import { TokenDecryptionError } from "@/lib/token-encryption";
 
@@ -66,6 +71,7 @@ export async function POST(request: Request) {
       propertyId: connectionRow.property_id,
       refreshToken,
       mode: body.mode,
+      trigger: "manual",
       onRefreshTokenRotated: (newRefreshToken) => replaceConnectionRefreshToken(connectionRow.id, newRefreshToken)
     });
 
@@ -75,6 +81,9 @@ export async function POST(request: Request) {
     // own finish_capture_run call. Never throws, never affects this
     // response either way -- see the function's own doc comment.
     await evaluateAlertsAfterSync(connectionRow.id, session.userId);
+    await reportConnectionSyncSuccess(connectionRow.id).catch(() => {
+      console.error("newinmeter_diagnostics_sync_recovery_failed");
+    });
     const summary = await loadDashboardSummary(session.accessToken);
 
     return NextResponse.json({ mode: body.mode, summary, output: result.output });
@@ -90,6 +99,9 @@ export async function POST(request: Request) {
       // button that will fail identically forever.
       console.error("livemopay_sync_failed", error.message);
       await markConnectionAuthError(connectionRow.id).catch(() => {});
+      await reportConnectionReauthenticationRequired(connectionRow.id).catch(() => {
+        console.error("newinmeter_diagnostics_reauth_event_failed");
+      });
       return NextResponse.json(
         { message: "Your LiveMopay connection needs to be reconnected.", reauthRequired: true },
         { status: 409 }
@@ -99,6 +111,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Sync failed.";
     console.error("livemopay_sync_failed", message);
     await markConnectionSyncOutcome(connectionRow.id, message).catch(() => {});
+    await reportConnectionSyncFailure(connectionRow.id, error).catch(() => {
+      console.error("newinmeter_diagnostics_sync_failure_event_failed");
+    });
     return NextResponse.json({ message: "Sync failed." }, { status: 500 });
   }
 }

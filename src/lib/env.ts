@@ -55,6 +55,14 @@ export function getNewinmeterWebAppFlavor() {
   return optional("NEWINMETER_WEB_APP_FLAVOR", "livemopay");
 }
 
+export function getNewinmeterCanaryConfig() {
+  return {
+    email: required("NEWINMETER_CANARY_EMAIL"),
+    password: required("NEWINMETER_CANARY_PASSWORD"),
+    accountId: required("NEWINMETER_CANARY_ACCOUNT_ID")
+  };
+}
+
 export function getVapidPublicKey() {
   return required("NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PUBLIC_KEY");
 }

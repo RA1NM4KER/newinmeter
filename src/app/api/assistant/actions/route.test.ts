@@ -17,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   markConnectionSyncOutcome: vi.fn(),
   replaceConnectionRefreshToken: vi.fn(),
   runLivemopaySync: vi.fn(),
-  loadDashboardSummary: vi.fn()
+  loadDashboardSummary: vi.fn(),
+  reportSuccess: vi.fn(),
+  reportFailure: vi.fn(),
+  reportReauth: vi.fn()
 }));
 
 vi.mock("react", async () => {
@@ -38,6 +41,11 @@ vi.mock("@/lib/activity/data", () => ({
   deleteActivity: mocks.deleteActivity
 }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
+vi.mock("@/lib/diagnostics/operations", () => ({
+  reportConnectionSyncSuccess: mocks.reportSuccess,
+  reportConnectionSyncFailure: mocks.reportFailure,
+  reportConnectionReauthenticationRequired: mocks.reportReauth
+}));
 vi.mock("@/lib/newinmeter/alerts", async () => {
   const actual = await vi.importActual<typeof import("@/lib/newinmeter/alerts")>("@/lib/newinmeter/alerts");
   return {
@@ -84,6 +92,9 @@ describe("POST /api/assistant/actions", () => {
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
     mocks.markConnectionAuthError.mockResolvedValue(undefined);
     mocks.markConnectionSyncOutcome.mockResolvedValue(undefined);
+    mocks.reportSuccess.mockResolvedValue(undefined);
+    mocks.reportFailure.mockResolvedValue(undefined);
+    mocks.reportReauth.mockResolvedValue(undefined);
   });
 
   it("requires authentication", async () => {
@@ -582,7 +593,7 @@ describe("POST /api/assistant/actions", () => {
 
       expect(response.status).toBe(200);
       expect(mocks.runLivemopaySync).toHaveBeenCalledWith(
-        expect.objectContaining({ connectionId: "conn-a", mode: "incremental" })
+        expect.objectContaining({ connectionId: "conn-a", mode: "incremental", trigger: "manual" })
       );
       expect(mocks.evaluateAlertsAfterSync).toHaveBeenCalledWith("conn-a", "user-a");
       const body = await response.json();

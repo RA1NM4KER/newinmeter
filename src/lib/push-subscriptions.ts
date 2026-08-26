@@ -1,6 +1,11 @@
 import "server-only";
 
-import { adminSupabaseRawResponse, adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
+import {
+  adminSupabaseCount,
+  adminSupabaseRawResponse,
+  adminSupabaseFetch,
+  adminSupabaseRequest
+} from "./supabase-rest";
 
 // The three fields a browser PushSubscription serializes to, plus the user we
 // resolved it for. Stored verbatim so web-push can address the endpoint later.
@@ -50,6 +55,10 @@ export async function getSubscriptionsForUser(userId: string): Promise<PushSubsc
   return adminSupabaseFetch<PushSubscriptionRow[]>(
     `/push_subscriptions?select=${SUBSCRIPTION_SELECT}&user_id=eq.${encodeURIComponent(userId)}`
   );
+}
+
+export async function countPushSubscriptions(): Promise<number> {
+  return adminSupabaseCount("/push_subscriptions?select=id");
 }
 
 // Called by the notifier when the push service reports an endpoint is gone

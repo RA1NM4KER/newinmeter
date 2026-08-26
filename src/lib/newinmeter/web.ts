@@ -524,6 +524,29 @@ export async function fetchLiveMopayLedger(params: {
   propertyId: string;
   startDate: string;
 }): Promise<NewinmeterCsvRow[]> {
+  const payload = await fetchLiveMopayLedgerPayload(params);
+
+  const rows: NewinmeterCsvRow[] = [];
+
+  for (const item of payload) {
+    const normalized = normalizeLedgerRow(item as LedgerApiRow);
+    if (normalized) {
+      rows.push(normalized);
+    }
+  }
+
+  return dedupeNewinmeterRows(rows);
+}
+
+type LiveMopayLedgerRequest = {
+  idToken: string;
+  accountId: string;
+  companyId: string;
+  propertyId: string;
+  startDate: string;
+};
+
+async function fetchLiveMopayLedgerPayload(params: LiveMopayLedgerRequest): Promise<unknown[]> {
   const url =
     `${getNewinmeterWebBaseUrl().replace(/\/$/, "")}/mobile/ledger/${encodeURIComponent(params.startDate)}` +
     `?accountId=${encodeURIComponent(params.accountId)}`;
@@ -536,16 +559,51 @@ export async function fetchLiveMopayLedger(params: {
     throw new Error(`Expected a list from ledger endpoint, got ${typeof payload}.`);
   }
 
-  const rows: NewinmeterCsvRow[] = [];
+  return payload;
+}
 
+const CanaryLedgerRowSchema = z
+  .object({
+    date: z.string().min(1),
+    description: z.string().nullable().optional(),
+    unitsDescription: z.string().nullable().optional(),
+    unitsDescriptionIncl: z.string().nullable().optional(),
+    debit: z.string().nullable().optional(),
+    debitIncl: z.string().nullable().optional(),
+    credit: z.string().nullable().optional(),
+    creditIncl: z.string().nullable().optional(),
+    balance: z.string().nullable().optional(),
+    balanceIncl: z.string().nullable().optional()
+  })
+  .passthrough();
+
+// Canary-only contract inspection. Returns counts, never ledger rows, so the
+// scheduled job cannot accidentally persist or expose account transactions.
+export async function checkLiveMopayLedgerContract(params: LiveMopayLedgerRequest): Promise<{
+  rowCount: number;
+  parseableRowCount: number;
+}> {
+  const payload = await fetchLiveMopayLedgerPayload(params);
+  if (payload.length === 0) {
+    throw new Error("Recent ledger response was empty; parser contract could not be exercised.");
+  }
+
+  let parseableRowCount = 0;
   for (const item of payload) {
-    const normalized = normalizeLedgerRow(item as LedgerApiRow);
-    if (normalized) {
-      rows.push(normalized);
+    const parsed = CanaryLedgerRowSchema.safeParse(item);
+    if (!parsed.success) {
+      throw new Error("Recent ledger row is missing required contract fields.");
+    }
+    if (normalizeLedgerRow(parsed.data as LedgerApiRow)) {
+      parseableRowCount += 1;
     }
   }
 
-  return dedupeNewinmeterRows(rows);
+  if (parseableRowCount === 0) {
+    throw new Error("Recent ledger rows no longer contain a structure understood by the parser.");
+  }
+
+  return { rowCount: payload.length, parseableRowCount };
 }
 
 export function currentNewinmeterLocalYear() {

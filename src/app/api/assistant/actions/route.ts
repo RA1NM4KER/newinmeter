@@ -30,6 +30,11 @@ import {
   replaceConnectionRefreshToken
 } from "@/lib/newinmeter/connection";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
+import {
+  reportConnectionReauthenticationRequired,
+  reportConnectionSyncFailure,
+  reportConnectionSyncSuccess
+} from "@/lib/diagnostics/operations";
 import { TokenDecryptionError } from "@/lib/token-encryption";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -315,11 +320,15 @@ async function handleSync(session: AuthenticatedConnectionSession) {
       propertyId: connectionRow.property_id,
       refreshToken,
       mode: "incremental",
+      trigger: "manual",
       onRefreshTokenRotated: (newRefreshToken) => replaceConnectionRefreshToken(connectionRow.id, newRefreshToken)
     });
 
     await markConnectionSyncOutcome(connectionRow.id, null);
     await evaluateAlertsAfterSync(connectionRow.id, session.userId);
+    await reportConnectionSyncSuccess(connectionRow.id).catch(() => {
+      console.error("newinmeter_diagnostics_sync_recovery_failed");
+    });
     const summary = await loadDashboardSummary(session.accessToken);
 
     return NextResponse.json({ mode: "incremental", summary, output: result.output });
@@ -330,6 +339,9 @@ async function handleSync(session: AuthenticatedConnectionSession) {
     if (error instanceof TokenDecryptionError) {
       console.error("newinmeter_assistant_sync_failed", error.message);
       await markConnectionAuthError(connectionRow.id).catch(() => {});
+      await reportConnectionReauthenticationRequired(connectionRow.id).catch(() => {
+        console.error("newinmeter_diagnostics_reauth_event_failed");
+      });
       return NextResponse.json(
         { message: "Your LiveMopay connection needs to be reconnected.", reauthRequired: true },
         { status: 409 }
@@ -338,6 +350,9 @@ async function handleSync(session: AuthenticatedConnectionSession) {
     const message = error instanceof Error ? error.message : "Sync failed.";
     console.error("newinmeter_assistant_sync_failed", message);
     await markConnectionSyncOutcome(connectionRow.id, message).catch(() => {});
+    await reportConnectionSyncFailure(connectionRow.id, error).catch(() => {
+      console.error("newinmeter_diagnostics_sync_failure_event_failed");
+    });
     return NextResponse.json({ message: "Sync failed." }, { status: 500 });
   }
 }

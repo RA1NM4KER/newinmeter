@@ -108,6 +108,11 @@ export async function listAllAuthUsers(): Promise<Array<{ userId: string; email:
   return data.users.map((user) => ({ userId: user.id, email: user.email ?? null }));
 }
 
+export async function listAdminUserIds(): Promise<string[]> {
+  const rows = await adminSupabaseFetch<UserRoleRow[]>("/user_roles?select=user_id,role&role=eq.admin");
+  return rows.map((row) => row.user_id);
+}
+
 // user list (for email), since auth.users isn't exposed over PostgREST.
 // Anyone who has never triggered getOrCreateUserPermissions (signed in but
 // never loaded a page that resolves it) still gets a synthesized 'user' row
@@ -132,7 +137,10 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
       "last_auto_sync_status,last_auto_sync_at&order=updated_at.desc"
   );
   const connectionStatusByUserId = new Map<string, LivemopayConnectionStatus>();
-  const autoSyncByUserId = new Map<string, Pick<ConnectionRow, "auto_sync_enabled" | "next_sync_at" | "last_auto_sync_status" | "last_auto_sync_at">>();
+  const autoSyncByUserId = new Map<
+    string,
+    Pick<ConnectionRow, "auto_sync_enabled" | "next_sync_at" | "last_auto_sync_status" | "last_auto_sync_at">
+  >();
   const userIdByConnectionId = new Map<string, string>();
   for (const row of connectionRows) {
     if (!connectionStatusByUserId.has(row.user_id)) {
@@ -197,4 +205,3 @@ export async function setUserRole(userId: string, role: UserRole): Promise<void>
     "return=minimal"
   );
 }
-

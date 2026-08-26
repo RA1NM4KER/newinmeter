@@ -4,6 +4,7 @@ import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "..
 import { formatCurrency, formatKwh, formatTariff } from "../format";
 import { getFeatureAccessForUsers, hasFeatureAccess } from "../features";
 import { sendPushToUser } from "../push-notify";
+import { reportAlertEvaluationOutcome } from "../diagnostics/operations";
 import {
   ALERT_TYPES,
   FRESH_DATA_ALERT_TYPES,
@@ -1113,6 +1114,15 @@ async function evaluateUsageAnomalyFamily(
 // hiccup or an anomaly-detection failure must never prevent low_balance/
 // daily_spend/daily_kwh (the original, most-relied-on alerts) from
 // evaluating normally, and vice versa.
+async function recordAlertDiagnostics(connectionId: string, family: string, error?: unknown) {
+  try {
+    await reportAlertEvaluationOutcome(connectionId, family, error);
+  } catch {
+    // The operational feed is best-effort and must never change alert or sync
+    // behavior, including during a deployment before its migration lands.
+  }
+}
+
 export async function evaluateAlertsAfterSync(connectionId: string, userId: string): Promise<void> {
   // The Alerts feature is fully revocable: while off for this user, no new
   // alert_events get written and no push gets sent (push only ever happens
@@ -1132,52 +1142,62 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
       `/alert_rules?select=${RULE_SELECT}&connection_id=eq.${encodeURIComponent(connectionId)}&enabled=eq.true&type=in.(${FRESH_DATA_ALERT_TYPES.join(",")})`
     );
     ruleByType = new Map(rules.map((rule) => [rule.type, rule]));
+    await recordAlertDiagnostics(connectionId, "rules");
   } catch (error) {
     console.error(
       "newinmeter_alert_rules_fetch_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
+    await recordAlertDiagnostics(connectionId, "rules", error);
   }
 
   try {
     await evaluateBalanceAndSpendFamily(ruleByType, connectionId, userId, today, now);
+    await recordAlertDiagnostics(connectionId, "balance-and-spend");
   } catch (error) {
     console.error(
       "newinmeter_alert_balance_spend_family_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
+    await recordAlertDiagnostics(connectionId, "balance-and-spend", error);
   }
 
   try {
     await evaluateTariffFamily(ruleByType, connectionId, userId, today, now);
+    await recordAlertDiagnostics(connectionId, "tariff");
   } catch (error) {
     console.error(
       "newinmeter_alert_tariff_family_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
+    await recordAlertDiagnostics(connectionId, "tariff", error);
   }
 
   try {
     await evaluateUsageAnomalyFamily(ruleByType.get("usage_anomaly"), connectionId, userId, today);
+    await recordAlertDiagnostics(connectionId, "usage-anomaly");
   } catch (error) {
     console.error(
       "newinmeter_alert_usage_anomaly_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
+    await recordAlertDiagnostics(connectionId, "usage-anomaly", error);
   }
 
   try {
     await resolveDataDelayedIfActive(connectionId);
+    await recordAlertDiagnostics(connectionId, "data-delayed");
   } catch (error) {
     console.error(
       "newinmeter_alert_data_delayed_resolve_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
+    await recordAlertDiagnostics(connectionId, "data-delayed", error);
   }
 }
 

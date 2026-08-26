@@ -14,6 +14,7 @@ import {
 const BATCH_SIZE = 500;
 
 type SyncMode = "incremental" | "full";
+export type SyncTrigger = "manual" | "auto";
 
 export class SyncAlreadyRunningError extends Error {
   constructor() {
@@ -31,6 +32,7 @@ export type LivemopaySyncParams = {
   propertyId: string;
   refreshToken: string;
   mode: SyncMode;
+  trigger: SyncTrigger;
   onRefreshTokenRotated: (newRefreshToken: string) => Promise<void>;
 };
 
@@ -46,12 +48,12 @@ async function latestPeriodDateForConnection(connectionId: string) {
   return rows[0]?.period_dt?.split(" ", 1)[0] || null;
 }
 
-async function startCaptureRun(connectionId: string, mode: SyncMode) {
+async function startCaptureRun(connectionId: string, mode: SyncMode, trigger: SyncTrigger) {
   try {
     const response = await adminSupabaseRequest<CaptureRunRow[]>(
       "POST",
       "/capture_runs",
-      [{ connection_id: connectionId, mode, status: "running" }],
+      [{ connection_id: connectionId, mode, trigger, status: "running" }],
       "return=representation"
     );
 
@@ -251,7 +253,7 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
 // Id tokens are never persisted, so every sync starts by refreshing the
 // LiveMopay session from the connection's stored (encrypted) refresh token.
 export async function runLivemopaySync(params: LivemopaySyncParams) {
-  const runId = await startCaptureRun(params.connectionId, params.mode);
+  const runId = await startCaptureRun(params.connectionId, params.mode, params.trigger);
   if (!runId) {
     throw new Error("Failed to create capture run.");
   }

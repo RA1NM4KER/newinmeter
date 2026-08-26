@@ -3,6 +3,13 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { getCronSecret } from "@/lib/env";
 import { evaluateAlertsAfterSync } from "@/lib/newinmeter/alerts";
 import {
+  recordSchedulerInvocation,
+  reportBroadSyncOutcome,
+  reportConnectionReauthenticationRequired,
+  reportConnectionSyncFailure,
+  reportConnectionSyncSuccess
+} from "@/lib/diagnostics/operations";
+import {
   claimDueAutoSyncConnections,
   markAutoSyncFailure,
   markAutoSyncSuccess,
@@ -55,6 +62,7 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
       // incremental start-date logic (latest known period_dt). A full
       // history resync stays a manual, user-initiated action only.
       mode: "incremental",
+      trigger: "auto",
       onRefreshTokenRotated: (newRefreshToken) => replaceConnectionRefreshToken(connection.id, newRefreshToken)
     });
 
@@ -62,6 +70,9 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
     // Same guaranteed-fresh-rollups reasoning as the manual /api/sync hook;
     // never throws, never affects this connection's outcome either way.
     await evaluateAlertsAfterSync(connection.id, connection.userId);
+    await reportConnectionSyncSuccess(connection.id).catch(() => {
+      console.error("newinmeter_diagnostics_sync_recovery_failed");
+    });
     return "success";
   } catch (error) {
     if (error instanceof SyncAlreadyRunningError) {
@@ -79,12 +90,18 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
       // it from future claims) and clears next_sync_at/sync_claimed_at.
       console.error("newinmeter_auto_sync_auth_error", connection.id, error.message);
       await markConnectionAuthError(connection.id).catch(() => {});
+      await reportConnectionReauthenticationRequired(connection.id).catch(() => {
+        console.error("newinmeter_diagnostics_reauth_event_failed");
+      });
       return "authError";
     }
 
     const message = error instanceof Error ? error.message : "Automatic sync failed.";
     console.error("newinmeter_auto_sync_failed", connection.id, message);
     await markAutoSyncFailure(connection.id, message).catch(() => {});
+    await reportConnectionSyncFailure(connection.id, error).catch(() => {
+      console.error("newinmeter_diagnostics_sync_failure_event_failed");
+    });
     return "retryable";
   }
 }
@@ -119,6 +136,15 @@ export async function POST(request: Request) {
       counts.unexpected += 1;
     }
   }
+
+  await Promise.all([
+    recordSchedulerInvocation({ claimed: claimed.length, ...counts }).catch(() => {
+      console.error("newinmeter_scheduler_heartbeat_failed");
+    }),
+    reportBroadSyncOutcome(counts).catch(() => {
+      console.error("newinmeter_broad_sync_health_failed");
+    })
+  ]);
 
   return NextResponse.json({ ok: true, claimed: claimed.length, ...counts });
 }

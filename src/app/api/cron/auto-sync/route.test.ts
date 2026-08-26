@@ -10,11 +10,23 @@ const mocks = vi.hoisted(() => ({
   replaceConnectionRefreshToken: vi.fn(),
   runLivemopaySync: vi.fn(),
   decryptRefreshToken: vi.fn(),
-  evaluateAlertsAfterSync: vi.fn()
+  evaluateAlertsAfterSync: vi.fn(),
+  reportSuccess: vi.fn(),
+  reportFailure: vi.fn(),
+  reportReauth: vi.fn(),
+  reportBroad: vi.fn(),
+  recordScheduler: vi.fn()
 }));
 
 vi.mock("@/lib/env", () => ({ getCronSecret: mocks.getCronSecret }));
 vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateAlertsAfterSync: mocks.evaluateAlertsAfterSync }));
+vi.mock("@/lib/diagnostics/operations", () => ({
+  reportConnectionSyncSuccess: mocks.reportSuccess,
+  reportConnectionSyncFailure: mocks.reportFailure,
+  reportConnectionReauthenticationRequired: mocks.reportReauth,
+  reportBroadSyncOutcome: mocks.reportBroad,
+  recordSchedulerInvocation: mocks.recordScheduler
+}));
 vi.mock("@/lib/newinmeter/connection", () => ({
   claimDueAutoSyncConnections: mocks.claimDueAutoSyncConnections,
   markAutoSyncSuccess: mocks.markAutoSyncSuccess,
@@ -65,6 +77,11 @@ describe("POST /api/cron/auto-sync", () => {
     mocks.markConnectionAuthError.mockResolvedValue(undefined);
     mocks.releaseAutoSyncClaim.mockResolvedValue(undefined);
     mocks.evaluateAlertsAfterSync.mockResolvedValue(undefined);
+    mocks.reportSuccess.mockResolvedValue(undefined);
+    mocks.reportFailure.mockResolvedValue(undefined);
+    mocks.reportReauth.mockResolvedValue(undefined);
+    mocks.reportBroad.mockResolvedValue(undefined);
+    mocks.recordScheduler.mockResolvedValue(undefined);
   });
 
   it("rejects a request without the correct bearer secret", async () => {
@@ -120,7 +137,8 @@ describe("POST /api/cron/auto-sync", () => {
         companyId: "co",
         propertyId: "prop",
         refreshToken: "plain-refresh-token",
-        mode: "incremental"
+        mode: "incremental",
+        trigger: "auto"
       })
     );
     expect(mocks.markAutoSyncSuccess).toHaveBeenCalledWith("a");

@@ -9,12 +9,20 @@ const mocks = vi.hoisted(() => ({
   markConnectionSyncOutcome: vi.fn(),
   replaceConnectionRefreshToken: vi.fn(),
   runLivemopaySync: vi.fn(),
-  evaluateAlertsAfterSync: vi.fn()
+  evaluateAlertsAfterSync: vi.fn(),
+  reportSuccess: vi.fn(),
+  reportFailure: vi.fn(),
+  reportReauth: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireConnectedSession }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
 vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateAlertsAfterSync: mocks.evaluateAlertsAfterSync }));
+vi.mock("@/lib/diagnostics/operations", () => ({
+  reportConnectionSyncSuccess: mocks.reportSuccess,
+  reportConnectionSyncFailure: mocks.reportFailure,
+  reportConnectionReauthenticationRequired: mocks.reportReauth
+}));
 vi.mock("@/lib/newinmeter/connection", () => ({
   getConnectionRowForUser: mocks.getConnectionRowForUser,
   getDecryptedRefreshToken: mocks.getDecryptedRefreshToken,
@@ -51,6 +59,9 @@ describe("POST /api/sync", () => {
     mocks.loadDashboardSummary.mockResolvedValue({});
     mocks.markConnectionSyncOutcome.mockResolvedValue(undefined);
     mocks.evaluateAlertsAfterSync.mockResolvedValue(undefined);
+    mocks.reportSuccess.mockResolvedValue(undefined);
+    mocks.reportFailure.mockResolvedValue(undefined);
+    mocks.reportReauth.mockResolvedValue(undefined);
   });
 
   it("never decrypts a token or calls runLivemopaySync for a demo connection", async () => {
@@ -75,7 +86,7 @@ describe("POST /api/sync", () => {
     expect(response.status).toBe(200);
     expect(mocks.getDecryptedRefreshToken).toHaveBeenCalledWith(connectedRow);
     expect(mocks.runLivemopaySync).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: "connection-a", refreshToken: "refresh-token" })
+      expect.objectContaining({ connectionId: "connection-a", refreshToken: "refresh-token", trigger: "manual" })
     );
     expect(mocks.markConnectionSyncOutcome).toHaveBeenCalledWith("connection-a", null);
     expect(mocks.evaluateAlertsAfterSync).toHaveBeenCalledWith("connection-a", "user-a");

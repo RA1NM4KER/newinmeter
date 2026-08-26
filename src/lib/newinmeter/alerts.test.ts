@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   getConnectionRowForUser: vi.fn(),
   setAutoSyncEnabled: vi.fn(),
   hasFeatureAccess: vi.fn(),
-  getFeatureAccessForUsers: vi.fn()
+  getFeatureAccessForUsers: vi.fn(),
+  reportAlertEvaluationOutcome: vi.fn()
 }));
 
 vi.mock("../supabase-rest", () => ({
@@ -17,6 +18,9 @@ vi.mock("../supabase-rest", () => ({
   adminSupabaseCount: mocks.adminSupabaseCount
 }));
 vi.mock("../push-notify", () => ({ sendPushToUser: mocks.sendPushToUser }));
+vi.mock("../diagnostics/operations", () => ({
+  reportAlertEvaluationOutcome: mocks.reportAlertEvaluationOutcome
+}));
 // Alerts gating (hasFeatureAccess/getFeatureAccessForUsers) is its own
 // module with its own tests (features.test.ts) -- everything in this file
 // is testing evaluateAlertsAfterSync/evaluateDataDelayedAlerts's own alert
