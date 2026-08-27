@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
 import { setRolloutMode } from "@/lib/features";
 import { isFeatureKey, ROLLOUT_MODES } from "@/lib/newinmeter/features-shared";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,6 +20,8 @@ export async function PATCH(request: Request, { params }: { params: { featureKey
       { status: auth.status }
     );
   }
+  const rate = await limitUserRequest(auth.session.userId, "admin-feature-write");
+  if (rate.response) return rate.response;
 
   if (!isFeatureKey(params.featureKey)) {
     return NextResponse.json({ message: "Unknown feature." }, { status: 404 });
@@ -27,5 +30,5 @@ export async function PATCH(request: Request, { params }: { params: { featureKey
   const { rolloutMode } = bodySchema.parse(await request.json());
   await setRolloutMode(params.featureKey, rolloutMode);
 
-  return NextResponse.json({ status: "updated" });
+  return NextResponse.json({ status: "updated" }, { headers: rate.headers });
 }

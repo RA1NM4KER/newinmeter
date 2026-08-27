@@ -16,5 +16,5 @@ export default async function DataPage() {
     redirect("/connect");
   }
 
-  return <DataPageClient />;
+  return <DataPageClient isDemo={connection.isDemo} />;
 }

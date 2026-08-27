@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import type { AssistantAction, TrustedActivitySnapshot } from "@/lib/assistant/types";
 import { assistantActionIcon, assistantActionLabel } from "./action-presentation";
 import { useAssistant } from "./assistant-provider";
+import { demoCapabilityBlocked } from "@/lib/demo/capabilities";
 import { useDayDetail } from "./day-detail-provider";
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
@@ -578,7 +579,14 @@ function ActionButton({ action }: { action: AssistantAction }) {
   ) {
     return null;
   }
-  if (isDemo) {
+  const demoBlocksAction =
+    isDemo &&
+    (action.type === "sync"
+      ? demoCapabilityBlocked(true, "sync")
+      : action.type === "set_alert" || action.type === "update_alert" || action.type === "disable_alert"
+        ? demoCapabilityBlocked(true, "alertMutation")
+        : false);
+  if (demoBlocksAction) {
     return null;
   }
 
@@ -611,7 +619,15 @@ export function AssistantActionRow({ actions }: { actions: AssistantAction[] }) 
     return null;
   }
 
-  const hasMutationActions = actions.some((action) => action.type !== "navigate" && action.type !== "open_day_detail");
+  const hasBlockedDemoAction =
+    isDemo &&
+    actions.some(
+      (action) =>
+        action.type === "sync" ||
+        action.type === "set_alert" ||
+        action.type === "update_alert" ||
+        action.type === "disable_alert"
+    );
 
   return (
     <div className="flex flex-col gap-2">
@@ -620,7 +636,9 @@ export function AssistantActionRow({ actions }: { actions: AssistantAction[] }) 
           <ActionButton action={action} key={`${action.type}-${index}`} />
         ))}
       </div>
-      {isDemo && hasMutationActions ? <p className="text-xs text-muted">Demo account is read-only.</p> : null}
+      {hasBlockedDemoAction ? (
+        <p className="text-xs text-muted">External and alert-setting actions are fixed in the shared demo.</p>
+      ) : null}
     </div>
   );
 }

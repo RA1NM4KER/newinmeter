@@ -11,6 +11,7 @@ import {
   type PushEnableResult,
   type PushPermissionState
 } from "@/lib/push-client";
+import { demoCapabilityBlocked } from "@/lib/demo/capabilities";
 
 type DeviceNotificationsState = {
   // Is NewinMeter allowed by the browser/OS to send notifications at all?
@@ -66,7 +67,7 @@ const RESUME_COALESCE_WINDOW_MS = 500;
 // live simultaneously, not sequential page loads -- exactly the situation
 // NotificationProvider already solved for the header bell, same reasoning
 // applies here.
-export function PushNotificationProvider({ children }: { children: ReactNode }) {
+export function PushNotificationProvider({ children, isDemo = false }: { children: ReactNode; isDemo?: boolean }) {
   const [browserPermission, setBrowserPermission] = useState<PushPermissionState>("unsupported");
   const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -80,6 +81,11 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
     loadingRef.current = true;
     setChecking(true);
     try {
+      if (demoCapabilityBlocked(isDemo, "pushSubscription")) {
+        setBrowserPermission("unsupported");
+        setSubscriptionActive(false);
+        return;
+      }
       const permission = getPushPermissionState();
       setBrowserPermission(permission);
 
@@ -135,7 +141,7 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
       setChecking(false);
       loadingRef.current = false;
     }
-  }, []);
+  }, [isDemo]);
 
   useEffect(() => {
     void refreshDeviceNotificationState();
@@ -199,6 +205,7 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
   // when permission is still "default" -- always fine here because both
   // callers only ever invoke this from a direct user click.
   const enableDeviceNotifications = useCallback(async (): Promise<PushEnableResult> => {
+    if (demoCapabilityBlocked(isDemo, "pushSubscription")) return { status: "unsupported" };
     const result = await ensurePushNotificationsEnabled();
     setBrowserPermission(getPushPermissionState());
     setSubscriptionActive(result.status === "granted");
@@ -206,7 +213,7 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
       clearDeviceNotificationsDismissed();
     }
     return result;
-  }, []);
+  }, [isDemo]);
 
   // The explicit "turn this device's push off" action -- General's toggle
   // only (Alerts never disables push, only chooses not to enable it).
@@ -214,9 +221,10 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
   // permission, and the product model doesn't want to imply this did
   // anything to it -- the user only told NewinMeter not to use it here.
   const disableDeviceNotifications = useCallback(async () => {
+    if (demoCapabilityBlocked(isDemo, "pushSubscription")) return;
     await unsubscribeFromPush();
     setSubscriptionActive(false);
-  }, []);
+  }, [isDemo]);
 
   const value = useMemo<DeviceNotificationsState>(
     () => ({

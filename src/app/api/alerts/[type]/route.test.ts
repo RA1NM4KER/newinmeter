@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getAuthenticatedSession: vi.fn(),
   upsertAlertRule: vi.fn(),
-  hasFeatureAccess: vi.fn()
+  hasFeatureAccess: vi.fn(),
+  getConnectionForUser: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
@@ -14,7 +15,10 @@ vi.mock("react", async () => {
 });
 vi.mock("@/lib/newinmeter/connection", async () => {
   const actual = await vi.importActual<typeof import("@/lib/newinmeter/connection")>("@/lib/newinmeter/connection");
-  return { DemoAccountProtectedError: actual.DemoAccountProtectedError };
+  return {
+    DemoAccountProtectedError: actual.DemoAccountProtectedError,
+    getConnectionForUser: mocks.getConnectionForUser
+  };
 });
 vi.mock("@/lib/newinmeter/alerts", async () => {
   const actual = await vi.importActual<typeof import("@/lib/newinmeter/alerts")>("@/lib/newinmeter/alerts");
@@ -22,7 +26,6 @@ vi.mock("@/lib/newinmeter/alerts", async () => {
 });
 
 import { AlertRuleValidationError, AutoSyncRequiredError } from "@/lib/newinmeter/alerts";
-import { DemoAccountProtectedError } from "@/lib/newinmeter/connection";
 import { POST } from "./route";
 
 function request(body: unknown) {
@@ -34,6 +37,7 @@ describe("POST /api/alerts/[type]", () => {
     vi.clearAllMocks();
     mocks.getAuthenticatedSession.mockResolvedValue({ userId: "user-a", email: "a@example.com", accessToken: "t" });
     mocks.hasFeatureAccess.mockResolvedValue(true);
+    mocks.getConnectionForUser.mockResolvedValue({ isDemo: false });
   });
 
   it("returns 403 when the user's Alerts access is off", async () => {
@@ -86,9 +90,10 @@ describe("POST /api/alerts/[type]", () => {
   });
 
   it("returns 403 for a demo connection", async () => {
-    mocks.upsertAlertRule.mockRejectedValue(new DemoAccountProtectedError("alerts"));
+    mocks.getConnectionForUser.mockResolvedValue({ isDemo: true });
     const response = await POST(request({ enabled: true, threshold: 200 }), { params: { type: "low_balance" } });
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ demoAccount: true });
+    expect(mocks.upsertAlertRule).not.toHaveBeenCalled();
   });
 });

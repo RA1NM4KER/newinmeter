@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
 import { setUserRole } from "@/lib/user-roles";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +19,8 @@ export async function PATCH(request: Request, { params }: { params: { userId: st
       { status: auth.status }
     );
   }
+  const rate = await limitUserRequest(auth.session.userId, "admin-user-role");
+  if (rate.response) return rate.response;
 
   const { role } = bodySchema.parse(await request.json());
 
@@ -26,5 +29,5 @@ export async function PATCH(request: Request, { params }: { params: { userId: st
   }
 
   await setUserRole(params.userId, role);
-  return NextResponse.json({ status: "updated" });
+  return NextResponse.json({ status: "updated" }, { headers: rate.headers });
 }

@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   try {
     const identifier = getRateLimitIdentifier(auth.session.userId, "export");
-    const rateLimit = await enforceRateLimit(identifier);
+    const rateLimit = await enforceRateLimit(identifier, "export");
     const rateHeaders = rateLimitHeaders(rateLimit);
 
     if (!rateLimit.allowed) {

@@ -26,8 +26,7 @@
 import { buildDemoDataset } from "@/lib/demo/dataset";
 import { adminSupabaseRequest } from "@/lib/supabase-rest";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
-import { setUserFeatureOverride } from "@/lib/features";
-import { setUserRole } from "@/lib/user-roles";
+import { validateDemoSeedTarget } from "@/lib/demo/seed-safety";
 
 const DEMO_LIVEMOPAY_EMAIL = "demo.recruiter@newinmeter.invalid";
 const DEMO_ACCOUNT_ID = "demo-account-001";
@@ -98,20 +97,7 @@ async function findOrCreateDemoConnection(userId: string): Promise<ConnectionRow
     `/livemopay_connections?select=id,user_id,is_demo,status&user_id=eq.${encodeURIComponent(userId)}&order=connected_at.asc`
   );
 
-  if (existingRows.length > 1) {
-    throw new Error(
-      `Refusing to guess: ${existingRows.length} connections already exist for this user. Resolve manually before rerunning.`
-    );
-  }
-
-  const existing = existingRows[0];
-
-  if (existing && !existing.is_demo) {
-    throw new Error(
-      `Refusing to overwrite connection ${existing.id}: it exists but is not marked is_demo. ` +
-        "NEWINMETER_DEMO_EMAIL must point at a dedicated demo account, never a real user's email."
-    );
-  }
+  const existing = validateDemoSeedTarget(existingRows);
 
   const nowIso = new Date().toISOString();
   const payload = {
@@ -129,6 +115,16 @@ async function findOrCreateDemoConnection(userId: string): Promise<ConnectionRow
     pending_accounts: null,
     status: "connected",
     is_demo: true,
+    auto_sync_enabled: false,
+    next_sync_at: null,
+    last_synced_at: nowIso,
+    last_auto_sync_at: null,
+    last_auto_sync_status: null,
+    last_auto_sync_error: null,
+    sync_claimed_at: null,
+    stale_notified_at: null,
+    alerts_enabled: true,
+    tariff_profile: null,
     last_error: null,
     updated_at: nowIso
   };
@@ -154,7 +150,7 @@ async function findOrCreateDemoConnection(userId: string): Promise<ConnectionRow
   return rows[0];
 }
 
-async function wipeConnectionData(connectionId: string) {
+async function wipeConnectionData(connectionId: string, userId: string) {
   const path = (table: string) => `/${table}?connection_id=eq.${encodeURIComponent(connectionId)}`;
   for (const table of [
     "energy_rows",
@@ -163,11 +159,86 @@ async function wipeConnectionData(connectionId: string) {
     "energy_hourly_rollups",
     "energy_interval_rollups",
     "dashboard_summary",
-    "usage_activities"
+    "usage_activities",
+    // Cascades alert_events and alert_rule_state.
+    "alert_rules"
   ]) {
     await adminSupabaseRequest("DELETE", path(table), undefined, "return=minimal");
   }
+  await adminSupabaseRequest(
+    "DELETE",
+    `/push_subscriptions?user_id=eq.${encodeURIComponent(userId)}`,
+    undefined,
+    "return=minimal"
+  );
   console.log("Cleared prior demo data for this connection.");
+}
+
+const DEMO_ALERT_RULE_IDS = {
+  dailyKwh: "00000000-0000-4000-8000-000000000101",
+  usageAnomaly: "00000000-0000-4000-8000-000000000102",
+  tariffChanged: "00000000-0000-4000-8000-000000000103",
+  monthlyBudget: "00000000-0000-4000-8000-000000000104"
+} as const;
+
+async function seedAlerts(connectionId: string, dataset: ReturnType<typeof buildDemoDataset>) {
+  const rules = [
+    { id: DEMO_ALERT_RULE_IDS.dailyKwh, type: "daily_kwh", enabled: true, threshold: 17 },
+    { id: DEMO_ALERT_RULE_IDS.usageAnomaly, type: "usage_anomaly", enabled: true, threshold: null },
+    { id: DEMO_ALERT_RULE_IDS.tariffChanged, type: "tariff_changed", enabled: true, threshold: null },
+    { id: DEMO_ALERT_RULE_IDS.monthlyBudget, type: "monthly_budget", enabled: true, threshold: 1450 }
+  ].map((rule) => ({ ...rule, connection_id: connectionId }));
+  await adminSupabaseRequest("POST", "/alert_rules", rules, "return=minimal");
+
+  const highDate = dataset.meta.highUsageDates[dataset.meta.highUsageDates.length - 1];
+  const highUsage = dataset.energyRows
+    .filter((row) => row.periodDt.startsWith(highDate) && row.chargeLabel.startsWith("Energy Charge:"))
+    .reduce((sum, row) => sum + row.kwh, 0);
+  const events = [
+    {
+      id: "00000000-0000-4000-8000-000000000201",
+      alert_rule_id: DEMO_ALERT_RULE_IDS.tariffChanged,
+      triggered_at: `${dataset.meta.rateChangeDate}T06:00:00+02:00`,
+      trigger_value: dataset.meta.baseRateAfter,
+      threshold_value: null,
+      event_context: { previousTariff: dataset.meta.baseRateBefore, currentTariff: dataset.meta.baseRateAfter },
+      read_at: `${dataset.meta.rateChangeDate}T08:30:00+02:00`,
+      resolved_at: `${dataset.meta.rateChangeDate}T08:30:00+02:00`
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000202",
+      alert_rule_id: DEMO_ALERT_RULE_IDS.usageAnomaly,
+      period_date: dataset.meta.spikeDate,
+      triggered_at: `${dataset.meta.spikeDate}T03:05:00+02:00`,
+      trigger_value: 4.8,
+      threshold_value: null,
+      event_context: {
+        startAt: `${dataset.meta.spikeDate}T02:00:00`,
+        endAt: `${dataset.meta.spikeDate}T03:00:00`
+      },
+      read_at: null
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000203",
+      alert_rule_id: DEMO_ALERT_RULE_IDS.dailyKwh,
+      period_date: highDate,
+      triggered_at: `${highDate}T22:00:00+02:00`,
+      trigger_value: Math.round(highUsage * 100) / 100,
+      threshold_value: 17,
+      event_context: null,
+      read_at: null
+    }
+  ].map((event) => ({
+    ...event,
+    connection_id: connectionId,
+    period_date: "period_date" in event ? event.period_date : null,
+    dedup_key: null,
+    notification_sent_at: event.triggered_at,
+    suppressed: false,
+    resolved_at: "resolved_at" in event ? event.resolved_at : null
+  }));
+  await adminSupabaseRequest("POST", "/alert_events", events, "return=minimal");
+  console.log(`Inserted ${rules.length} alert rules and ${events.length} notification events.`);
 }
 
 async function seedEnergyRows(connectionId: string, rows: ReturnType<typeof buildDemoDataset>["energyRows"]) {
@@ -190,6 +261,7 @@ async function seedEnergyRows(connectionId: string, rows: ReturnType<typeof buil
       kwh: row.kwh,
       water_kl: row.waterKl,
       tariff: row.tariff,
+      tariff_band: row.tariffBand,
       cost: row.cost,
       balance: row.balance
     }));
@@ -225,6 +297,27 @@ async function seedActivities(connectionId: string, activities: ReturnType<typeo
   console.log(`Inserted ${payload.length} usage_activities.`);
 }
 
+async function seedDemoProductState(userId: string) {
+  const updatedAt = new Date().toISOString();
+  await adminSupabaseRequest(
+    "POST",
+    "/user_roles?on_conflict=user_id",
+    [{ user_id: userId, role: "user" }],
+    "resolution=merge-duplicates,return=minimal"
+  );
+  await adminSupabaseRequest(
+    "POST",
+    "/feature_overrides?on_conflict=user_id,feature_key",
+    [
+      { user_id: userId, feature_key: "ai", enabled: true, updated_at: updatedAt },
+      { user_id: userId, feature_key: "activities", enabled: true, updated_at: updatedAt },
+      { user_id: userId, feature_key: "alerts", enabled: true, updated_at: updatedAt },
+      { user_id: userId, feature_key: "live", enabled: false, updated_at: updatedAt }
+    ],
+    "resolution=merge-duplicates,return=minimal"
+  );
+}
+
 async function main() {
   const email = process.env.NEWINMETER_DEMO_EMAIL;
 
@@ -237,19 +330,20 @@ async function main() {
   const user = await findOrCreateDemoAuthUser(email);
   const connection = await findOrCreateDemoConnection(user.id);
 
-  await wipeConnectionData(connection.id);
+  await wipeConnectionData(connection.id, user.id);
 
   const startDate = addDaysIso(isoYesterday(), -(DATASET_DAYS - 1));
   const dataset = buildDemoDataset({ startDate, days: DATASET_DAYS });
 
   await seedEnergyRows(connection.id, dataset.energyRows);
   await seedActivities(connection.id, dataset.activities);
+  await seedAlerts(connection.id, dataset);
 
-  await setUserRole(user.id, "user");
-  // AI is on for everyone by default (rollout mode 'everyone'); Activities
-  // defaults off ('selected'), so the demo account needs an explicit grant.
-  await setUserFeatureOverride(user.id, "activities", true);
-  console.log("Set user_roles: role=user. Granted the demo account an explicit Activities override.");
+  // Explicit overrides make the walkthrough stable even if global rollout
+  // modes change later. Live stays intentionally unavailable because no
+  // physical meter is attached to this synthetic account.
+  await seedDemoProductState(user.id);
+  console.log("Set user role and canonical demo feature overrides (AI/Activities/Alerts on, Live off).");
 
   console.log("\nDemo account ready:");
   console.log(`  email: ${email}`);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { markNotificationRead } from "@/lib/newinmeter/alerts";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,7 +15,9 @@ export async function POST(_request: Request, { params }: { params: { id: string
   if (!session) {
     return NextResponse.json({ message: "Authentication required." }, { status: 401 });
   }
+  const rate = await limitUserRequest(session.userId, "notifications-write");
+  if (rate.response) return rate.response;
 
   await markNotificationRead(session.userId, params.id);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true }, { headers: rate.headers });
 }

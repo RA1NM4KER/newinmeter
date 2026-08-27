@@ -17,6 +17,7 @@ import {
 } from "@/lib/diagnostics/operations";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
 import { TokenDecryptionError } from "@/lib/token-encryption";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
   }
 
   const { session } = auth;
+  const rate = await limitUserRequest(session.userId, "sync", "sync");
+  if (rate.response) return rate.response;
   // requireConnectedSession() already resolved a safe connection projection;
   // the sync needs the row's encrypted token fields too, which that
   // projection deliberately omits, so it's fetched again here.
@@ -86,7 +89,7 @@ export async function POST(request: Request) {
     });
     const summary = await loadDashboardSummary(session.accessToken);
 
-    return NextResponse.json({ mode: body.mode, summary, output: result.output });
+    return NextResponse.json({ mode: body.mode, summary, output: result.output }, { headers: rate.headers });
   } catch (error) {
     if (error instanceof SyncAlreadyRunningError) {
       return NextResponse.json({ message: error.message }, { status: 409 });

@@ -15,6 +15,7 @@ vi.mock("@/lib/newinmeter/connection", () => ({ getConnectionForUser: mocks.getC
 vi.mock("@/lib/rate-limit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
   getRateLimitIdentifier: (id: string, scope: string) => `${id}:${scope}`,
+  getTrustedRequestIp: () => "203.0.113.7",
   rateLimitHeaders: () => ({})
 }));
 vi.mock("@/lib/supabase/admin-client", () => ({

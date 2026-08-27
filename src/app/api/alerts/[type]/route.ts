@@ -10,6 +10,9 @@ import {
   upsertAlertRule,
   type AlertType
 } from "@/lib/newinmeter/alerts";
+import { limitUserRequest } from "@/lib/rate-limit";
+import { demoCapabilityBlocked } from "@/lib/demo/capabilities";
+import { getConnectionForUser } from "@/lib/newinmeter/connection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,6 +35,16 @@ export async function POST(request: Request, { params }: { params: { type: strin
   const session = await getAuthenticatedSession();
   if (!session) {
     return NextResponse.json({ message: "Authentication required." }, { status: 401 });
+  }
+  const rate = await limitUserRequest(session.userId, "alerts-write");
+  if (rate.response) return rate.response;
+
+  const connection = await getConnectionForUser(session.userId);
+  if (demoCapabilityBlocked(connection?.isDemo ?? false, "alertMutation")) {
+    return NextResponse.json(
+      { message: "Demo alert settings are fixed for the shared walkthrough.", demoAccount: true },
+      { status: 403, headers: rate.headers }
+    );
   }
 
   if (!isAlertType(params.type)) {

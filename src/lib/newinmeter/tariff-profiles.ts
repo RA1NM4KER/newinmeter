@@ -62,6 +62,30 @@ export const NEWINBOSCH_2026_27: TariffProfile = {
     { fromKwh: 600, toKwh: null, ratePerKwh: 3.68 }
   ],
   ledgerRateSchedules: [
+    {
+      kind: "energy",
+      effectiveFrom: "2025-07-01",
+      effectiveTo: "2026-07-01",
+      bands: [
+        { label: "0 - 50", rate: 1.84 },
+        { label: "50 - 300", rate: 2.369 },
+        { label: "300 - 600", rate: 3.3235 },
+        { label: "600 -", rate: 3.933 }
+      ]
+    },
+    {
+      kind: "water",
+      effectiveFrom: "2025-07-01",
+      effectiveTo: "2026-07-01",
+      bands: [
+        { label: "0 - 6", rate: 9.315 },
+        { label: "6 - 12", rate: 14.099 },
+        { label: "12 - 20", rate: 23.8395 },
+        { label: "20 - 25", rate: 42.4005 },
+        { label: "25 - 40", rate: 58.926 },
+        { label: "40 - 70", rate: 94.1505 }
+      ]
+    },
     // LiveMopay applied this distinct four-block set during July. Production
     // ledger transitions across several connections occur at 50/300/600 kWh,
     // establishing the band correspondence without treating the rates as the
@@ -117,6 +141,21 @@ export function getTariffProfile(key: string | null | undefined): TariffProfile 
   return TARIFF_PROFILES[key] ?? null;
 }
 
+export function findTariffLedgerRateSchedule(
+  profile: TariffProfile,
+  kind: TariffBandKind,
+  date: string
+): TariffLedgerRateSchedule | null {
+  return (
+    profile.ledgerRateSchedules.find(
+      (candidate) =>
+        candidate.kind === kind &&
+        date >= candidate.effectiveFrom &&
+        (!candidate.effectiveTo || date < candidate.effectiveTo)
+    ) ?? null
+  );
+}
+
 const RATE_EPSILON = 0.0001;
 const EXPLICIT_BAND_RE = /^(Energy Charge|Water):\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)?\s*$/i;
 
@@ -149,12 +188,7 @@ export function resolveTariffBand(input: TariffBandResolutionInput): string | nu
   const date = input.periodDate.slice(0, 10);
   if (!profile || !Number.isFinite(tariff) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
 
-  const schedule = profile.ledgerRateSchedules.find(
-    (candidate) =>
-      candidate.kind === input.kind &&
-      date >= candidate.effectiveFrom &&
-      (!candidate.effectiveTo || date < candidate.effectiveTo)
-  );
+  const schedule = findTariffLedgerRateSchedule(profile, input.kind, date);
   if (!schedule) return null;
 
   const matches = schedule.bands.filter(({ rate }) => Math.abs(rate - tariff) <= RATE_EPSILON);

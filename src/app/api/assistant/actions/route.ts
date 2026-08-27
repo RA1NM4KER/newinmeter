@@ -36,7 +36,8 @@ import {
   reportConnectionSyncSuccess
 } from "@/lib/diagnostics/operations";
 import { TokenDecryptionError } from "@/lib/token-encryption";
-import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
+import { enforceRateLimit, getRateLimitIdentifier, limitUserRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { demoCapabilityBlocked } from "@/lib/demo/capabilities";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -122,9 +123,6 @@ async function handleAddActivity(session: AuthenticatedConnectionSession, body: 
   if (!(await hasFeatureAccess(session.userId, "activities"))) {
     return NextResponse.json({ message: "Activities is not enabled for your account." }, { status: 403 });
   }
-  if (session.connection.isDemo) {
-    return demoReadOnlyError();
-  }
 
   const input: ActivityInput = {
     date: body.date,
@@ -165,9 +163,6 @@ async function handleUpdateActivity(
   if (!(await hasFeatureAccess(session.userId, "activities"))) {
     return NextResponse.json({ message: "Activities is not enabled for your account." }, { status: 403 });
   }
-  if (session.connection.isDemo) {
-    return demoReadOnlyError();
-  }
 
   const updates: ActivityInput = {
     date: body.date,
@@ -203,9 +198,6 @@ async function handleDeleteActivity(
   if (!(await hasFeatureAccess(session.userId, "activities"))) {
     return NextResponse.json({ message: "Activities is not enabled for your account." }, { status: 403 });
   }
-  if (session.connection.isDemo) {
-    return demoReadOnlyError();
-  }
 
   try {
     // Same RLS ownership boundary as update -- null means not found OR not
@@ -231,6 +223,7 @@ async function handleAlertMutation(
     | z.infer<typeof updateAlertSchema>
     | (z.infer<typeof disableAlertSchema> & { threshold?: null; alsoEnableAutoSync?: undefined })
 ) {
+  if (demoCapabilityBlocked(session.connection.isDemo, "alertMutation")) return demoReadOnlyError();
   if (!(await hasFeatureAccess(session.userId, "alerts"))) {
     return NextResponse.json({ message: "Alerts are disabled for your account." }, { status: 403 });
   }
@@ -292,6 +285,8 @@ async function handleSync(session: AuthenticatedConnectionSession) {
   // server function call with no cookie-forwarding fragility. All of the
   // actual sync logic is the same shared runLivemopaySync/evaluateAlertsAfterSync
   // domain functions the real route calls -- nothing here reimplements sync.
+  const syncRate = await limitUserRequest(session.userId, "sync", "sync");
+  if (syncRate.response) return syncRate.response;
   const connectionRow = await getConnectionRowForUser(session.userId);
 
   if (

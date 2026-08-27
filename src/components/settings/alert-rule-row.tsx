@@ -8,6 +8,7 @@ import { hasDismissedDeviceNotifications, markDeviceNotificationsDismissed } fro
 import { dismissInstallPromo, isInstallPromoCoolingDown } from "@/lib/pwa-install-prompt";
 import { useDeviceNotifications } from "@/components/layout/push-notification-provider";
 import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
+import { demoCapability } from "@/lib/demo/capabilities";
 
 type AlertRuleRowProps = {
   type: AlertType;
@@ -272,8 +273,12 @@ export function AlertRuleRow({
       <div className="flex items-center gap-4 border-t border-line px-4 py-4 first:border-t-0 sm:px-5">
         <div className="min-w-0 flex-1">
           <p className="text-[0.9375rem] font-medium text-ink">{title}</p>
-          <p className="mt-0.5 text-[0.8125rem] text-muted">Not available for the shared demo account.</p>
+          <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">{description}</p>
+          <p className="mt-1 text-[0.75rem] text-muted">
+            {enabled ? "Demo preset enabled" : "Demo preset off"} · {demoCapability("alertMutation").reason}
+          </p>
         </div>
+        <Toggle checked={enabled} disabled onChange={() => undefined} label={title} />
       </div>
     );
   }

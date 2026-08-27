@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isValidDemoAccessToken } from "@/lib/demo/access-token";
 import { getNewinmeterDemoEmail } from "@/lib/env";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
-import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
+import { enforceRateLimit, getRateLimitIdentifier, getTrustedRequestIp, rateLimitHeaders } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +18,6 @@ const demoLoginSchema = z.object({ token: z.string().min(1).max(512) });
 // a demo account exists at all.
 function denied(headers: HeadersInit) {
   return NextResponse.json({ message: "Invalid or missing demo access." }, { status: 401, headers });
-}
-
-function requestIp(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || "unknown";
 }
 
 // One-click recruiter demo sign-in. Never accepts an email/target user from
@@ -51,7 +46,7 @@ function requestIp(request: Request) {
 //      case, and it produces a completely normal session via the ordinary
 //      client, not a bespoke one.)
 export async function POST(request: Request) {
-  const identifier = getRateLimitIdentifier(requestIp(request), "demo-login");
+  const identifier = getRateLimitIdentifier(getTrustedRequestIp(request), "demo-login");
   const rateLimit = await enforceRateLimit(identifier, "demoLogin");
   const rateHeaders = rateLimitHeaders(rateLimit);
 

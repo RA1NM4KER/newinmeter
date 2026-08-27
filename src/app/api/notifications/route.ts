@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { getRecentNotifications, hasAnyEnabledAlertRule } from "@/lib/newinmeter/alerts";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,10 +16,12 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ message: "Authentication required." }, { status: 401 });
   }
+  const rate = await limitUserRequest(session.userId, "notifications-read");
+  if (rate.response) return rate.response;
 
   const [notifications, hasEnabledAlerts] = await Promise.all([
     getRecentNotifications(session.userId),
     hasAnyEnabledAlertRule(session.userId)
   ]);
-  return NextResponse.json({ notifications, hasEnabledAlerts });
+  return NextResponse.json({ notifications, hasEnabledAlerts }, { headers: rate.headers });
 }

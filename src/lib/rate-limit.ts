@@ -2,8 +2,9 @@ import "server-only";
 
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { NextResponse } from "next/server";
 
-const RATE_LIMIT_POLICIES = {
+export const RATE_LIMIT_POLICIES = {
   default: {
     minuteLimit: 60,
     dayLimit: 1000
@@ -20,6 +21,23 @@ const RATE_LIMIT_POLICIES = {
   assistantAction: {
     minuteLimit: 10,
     dayLimit: 50
+  },
+  // Manual sync performs an authenticated LiveMopay refresh and database
+  // rollup. Normal use is a few deliberate clicks, never a polling loop.
+  sync: {
+    minuteLimit: 3,
+    dayLimit: 20
+  },
+  // Connect/reconnect/account-selection calls reach LiveMopay or mutate
+  // connection state. Kept separate from assistant questions.
+  external: {
+    minuteLimit: 10,
+    dayLimit: 100
+  },
+  // Exports can scan and serialize a user's full selected range.
+  export: {
+    minuteLimit: 10,
+    dayLimit: 100
   },
   // Physical meter devices upload small batches roughly every 5 seconds
   // (~12 req/min, ~17,280 req/day), so the default 1,000/day user policy would
@@ -124,6 +142,16 @@ export function getRateLimitIdentifier(userId: string, scope?: string) {
   return scope ? `${userId}:${scope}` : userId;
 }
 
+export function getTrustedRequestIp(request: Request): string {
+  // Vercel documents x-vercel-forwarded-for as its platform-generated copy
+  // of the client IP. Only trust it when actually running on Vercel; local
+  // callers can forge arbitrary forwarding headers and therefore share one
+  // explicit development bucket instead.
+  if (process.env.VERCEL !== "1") return "local";
+  const forwarded = request.headers.get("x-vercel-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || "unknown";
+}
+
 export async function enforceRateLimit(
   identifier: string,
   policyName: RateLimitPolicyName = "default"
@@ -153,12 +181,36 @@ export async function enforceRateLimit(
 }
 
 export function rateLimitHeaders(result: RateLimitResult) {
-  return {
+  const headers: Record<string, string> = {
     "X-RateLimit-Limit-Minute": String(result.minute.limit),
     "X-RateLimit-Remaining-Minute": String(result.minute.remaining),
     "X-RateLimit-Reset-Minute": String(result.minute.reset),
     "X-RateLimit-Limit-Day": String(result.day.limit),
     "X-RateLimit-Remaining-Day": String(result.day.remaining),
     "X-RateLimit-Reset-Day": String(result.day.reset)
+  };
+  if (!result.allowed) {
+    const blockedResets = [result.minute, result.day].filter((state) => !state.success).map((state) => state.reset);
+    headers["Retry-After"] = String(Math.max(1, Math.max(...blockedResets) - Math.floor(Date.now() / 1000)));
+  }
+  return headers;
+}
+
+export async function limitUserRequest(
+  userId: string,
+  scope: string,
+  policy: RateLimitPolicyName = "default"
+) {
+  const result = await enforceRateLimit(getRateLimitIdentifier(userId, scope), policy);
+  const headers = rateLimitHeaders(result);
+  return {
+    allowed: result.allowed,
+    headers,
+    response: result.allowed
+      ? null
+      : NextResponse.json(
+          { message: "Rate limit exceeded. Please try again later." },
+          { status: 429, headers }
+        )
   };
 }

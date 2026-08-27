@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { disableFreshDataAlertRules } from "@/lib/newinmeter/alerts";
 import { DemoAccountProtectedError, setAutoSyncEnabled } from "@/lib/newinmeter/connection";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ message: "Authentication required." }, { status: 401 });
   }
+  const rate = await limitUserRequest(session.userId, "auto-sync", "external");
+  if (rate.response) return rate.response;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -35,11 +38,14 @@ export async function POST(request: Request) {
     // the only warning.
     const disabledAlertTypes = parsed.data.enabled ? [] : await disableFreshDataAlertRules(connection.id);
 
-    return NextResponse.json({
-      autoSyncEnabled: connection.autoSyncEnabled,
-      nextSyncAt: connection.nextSyncAt,
-      disabledAlertTypes
-    });
+    return NextResponse.json(
+      {
+        autoSyncEnabled: connection.autoSyncEnabled,
+        nextSyncAt: connection.nextSyncAt,
+        disabledAlertTypes
+      },
+      { headers: rate.headers }
+    );
   } catch (error) {
     if (error instanceof DemoAccountProtectedError) {
       return NextResponse.json(

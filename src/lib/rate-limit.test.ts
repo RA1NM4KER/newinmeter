@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
+import { describe, expect, it, vi } from "vitest";
+import {
+  getRateLimitIdentifier,
+  getTrustedRequestIp,
+  RATE_LIMIT_POLICIES,
+  rateLimitHeaders
+} from "@/lib/rate-limit";
 
 describe("getRateLimitIdentifier", () => {
   it("uses the user id alone when there's no scope", () => {
@@ -21,6 +26,27 @@ describe("getRateLimitIdentifier", () => {
   });
 });
 
+describe("getTrustedRequestIp", () => {
+  it("only trusts Vercel's platform header in production", () => {
+    vi.stubEnv("VERCEL", "1");
+    const request = new Request("https://example.test", {
+      headers: {
+        "x-forwarded-for": "spoofed",
+        "x-vercel-forwarded-for": "203.0.113.9"
+      }
+    });
+    expect(getTrustedRequestIp(request)).toBe("203.0.113.9");
+    vi.unstubAllEnvs();
+  });
+
+  it("ignores forwarding headers outside Vercel", () => {
+    vi.stubEnv("VERCEL", "");
+    const request = new Request("http://localhost", { headers: { "x-forwarded-for": "spoofed" } });
+    expect(getTrustedRequestIp(request)).toBe("local");
+    vi.unstubAllEnvs();
+  });
+});
+
 describe("rateLimitHeaders", () => {
   it("maps the result onto the expected X-RateLimit-* header names", () => {
     const headers = rateLimitHeaders({
@@ -37,5 +63,24 @@ describe("rateLimitHeaders", () => {
       "X-RateLimit-Remaining-Day": "20",
       "X-RateLimit-Reset-Day": "2000"
     });
+  });
+
+  it("adds Retry-After only to blocked responses", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const headers = rateLimitHeaders({
+      allowed: false,
+      minute: { success: false, limit: 3, remaining: 0, reset: 1060 },
+      day: { success: true, limit: 20, remaining: 10, reset: 90000 }
+    });
+    expect(headers["Retry-After"]).toBe("60");
+    now.mockRestore();
+  });
+});
+
+describe("specialized policies", () => {
+  it("keeps sync and exports intentionally tighter than ordinary reads", () => {
+    expect(RATE_LIMIT_POLICIES.sync).toEqual({ minuteLimit: 3, dayLimit: 20 });
+    expect(RATE_LIMIT_POLICIES.export).toEqual({ minuteLimit: 10, dayLimit: 100 });
+    expect(RATE_LIMIT_POLICIES.sync.dayLimit).toBeLessThan(RATE_LIMIT_POLICIES.default.dayLimit);
   });
 });

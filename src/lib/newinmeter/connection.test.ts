@@ -36,6 +36,7 @@ import {
   DemoAccountProtectedError,
   deleteAccountForUser,
   disconnectLivemopayConnection,
+  finalizeLivemopayAccountSelection,
   listConnectionsForStaleCheck,
   markAutoSyncFailure,
   markAutoSyncSuccess,
@@ -113,6 +114,16 @@ describe("newinmeter-connection demo protections", () => {
         candidates: [{ accountId: "a", companyId: "b", propertyId: "c", label: "Real" }]
       })
     ).rejects.toBeInstanceOf(DemoAccountProtectedError);
+    expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
+  });
+
+  it("refuses to select a LiveMopay account for a demo connection", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([
+      { ...demoRow, status: "pending_selection", pending_accounts: [{ accountId: "a" }] }
+    ]);
+    await expect(finalizeLivemopayAccountSelection("user-demo", 0)).rejects.toBeInstanceOf(
+      DemoAccountProtectedError
+    );
     expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
   });
 

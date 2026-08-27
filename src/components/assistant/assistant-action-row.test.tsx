@@ -408,7 +408,7 @@ describe("AssistantActionRow -- add_activity", () => {
 });
 
 describe("AssistantActionRow -- gating", () => {
-  it("hides every mutating action for the demo account, but keeps navigate actions", () => {
+  it("hides blocked external actions for the demo account, but keeps navigate actions", () => {
     renderActions(
       [
         {
@@ -423,7 +423,7 @@ describe("AssistantActionRow -- gating", () => {
 
     expect(screen.queryByRole("button", { name: "View raw data" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
-    expect(screen.queryByText("Demo account is read-only.")).not.toBeNull();
+    expect(screen.queryByText("External and alert-setting actions are fixed in the shared demo.")).not.toBeNull();
   });
 
   it("open_day_detail stays available in the demo account and does NOT trigger the 'read-only' disclaimer -- it's a view action, not a mutation", () => {

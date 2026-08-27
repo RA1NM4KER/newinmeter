@@ -422,6 +422,18 @@ describe("createAnalytics daily projections", () => {
 });
 
 describe("createAnalytics insights", () => {
+  it("counts actual material tariff transitions rather than daily observations", () => {
+    const rows = [
+      dailyRow({ periodDate: "2026-07-01", energyKwh: 10, weightedTariff: 2.38, peakTariff: 2.38 }),
+      dailyRow({ periodDate: "2026-07-02", energyKwh: 10, weightedTariff: 2.381, peakTariff: 2.38 }),
+      dailyRow({ periodDate: "2026-07-03", energyKwh: 10, weightedTariff: 3.05, peakTariff: 3.05 })
+    ];
+    const { insights } = createAnalytics(rows, []);
+    expect(insights.find((insight) => insight.title === "Tariff movement")?.body).toContain(
+      "1 material tariff change appears"
+    );
+  });
+
   it("includes a fixed-charges insight when fixed spend is present", () => {
     const { insights } = createAnalytics(dailyRows, hourlyRows);
     expect(insights.some((insight) => insight.title === "Fixed charges")).toBe(true);

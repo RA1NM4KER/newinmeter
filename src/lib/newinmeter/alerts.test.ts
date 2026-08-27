@@ -1049,7 +1049,7 @@ describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-sc
 
   it("projects month-end spend from month-to-date + recent daily rate, and notifies once when over budget", async () => {
     routeFetchV2({
-      rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 1500 })],
+      rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 500 })],
       balance: 1000,
       rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130])
     });
@@ -1072,7 +1072,7 @@ describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-sc
 
   it("a repeated sync the same month is deduped by the (rule, month) unique index, not a second push", async () => {
     routeFetchV2({
-      rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 1500 })],
+      rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 500 })],
       balance: 1000,
       rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130])
     });

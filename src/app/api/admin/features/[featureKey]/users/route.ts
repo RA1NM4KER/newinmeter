@@ -3,6 +3,7 @@ import { requireAdminSession } from "@/lib/auth/session";
 import { listFeatureOverrides } from "@/lib/features";
 import { isFeatureKey } from "@/lib/newinmeter/features-shared";
 import { listAllAuthUsers } from "@/lib/user-roles";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +19,8 @@ export async function GET(_request: Request, { params }: { params: { featureKey:
       { status: auth.status }
     );
   }
+  const rate = await limitUserRequest(auth.session.userId, "admin-feature-users");
+  if (rate.response) return rate.response;
 
   if (!isFeatureKey(params.featureKey)) {
     return NextResponse.json({ message: "Unknown feature." }, { status: 404 });
@@ -34,5 +37,5 @@ export async function GET(_request: Request, { params }: { params: { featureKey:
     }))
     .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
 
-  return NextResponse.json({ users: rows });
+  return NextResponse.json({ users: rows }, { headers: rate.headers });
 }

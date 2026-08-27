@@ -237,7 +237,7 @@ export function AppShell({
       {userId && !isAdmin && !isDemo ? <ForegroundActivityTracker userId={userId} /> : null}
       <DayDetailProvider activitiesEnabled={isActivitiesEnabled}>
         <NotificationProvider initialUnreadCount={initialUnreadNotificationCount}>
-          <PushNotificationProvider>
+          <PushNotificationProvider isDemo={isDemo}>
             {/* lockViewport pages keep the original fixed-height, internally-
         scrolling shell (nothing here may scroll except the nested region
         those pages manage themselves) -- sized with 100dvh (the *actual*

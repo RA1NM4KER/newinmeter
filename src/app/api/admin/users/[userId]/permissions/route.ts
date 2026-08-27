@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
 import { setUserFeatureOverride } from "@/lib/features";
 import { FEATURE_KEYS } from "@/lib/newinmeter/features-shared";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,6 +32,8 @@ export async function PATCH(request: Request, { params }: { params: { userId: st
       { status: auth.status }
     );
   }
+  const rate = await limitUserRequest(auth.session.userId, "admin-user-permissions");
+  if (rate.response) return rate.response;
 
   const body = bodySchema.parse(await request.json());
 
@@ -41,5 +44,5 @@ export async function PATCH(request: Request, { params }: { params: { userId: st
     }
   }
 
-  return NextResponse.json({ status: "updated" });
+  return NextResponse.json({ status: "updated" }, { headers: rate.headers });
 }

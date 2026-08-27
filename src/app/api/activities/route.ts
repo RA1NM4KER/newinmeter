@@ -22,10 +22,6 @@ function authError(status: 401 | 403 | 409) {
   );
 }
 
-function demoReadOnlyError() {
-  return NextResponse.json({ message: "Demo data is read-only.", demoAccount: true }, { status: 403 });
-}
-
 async function limitedSession(scope: string) {
   const auth = await requireActivitiesSession();
   if (!auth.ok) return { ok: false as const, response: authError(auth.status) };
@@ -65,7 +61,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await limitedSession("activities-write");
   if (!access.ok) return access.response;
-  if (access.session.connection.isDemo) return demoReadOnlyError();
   try {
     const body = (await request.json()) as Partial<ActivityInput>;
     const input: ActivityInput = {

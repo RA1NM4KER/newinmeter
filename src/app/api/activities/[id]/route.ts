@@ -34,10 +34,6 @@ async function authorize(scope: string) {
   return { ok: true as const, session: auth.session, headers };
 }
 
-function demoReadOnlyError() {
-  return NextResponse.json({ message: "Demo data is read-only.", demoAccount: true }, { status: 403 });
-}
-
 function parseUpdates(body: Record<string, unknown>): Partial<ActivityInput> {
   const updates: Partial<ActivityInput> = {};
   if (typeof body.date === "string") updates.date = body.date;
@@ -53,7 +49,6 @@ function parseUpdates(body: Record<string, unknown>): Partial<ActivityInput> {
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const access = await authorize("activities-write");
   if (!access.ok) return access.response;
-  if (access.session.connection.isDemo) return demoReadOnlyError();
   try {
     const activity = await updateActivity(
       access.session.accessToken,
@@ -83,7 +78,6 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
   const access = await authorize("activities-write");
   if (!access.ok) return access.response;
-  if (access.session.connection.isDemo) return demoReadOnlyError();
   try {
     const activity = await deleteActivity(access.session.accessToken, params.id);
     if (!activity)

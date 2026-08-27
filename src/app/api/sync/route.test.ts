@@ -12,11 +12,13 @@ const mocks = vi.hoisted(() => ({
   evaluateAlertsAfterSync: vi.fn(),
   reportSuccess: vi.fn(),
   reportFailure: vi.fn(),
-  reportReauth: vi.fn()
+  reportReauth: vi.fn(),
+  limitUserRequest: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireConnectedSession }));
 vi.mock("@/lib/dashboard-data", () => ({ loadDashboardSummary: mocks.loadDashboardSummary }));
+vi.mock("@/lib/rate-limit", () => ({ limitUserRequest: mocks.limitUserRequest }));
 vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateAlertsAfterSync: mocks.evaluateAlertsAfterSync }));
 vi.mock("@/lib/diagnostics/operations", () => ({
   reportConnectionSyncSuccess: mocks.reportSuccess,
@@ -62,6 +64,7 @@ describe("POST /api/sync", () => {
     mocks.reportSuccess.mockResolvedValue(undefined);
     mocks.reportFailure.mockResolvedValue(undefined);
     mocks.reportReauth.mockResolvedValue(undefined);
+    mocks.limitUserRequest.mockResolvedValue({ allowed: true, headers: {}, response: null });
   });
 
   it("never decrypts a token or calls runLivemopaySync for a demo connection", async () => {
@@ -108,5 +111,20 @@ describe("POST /api/sync", () => {
     const response = await POST(request());
     expect(response.status).toBe(409);
     expect(mocks.getConnectionRowForUser).not.toHaveBeenCalled();
+  });
+
+  it("uses the dedicated sync policy and returns a consistent 429 before LiveMopay work", async () => {
+    mocks.limitUserRequest.mockResolvedValue({
+      allowed: false,
+      headers: { "Retry-After": "60" },
+      response: Response.json({ message: "Rate limit exceeded. Please try again later." }, { status: 429 })
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(mocks.limitUserRequest).toHaveBeenCalledWith("user-a", "sync", "sync");
+    expect(mocks.getConnectionRowForUser).not.toHaveBeenCalled();
+    expect(mocks.runLivemopaySync).not.toHaveBeenCalled();
   });
 });

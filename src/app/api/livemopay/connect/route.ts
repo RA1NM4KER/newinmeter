@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   const identifier = getRateLimitIdentifier(session.userId, "livemopay-connect");
-  const rateLimit = await enforceRateLimit(identifier, "assistant");
+  const rateLimit = await enforceRateLimit(identifier, "external");
   const rateHeaders = rateLimitHeaders(rateLimit);
 
   if (!rateLimit.allowed) {

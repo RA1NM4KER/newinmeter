@@ -86,7 +86,7 @@ function TableSkeletonRows({ columnCount, rowCount }: { columnCount: number; row
   );
 }
 
-export function DataTable() {
+export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
   const {
     from,
     to,
@@ -369,7 +369,7 @@ export function DataTable() {
         onDateChange={onDateChange}
         onQuickRange={handleQuickRangeChange}
         loading={isDatePending}
-        leftControls={<DataSyncAction lastSyncedAt={data?.sync.lastSyncedAt} loading={isLoading} />}
+        leftControls={<DataSyncAction isDemo={isDemo} lastSyncedAt={data?.sync.lastSyncedAt} loading={isLoading} />}
         extraControls={chargeTypeFilterControl}
         rightControls={
           <div className="flex items-center gap-2">

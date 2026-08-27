@@ -117,10 +117,15 @@ describe("activities API", () => {
     expect(response.status).toBe(201);
   });
 
-  it("blocks activity creation for the shared demo connection", async () => {
+  it("allows demo-local activity creation so the walkthrough stays interactive", async () => {
     mocks.requireActivitiesSession.mockResolvedValue({
       ok: true,
       session: { ...session, connection: { id: "connection-a", isDemo: true } }
+    });
+    mocks.createActivity.mockResolvedValue({
+      id: "demo-activity",
+      startsAt: "2026-08-04T00:00:00",
+      endsAt: "2026-08-05T00:00:00"
     });
     const response = await POST(
       new Request("http://localhost/api/activities", {
@@ -128,9 +133,8 @@ describe("activities API", () => {
         body: JSON.stringify({ date: "2026-08-04", allDay: true, tags: ["Guests"] })
       })
     );
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({ demoAccount: true });
-    expect(mocks.createActivity).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mocks.createActivity).toHaveBeenCalledWith("token", "connection-a", expect.any(Object));
   });
 
   it("returns field validation failures as 400", async () => {

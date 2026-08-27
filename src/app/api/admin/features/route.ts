@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth/session";
 import { getFeatureRolloutSummaries, toFeatureSummaryPayload } from "@/lib/features";
 import { listAllAuthUsers } from "@/lib/user-roles";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,9 +17,11 @@ export async function GET() {
       { status: auth.status }
     );
   }
+  const rate = await limitUserRequest(auth.session.userId, "admin-features");
+  if (rate.response) return rate.response;
 
   const users = await listAllAuthUsers();
   const summaries = await getFeatureRolloutSummaries(users.map((user) => user.userId));
 
-  return NextResponse.json({ features: toFeatureSummaryPayload(summaries) });
+  return NextResponse.json({ features: toFeatureSummaryPayload(summaries) }, { headers: rate.headers });
 }

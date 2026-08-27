@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/session";
 import { hasFeatureAccess } from "@/lib/features";
 import { getAlertRulesForUser } from "@/lib/newinmeter/alerts";
+import { limitUserRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,11 +15,13 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ message: "Authentication required." }, { status: 401 });
   }
+  const rate = await limitUserRequest(session.userId, "alerts-read");
+  if (rate.response) return rate.response;
 
   if (!(await hasFeatureAccess(session.userId, "alerts"))) {
     return NextResponse.json({ message: "Alerts are disabled for your account." }, { status: 403 });
   }
 
   const rules = await getAlertRulesForUser(session.userId);
-  return NextResponse.json({ rules });
+  return NextResponse.json({ rules }, { headers: rate.headers });
 }

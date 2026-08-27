@@ -225,6 +225,10 @@ export async function beginLivemopayConnection(params: BeginConnectionParams): P
 export async function finalizeLivemopayAccountSelection(userId: string, index: number): Promise<LivemopayConnection> {
   const row = await getConnectionRowForUser(userId);
 
+  if (row?.is_demo) {
+    throw new DemoAccountProtectedError("selecting a LiveMopay account");
+  }
+
   if (!row || row.status !== "pending_selection" || !row.pending_accounts) {
     throw new Error("No pending LiveMopay account selection for this user.");
   }

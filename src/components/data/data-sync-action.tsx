@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { SyncButton } from "@/components/ui/sync-button";
+import { demoCapability } from "@/lib/demo/capabilities";
 import { isSyncStale } from "@/lib/sync-status";
 
 type DataSyncActionProps = {
@@ -11,9 +12,10 @@ type DataSyncActionProps = {
   // data yet) -- distinct from lastSyncedAt genuinely being null/undefined
   // because a connected account has never run a sync, which should nudge.
   loading?: boolean;
+  isDemo?: boolean;
 };
 
-export function DataSyncAction({ iconOnly = false, lastSyncedAt, loading = false }: DataSyncActionProps) {
+export function DataSyncAction({ iconOnly = false, lastSyncedAt, loading = false, isDemo = false }: DataSyncActionProps) {
   const handleSyncSuccess = async () => {
     window.location.reload();
   };
@@ -58,10 +60,12 @@ export function DataSyncAction({ iconOnly = false, lastSyncedAt, loading = false
   // the bar's dark teal background -- no other caller in this codebase.
   return (
     <SyncButton
+      disabled={isDemo}
+      disabledReason={isDemo ? demoCapability("sync").reason : undefined}
       iconOnly={iconOnly}
       onSuccess={handleSyncSuccess}
       tone="dark"
-      showNudge={!loading && isSyncStale(lastSyncedAt)}
+      showNudge={!isDemo && !loading && isSyncStale(lastSyncedAt)}
     />
   );
 }

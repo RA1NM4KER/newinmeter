@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconTile, SettingsGroup, SettingsRow } from "@/components/ui/settings";
+import { demoCapability } from "@/lib/demo/capabilities";
 
 const confirmPhrase = "DELETE";
 
@@ -43,7 +44,7 @@ export function DeleteAccountCard({ isDemo = false }: { isDemo?: boolean }) {
             </IconTile>
           }
           title="Delete account"
-          description="This is a shared demo account. Deletion is disabled so every reviewer sees the same dataset."
+          description={demoCapability("accountDeletion").reason}
         />
       </SettingsGroup>
     );

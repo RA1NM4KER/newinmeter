@@ -177,9 +177,12 @@ describe("seeded demo data through the real analytics/assistant path", () => {
     // The spike is deliberately two half-hour intervals, not a whole elevated
     // day (that's what the separate "high usage days" are for) -- so the
     // signal to check is the spike hour's rollup, not the day's total kwh.
-    const spikeHour = analytics.hourly.filter((point) => point.hour === "13:00");
-    const spikeDayHourly = hourly.find((row) => row.periodDate === dataset.meta.spikeDate && row.hour === 13);
-    const otherHourlyAtSameHour = hourly.filter((row) => row.hour === 13 && row.periodDate !== dataset.meta.spikeDate);
+    const spikeDayHours = hourly.filter((row) => row.periodDate === dataset.meta.spikeDate);
+    const spikeDayHourly = spikeDayHours.reduce((highest, row) => (row.kwh > highest.kwh ? row : highest));
+    const spikeHour = analytics.hourly.filter((point) => point.hour === `${String(spikeDayHourly.hour).padStart(2, "0")}:00`);
+    const otherHourlyAtSameHour = hourly.filter(
+      (row) => row.hour === spikeDayHourly.hour && row.periodDate !== dataset.meta.spikeDate
+    );
     const averageOtherKwh = otherHourlyAtSameHour.reduce((sum, row) => sum + row.kwh, 0) / otherHourlyAtSameHour.length;
 
     expect(spikeHour.length).toBeGreaterThan(0);

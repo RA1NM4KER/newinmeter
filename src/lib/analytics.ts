@@ -379,6 +379,9 @@ function buildInsights(
   const trend = previousTrend(daily);
   const highestSpendDay = maxBy(daily, (day) => day.spend);
   const highestTariff = maxBy(dailyRows, (row) => row.peakTariff);
+  const tariffChangeCount = tariffTimeline.slice(1).reduce((count, point, index) => {
+    return count + (Math.abs(point.tariff - tariffTimeline[index].tariff) >= 0.05 ? 1 : 0);
+  }, 0);
 
   const insights: Insight[] = [];
 
@@ -417,10 +420,10 @@ function buildInsights(
     });
   }
 
-  if (tariffTimeline.length > 1 && highestTariff) {
+  if (tariffChangeCount > 0 && highestTariff) {
     insights.push({
       title: "Tariff movement",
-      body: `${tariffTimeline.length} tariff band changes appear in range. Highest observed tariff is ${formatTariff(highestTariff.peakTariff)}.`
+      body: `${tariffChangeCount} material tariff ${tariffChangeCount === 1 ? "change appears" : "changes appear"} in range. Highest observed tariff is ${formatTariff(highestTariff.peakTariff)}.`
     });
   }
 

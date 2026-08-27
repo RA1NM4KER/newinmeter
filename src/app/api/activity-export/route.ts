@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       },
       { status: auth.status }
     );
-  const limit = await enforceRateLimit(getRateLimitIdentifier(auth.session.userId, "activity-export"));
+  const limit = await enforceRateLimit(getRateLimitIdentifier(auth.session.userId, "activity-export"), "export");
   const headers = rateLimitHeaders(limit);
   if (!limit.allowed)
     return Response.json({ message: "Rate limit exceeded. Please try again later." }, { status: 429, headers });

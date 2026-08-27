@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   requireConnectedSession: vi.fn(),
   hasFeatureAccess: vi.fn(),
   enforceRateLimit: vi.fn(),
+  limitUserRequest: vi.fn(),
   createActivity: vi.fn(),
   updateActivity: vi.fn(),
   deleteActivity: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("@/lib/auth/session", () => ({ requireConnectedSession: mocks.requireCon
 vi.mock("@/lib/features", () => ({ hasFeatureAccess: mocks.hasFeatureAccess }));
 vi.mock("@/lib/rate-limit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
+  limitUserRequest: mocks.limitUserRequest,
   getRateLimitIdentifier: (userId: string, scope: string) => `${userId}:${scope}`,
   rateLimitHeaders: () => ({})
 }));
@@ -90,6 +92,7 @@ describe("POST /api/assistant/actions", () => {
     mocks.requireConnectedSession.mockResolvedValue({ ok: true, session });
     mocks.hasFeatureAccess.mockResolvedValue(true);
     mocks.enforceRateLimit.mockResolvedValue({ allowed: true, minute: {}, day: {} });
+    mocks.limitUserRequest.mockResolvedValue({ allowed: true, headers: {}, response: null });
     mocks.markConnectionAuthError.mockResolvedValue(undefined);
     mocks.markConnectionSyncOutcome.mockResolvedValue(undefined);
     mocks.reportSuccess.mockResolvedValue(undefined);
@@ -163,16 +166,19 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.createActivity).not.toHaveBeenCalled();
     });
 
-    it("blocks the demo account, without ever calling createActivity", async () => {
+    it("allows a demo-local activity to be created", async () => {
       mocks.requireConnectedSession.mockResolvedValue({
         ok: true,
         session: { ...session, connection: { ...session.connection, isDemo: true } }
       });
+      mocks.createActivity.mockResolvedValue({
+        id: "activity-1",
+        startsAt: "2026-08-20T18:00:00",
+        endsAt: "2026-08-20T19:00:00"
+      });
       const response = await POST(activityRequest());
-      expect(response.status).toBe(403);
-      const body = await response.json();
-      expect(body.demoAccount).toBe(true);
-      expect(mocks.createActivity).not.toHaveBeenCalled();
+      expect(response.status).toBe(201);
+      expect(mocks.createActivity).toHaveBeenCalled();
     });
 
     it("creates the activity using the session's own connection id, and best-effort resolves overlapping usage_anomaly events", async () => {
@@ -260,16 +266,15 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.updateActivity).not.toHaveBeenCalled();
     });
 
-    it("blocks the demo account, without ever calling updateActivity", async () => {
+    it("allows a demo-local activity to be updated", async () => {
       mocks.requireConnectedSession.mockResolvedValue({
         ok: true,
         session: { ...session, connection: { ...session.connection, isDemo: true } }
       });
+      mocks.updateActivity.mockResolvedValue({ id: "activity-1" });
       const response = await POST(updateRequest());
-      expect(response.status).toBe(403);
-      const body = await response.json();
-      expect(body.demoAccount).toBe(true);
-      expect(mocks.updateActivity).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(mocks.updateActivity).toHaveBeenCalled();
     });
 
     it("resolves ownership via RLS (session accessToken/connection id), never a client-supplied id", async () => {
@@ -379,16 +384,15 @@ describe("POST /api/assistant/actions", () => {
       expect(mocks.deleteActivity).not.toHaveBeenCalled();
     });
 
-    it("blocks the demo account, without ever calling deleteActivity", async () => {
+    it("allows a demo-local activity to be deleted", async () => {
       mocks.requireConnectedSession.mockResolvedValue({
         ok: true,
         session: { ...session, connection: { ...session.connection, isDemo: true } }
       });
+      mocks.deleteActivity.mockResolvedValue({ id: "activity-1" });
       const response = await POST(deleteRequest());
-      expect(response.status).toBe(403);
-      const body = await response.json();
-      expect(body.demoAccount).toBe(true);
-      expect(mocks.deleteActivity).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(mocks.deleteActivity).toHaveBeenCalled();
     });
 
     it("deletes using the session's own accessToken (RLS ownership), never a client-supplied user id", async () => {
