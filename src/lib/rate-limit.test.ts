@@ -83,4 +83,14 @@ describe("specialized policies", () => {
     expect(RATE_LIMIT_POLICIES.export).toEqual({ minuteLimit: 10, dayLimit: 100 });
     expect(RATE_LIMIT_POLICIES.sync.dayLimit).toBeLessThan(RATE_LIMIT_POLICIES.default.dayLimit);
   });
+
+  it("keeps the shared demo AI bucket tighter than the real per-user assistant policy", () => {
+    expect(RATE_LIMIT_POLICIES.assistantDemo.dayLimit).toBeLessThan(RATE_LIMIT_POLICIES.assistant.dayLimit * 2);
+    expect(RATE_LIMIT_POLICIES.assistantDemo.minuteLimit).toBeLessThanOrEqual(RATE_LIMIT_POLICIES.assistant.minuteLimit);
+  });
+
+  it("keeps the pre-auth funnel tracker generous enough for one visitor's real steps but bounded", () => {
+    expect(RATE_LIMIT_POLICIES.funnelTrack.minuteLimit).toBeGreaterThan(5);
+    expect(RATE_LIMIT_POLICIES.funnelTrack.dayLimit).toBeLessThan(RATE_LIMIT_POLICIES.default.dayLimit);
+  });
 });

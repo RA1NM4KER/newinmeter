@@ -100,13 +100,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "The energy assistant is disabled for your account." }, { status: 403 });
   }
 
+  // Demo traffic shares one Supabase user id across every visitor (see
+  // src/lib/demo/capabilities.ts), so this bucket is already a single
+  // shared allowance for ALL demo sessions combined, not per-visitor. Using
+  // the tighter "assistantDemo" policy bounds AI cost from a link that has
+  // no signup gate; real users keep the normal per-user "assistant" policy.
+  const isDemo = auth.session.connection.isDemo;
   const identifier = getRateLimitIdentifier(auth.session.userId, "assistant");
-  const rateLimit = await enforceRateLimit(identifier, "assistant");
+  const rateLimit = await enforceRateLimit(identifier, isDemo ? "assistantDemo" : "assistant");
   const rateHeaders = rateLimitHeaders(rateLimit);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { message: "Rate limit exceeded. Please try again later." },
+      {
+        message: isDemo
+          ? "The shared demo has reached today's AI question allowance. It resets tomorrow -- or connect your own LiveMopay account for unlimited use."
+          : "Rate limit exceeded. Please try again later."
+      },
       { status: 429, headers: rateHeaders }
     );
   }

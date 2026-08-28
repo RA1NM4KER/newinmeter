@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   signInWithOtp: vi.fn(),
   signInWithOAuth: vi.fn(),
-  verifyOtp: vi.fn()
+  verifyOtp: vi.fn(),
+  trackFunnelEvent: vi.fn()
 }));
 
 vi.mock("@/lib/supabase/browser-client", () => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/supabase/browser-client", () => ({
     auth: { signInWithOtp: mocks.signInWithOtp, signInWithOAuth: mocks.signInWithOAuth, verifyOtp: mocks.verifyOtp }
   })
 }));
+vi.mock("@/lib/funnel-client", () => ({ trackFunnelEvent: mocks.trackFunnelEvent }));
 
 import { LoginForm } from "./login-form";
 
@@ -46,15 +48,14 @@ describe("LoginForm", () => {
     );
   });
 
-  it("does not show the demo option when no demo token is supplied", () => {
+  it("always shows the Explore demo option, with no token needed", () => {
     render(<LoginForm />);
-    expect(screen.queryByText("Explore demo account")).toBeNull();
+    expect(screen.queryByText("Explore demo")).not.toBeNull();
   });
 
-  it("shows the demo option only when a (server-validated) demo token is supplied", () => {
+  it("also shows it when a (server-validated) recruiter demo token is supplied", () => {
     render(<LoginForm demoToken="server-validated-token" />);
-    expect(screen.queryByText("Explore demo account")).not.toBeNull();
-    expect(screen.queryByText("View NewinMeter with synthetic data")).not.toBeNull();
+    expect(screen.queryByText("Explore demo")).not.toBeNull();
   });
 
   it("keeps Google OAuth sign-in unchanged", async () => {
@@ -68,9 +69,25 @@ describe("LoginForm", () => {
     });
   });
 
-  it("posts only the demo token (never an email) to /api/demo-login when clicked", async () => {
+  it("tracks sign_in_started when Google is clicked", async () => {
+    render(<LoginForm />);
+    fireEvent.click(screen.getByText("Continue with Google"));
+    await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_started"));
+  });
+
+  it("posts no token to /api/demo-login for the public button (no demoToken prop)", async () => {
+    render(<LoginForm />);
+    fireEvent.click(screen.getByText("Explore demo"));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe("/api/demo-login");
+    expect(JSON.parse(init.body)).toEqual({});
+  });
+
+  it("posts only the demo token (never an email) to /api/demo-login when a recruiter token is present", async () => {
     render(<LoginForm demoToken="server-validated-token" />);
-    fireEvent.click(screen.getByText("Explore demo account"));
+    fireEvent.click(screen.getByText("Explore demo"));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -80,7 +97,7 @@ describe("LoginForm", () => {
 
   it("redeems the server-generated token_hash with the normal browser client's verifyOtp (demo login unchanged)", async () => {
     render(<LoginForm demoToken="server-validated-token" />);
-    fireEvent.click(screen.getByText("Explore demo account"));
+    fireEvent.click(screen.getByText("Explore demo"));
 
     await waitFor(() => expect(mocks.verifyOtp).toHaveBeenCalledTimes(1));
     expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: "hashed-token-abc", type: "magiclink" });
@@ -95,7 +112,7 @@ describe("LoginForm", () => {
       })
     );
     render(<LoginForm demoToken="server-validated-token" />);
-    fireEvent.click(screen.getByText("Explore demo account"));
+    fireEvent.click(screen.getByText("Explore demo"));
 
     expect(await screen.findByText("Invalid or missing demo access.")).not.toBeNull();
   });
@@ -121,7 +138,7 @@ describe("LoginForm", () => {
     it("hides the demo option once on the code-entry step", async () => {
       render(<LoginForm demoToken="server-validated-token" />);
       await sendCode();
-      expect(screen.queryByText("Explore demo account")).toBeNull();
+      expect(screen.queryByText("Explore demo")).toBeNull();
     });
 
     it("shows a useful error and stays on the email step when the send fails", async () => {
@@ -189,6 +206,22 @@ describe("LoginForm", () => {
       enterCode("123456");
 
       await waitFor(() => expect(window.location.href).toBe("/"));
+
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    });
+
+    it("tracks sign_in_completed on successful code verification", async () => {
+      const originalLocation = window.location;
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: { ...originalLocation, href: "" }
+      });
+
+      render(<LoginForm />);
+      await sendCode();
+      enterCode("123456");
+
+      await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_completed"));
 
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     });

@@ -35,7 +35,17 @@ export const getAuthenticatedSession = cache(async (): Promise<AuthenticatedSess
   // before and after that migration (see supabase.com/docs/guides/auth/signing-keys).
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(session.access_token);
 
-  if (claimsError || !claimsData) {
+  if (claimsError) {
+    // Distinct from the ordinary "no session cookie at all" case above (not
+    // logged -- that's just an anonymous visit) -- this means a session
+    // cookie existed but failed verification (expired past its refresh
+    // window, JWKS/Auth upstream trouble, malformed token). Message only,
+    // never the token/claims themselves.
+    console.warn("auth_session_claims_failed", { message: claimsError.message });
+    return null;
+  }
+
+  if (!claimsData) {
     return null;
   }
 

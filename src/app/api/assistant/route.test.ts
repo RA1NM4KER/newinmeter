@@ -248,4 +248,35 @@ describe("POST /api/assistant", () => {
     const response = await POST(request({ question: "Q", history: longHistory }));
     expect(response.status).toBe(400);
   });
+
+  describe("shared demo account", () => {
+    const demoSession = { userId: "demo-user", accessToken: "token", connection: { id: "demo-conn", isDemo: true } };
+
+    it("uses the tighter, shared assistantDemo rate-limit policy instead of the per-user default", async () => {
+      mocks.requireConnectedSession.mockResolvedValue({ ok: true, session: demoSession });
+      await POST(request({ question: "Q" }));
+
+      expect(mocks.enforceRateLimit).toHaveBeenCalledWith("demo-user:assistant", "assistantDemo");
+    });
+
+    it("shows demo-specific, non-alarming copy when the shared demo allowance is exhausted", async () => {
+      mocks.requireConnectedSession.mockResolvedValue({ ok: true, session: demoSession });
+      mocks.enforceRateLimit.mockResolvedValue({ allowed: false, minute: {}, day: {} });
+
+      const response = await POST(request({ question: "Q" }));
+
+      expect(response.status).toBe(429);
+      const body = await response.json();
+      expect(body.message).toMatch(/demo/i);
+      expect(body.message).toMatch(/connect your own/i);
+    });
+
+    it("keeps the generic rate-limit message for a real (non-demo) connected user", async () => {
+      mocks.enforceRateLimit.mockResolvedValue({ allowed: false, minute: {}, day: {} });
+      const response = await POST(request({ question: "Q" }));
+
+      const body = await response.json();
+      expect(body.message).toBe("Rate limit exceeded. Please try again later.");
+    });
+  });
 });

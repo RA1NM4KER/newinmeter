@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isValidDemoAccessToken } from "@/lib/demo/access-token";
 import { getNewinmeterDemoEmail } from "@/lib/env";
+import { recordFunnelEvent } from "@/lib/funnel";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { enforceRateLimit, getRateLimitIdentifier, getTrustedRequestIp, rateLimitHeaders } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
@@ -9,7 +10,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const demoLoginSchema = z.object({ token: z.string().min(1).max(512) });
+// `token` is now optional: present and valid -> the original recruiter/
+// private-link flow (see isValidDemoAccessToken); absent -> the public
+// "Explore demo" button, allowed unconditionally. Both paths sign in to
+// nothing but the one configured is_demo account, under the same rate
+// limit and the same server-side is_demo re-verification below -- the
+// token was never the thing keeping this endpoint safe to expose, the
+// fixed target account + verification was.
+const demoLoginSchema = z.object({ token: z.string().min(1).max(512).optional() });
 
 // Every failure path returns this exact body -- missing token, wrong token,
 // unconfigured feature, misconfigured demo user, or an upstream Supabase
@@ -20,12 +28,13 @@ function denied(headers: HeadersInit) {
   return NextResponse.json({ message: "Invalid or missing demo access." }, { status: 401, headers });
 }
 
-// One-click recruiter demo sign-in. Never accepts an email/target user from
-// the request -- the only account this can ever sign in is
-// NEWINMETER_DEMO_EMAIL, read from server env. Flow:
+// One-click demo sign-in -- both the public "Explore demo" button (no
+// token) and the recruiter/private link (?demo=<token>). Never accepts an
+// email/target user from the request -- the only account this can ever
+// sign in is NEWINMETER_DEMO_EMAIL, read from server env. Flow:
 //   1. rate limit by IP (unauthenticated endpoint)
-//   2. constant-time validate the supplied token against
-//      NEWINMETER_DEMO_ACCESS_TOKEN
+//   2. if a token was supplied, constant-time validate it against
+//      NEWINMETER_DEMO_ACCESS_TOKEN (no token = public request, skips this)
 //   3. look up the existing demo user by email (never create one here --
 //      generateLink() can silently create a user for type "magiclink", which
 //      must never happen from this endpoint)
@@ -56,8 +65,20 @@ export async function POST(request: Request) {
 
   const parsed = demoLoginSchema.safeParse(await request.json().catch(() => null));
 
-  if (!parsed.success || !isValidDemoAccessToken(parsed.data.token)) {
+  if (!parsed.success) {
     return denied(rateHeaders);
+  }
+
+  // A supplied token must be correct (recruiter/private link). No token at
+  // all is the public button -- intentionally allowed through to the same
+  // fixed, re-verified is_demo account below.
+  const isPublicRequest = parsed.data.token === undefined;
+  if (!isPublicRequest && !isValidDemoAccessToken(parsed.data.token)) {
+    return denied(rateHeaders);
+  }
+
+  if (isPublicRequest) {
+    await recordFunnelEvent("public_demo_started");
   }
 
   const demoEmail = getNewinmeterDemoEmail();
@@ -94,6 +115,10 @@ export async function POST(request: Request) {
   if (linkError || !linkData?.properties?.hashed_token) {
     console.error("demo_login_failed", linkError?.message ?? "generateLink returned no hashed_token");
     return denied(rateHeaders);
+  }
+
+  if (isPublicRequest) {
+    await recordFunnelEvent("demo_reached");
   }
 
   return NextResponse.json({ tokenHash: linkData.properties.hashed_token }, { headers: rateHeaders });

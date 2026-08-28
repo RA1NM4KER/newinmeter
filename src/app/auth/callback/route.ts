@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordFunnelEvent } from "@/lib/funnel";
 import { createServerSupabaseClient } from "@/lib/supabase/server-client";
 
 // Google OAuth's redirect target only -- LoginForm's signInWithOAuth points
@@ -15,7 +16,10 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = createServerSupabaseClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      await recordFunnelEvent("sign_in_completed");
+    }
   }
 
   return NextResponse.redirect(`${origin}${next}`);

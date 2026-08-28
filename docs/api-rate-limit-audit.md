@@ -19,17 +19,19 @@ Audited 2026-08-27. Authenticated identifiers are the resolved Supabase user ID 
 | `/api/admin/users/[userId]/role` | PATCH | admin user | default | user:`admin-user-role` | 60/1000 | — |
 | `/api/alerts` | GET | Supabase user + Alerts feature | default | user:`alerts-read` | 60/1000 | — |
 | `/api/alerts/[type]` | POST | Supabase user + Alerts feature | default | user:`alerts-write` | 60/1000 | — |
-| `/api/assistant` | POST | connected user + AI feature | assistant | user:`assistant` | 5/30 | — |
+| `/api/assistant` | POST | connected user + AI feature | assistant, or assistantDemo for the shared is_demo connection | user:`assistant` | 5/30 (4/40 shared, for demo) | — |
 | `/api/assistant/actions` | POST | connected user + AI/action feature checks | assistantAction | user:`assistantAction` | 10/50 | A confirmed sync action additionally consumes `sync` (3/20). |
 | `/api/beacon/summary` | GET | timing-safe bearer service token; user fixed by env | exempt | — | — | Private server-to-server integration; secret auth, fixed identity and fixed response shape. |
 | `/api/cron/auto-sync` | POST | `CRON_SECRET` bearer | exempt | — | — | Trusted scheduled job; bounded claim batch (10), concurrency (4), and per-connection scheduling/claims. |
 | `/api/cron/livemopay-canary` | POST | `CRON_SECRET` bearer | exempt | — | — | Trusted daily diagnostic job with one canary execution. |
+| `/api/cron/reset-demo` | GET | `CRON_SECRET` bearer | exempt | — | — | Trusted scheduled job; reseeds one fixed is_demo connection, a no-op when unconfigured. |
 | `/api/cron/stale-check` | GET | `CRON_SECRET` bearer | exempt | — | — | Trusted scheduled job; notification dedup is persistent per connection/rule. |
 | `/api/daily-rollups` | GET | connected user | default | user:`daily-rollups` | 60/1000 | — |
 | `/api/day-intervals` | GET | connected user | default | user:`day-intervals` | 60/1000 | — |
-| `/api/demo-login` | POST | public demo token, then fixed configured demo identity | demoLogin | trusted Vercel IP:`demo-login` | 5/30 | — |
+| `/api/demo-login` | POST | optional demo token (public button when absent), then fixed configured demo identity | demoLogin | trusted Vercel IP:`demo-login` | 5/30 | — |
 | `/api/energy-rows` | GET | connected user | default | user:`energy-rows` | 60/1000 | — |
 | `/api/export` | GET | connected user | export | user:`export` | 10/100 | — |
+| `/api/funnel/track` | POST | none (pre-auth onboarding events) | funnelTrack | trusted Vercel IP:`funnel-track` | 20/200 | — |
 | `/api/live/overview` | GET | Supabase user + Live feature | live | user:`live` | 30/30000 | — |
 | `/api/live/pulses` | POST | bearer meter-device API key + Live feature | meter | device:`meter` | 60/30000 | — |
 | `/api/livemopay/auto-sync` | POST | Supabase user | external | user:`auto-sync` | 10/100 | — |

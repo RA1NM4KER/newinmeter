@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
-import { discoverLiveMopayAccounts, loginWithLiveMopayCredentials } from "@/lib/newinmeter/web";
+import {
+  discoverLiveMopayAccounts,
+  LiveMopayInvalidCredentialsError,
+  LiveMopayTooManyAttemptsError,
+  loginWithLiveMopayCredentials
+} from "@/lib/newinmeter/web";
 import { beginLivemopayConnection, DemoAccountProtectedError, getConnectionForUser } from "@/lib/newinmeter/connection";
 import { enforceRateLimit, getRateLimitIdentifier, rateLimitHeaders } from "@/lib/rate-limit";
+import { recordFunnelEvent } from "@/lib/funnel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,6 +52,7 @@ export async function POST(request: Request) {
     }
 
     const body = connectRequestSchema.parse(await request.json());
+    await recordFunnelEvent("connect_attempted");
 
     // The password is used exactly once, right here, to obtain a Firebase ID
     // token and refresh token. It is never written to a variable that
@@ -78,6 +85,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await recordFunnelEvent("connect_succeeded");
     return NextResponse.json({ status: "connected", accountLabel: connection.accountLabel }, { headers: rateHeaders });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -97,9 +105,29 @@ export async function POST(request: Request) {
       );
     }
 
+    if (error instanceof LiveMopayInvalidCredentialsError) {
+      await recordFunnelEvent("connect_invalid_credentials");
+      return NextResponse.json(
+        {
+          message: "That LiveMopay email or password isn't right. Double-check them, or reset your LiveMopay password.",
+          invalidCredentials: true
+        },
+        { status: 422, headers: rateHeaders }
+      );
+    }
+
+    if (error instanceof LiveMopayTooManyAttemptsError) {
+      return NextResponse.json(
+        {
+          message: "LiveMopay has temporarily blocked further sign-in attempts on this account. Wait a while and try again."
+        },
+        { status: 429, headers: rateHeaders }
+      );
+    }
+
     console.error("livemopay_connect_failed", error instanceof Error ? error.message : "unknown_error");
     return NextResponse.json(
-      { message: "Could not connect your LiveMopay account." },
+      { message: "Could not connect your LiveMopay account. This looks like a NewinMeter problem, not yours -- try again shortly." },
       { status: 500, headers: rateHeaders }
     );
   }

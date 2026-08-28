@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
+import { ArrowRight, Heart, ShieldCheck, Smartphone, type LucideIcon } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { usePwaInstall } from "@/components/pwa/pwa-install-provider";
 import { AssistantDialog } from "@/components/assistant/assistant-dialog";
@@ -102,11 +102,65 @@ function ActivitiesTableTabDetector({ onChange }: { onChange: (isTableTab: boole
   return null;
 }
 
+// Stands in for the whole account row (email + Sign out) when the account
+// is the shared demo -- that pair only means something for a real account,
+// and showing the demo's actual login email here just reads as clutter/a
+// leaked internal detail. One status badge (rounded-full, soft fill -- this
+// app's own shape language for a passive tag, matches the badge above it),
+// one real button that says exactly what happens: signs out of the demo
+// session and lands on /login. The button is deliberately NOT shaped like
+// the badge -- solid fill, rounded-lg, the same look Send code/Continue/
+// Connect/Explore demo all use -- so it reads as clickable on sight instead
+// of as a second soft tag next to the first one. Legal links stay separate,
+// below this, unchanged.
 function DemoBadge() {
   return (
-    <span className="inline-flex w-fit items-center rounded-full border border-accent/30 bg-accentSoft px-2 py-0.5 text-[0.6875rem] font-medium text-brandTeal dark:text-accent">
-      Demo account · synthetic data
-    </span>
+    <div className="flex flex-col items-start gap-2">
+      <span className="inline-flex w-fit items-center rounded-full border border-accent/30 bg-accentSoft px-2 py-0.5 text-[0.6875rem] font-medium text-brandTeal dark:text-accent">
+        Demo account · synthetic data
+      </span>
+      <form action="/auth/sign-out" method="post">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-paper transition hover:bg-brandTeal"
+        >
+          Use my own data
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// Same status + action as DemoBadge, but for the mobile header, which
+// unlike the desktop sidebar footer isn't a persistently visible surface --
+// the sidebar's demo badge is pinned in view the whole time on desktop, but
+// on mobile the equivalent is one tap deep inside the "More" sheet,
+// invisible until opened. Most first-time demo visitors are on a phone
+// (WhatsApp-shared link), so without this, neither the "you're in a demo"
+// fact nor the way out effectively exist for them until they think to look.
+// Split into two elements for the same reason DemoBadge is split: a
+// non-interactive status tag (rounded-full, soft fill) reads as "this is a
+// fact about the account", while the solid rounded-lg button next to it
+// reads as "this is clickable" -- cramming both meanings into one shape
+// tends to blur into "a soft chip that might do something."
+function DemoExitTag() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="inline-flex items-center rounded-full border border-accent/30 bg-accentSoft px-2 py-1 text-[0.6875rem] font-medium text-brandTeal dark:text-accent">
+        Demo
+      </span>
+      <form action="/auth/sign-out" method="post">
+        <button
+          type="submit"
+          aria-label="Demo account. Tap to sign in and use your own electricity data."
+          className="inline-flex items-center gap-1 rounded-lg bg-ink px-2.5 py-1.5 text-[0.6875rem] font-semibold text-paper transition hover:bg-brandTeal"
+        >
+          Sign in
+          <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -285,16 +339,17 @@ export function AppShell({
                 </div>
                 <div className="shrink-0 border-t border-line px-4 py-4">
                   {isDemo ? (
-                    <div className="mb-2">
+                    <div className="mb-3">
                       <DemoBadge />
                     </div>
-                  ) : null}
-                  <div className="flex items-center gap-2">
-                    {userEmail ? (
-                      <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p>
-                    ) : null}
-                    <SignOutForm />
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {userEmail ? (
+                        <p className="min-w-0 max-w-[9.5rem] truncate text-xs text-muted">{userEmail}</p>
+                      ) : null}
+                      <SignOutForm />
+                    </div>
+                  )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
                       Privacy
@@ -313,7 +368,12 @@ export function AppShell({
                 <TopBar
                   className="fixed inset-x-0 top-0 z-20 lg:hidden"
                   hidden={isHeaderHidden}
-                  right={<NotificationBell />}
+                  right={
+                    <div className="flex items-center gap-2">
+                      {isDemo ? <DemoExitTag /> : null}
+                      <NotificationBell />
+                    </div>
+                  }
                 />
 
                 {/* lockViewport pages (data table, admin users table, activities
@@ -394,14 +454,15 @@ export function AppShell({
                   />
                   <div className="mt-2 border-t border-line pt-3.5">
                     {isDemo ? (
-                      <div className="mb-2">
+                      <div className="mb-3">
                         <DemoBadge />
                       </div>
-                    ) : null}
-                    <div className="flex min-h-10 w-full items-center justify-between gap-4">
-                      {userEmail ? <p className="min-w-0 truncate text-sm text-muted">{userEmail}</p> : null}
-                      <SignOutForm compact />
-                    </div>
+                    ) : (
+                      <div className="flex min-h-10 w-full items-center justify-between gap-4">
+                        {userEmail ? <p className="min-w-0 truncate text-sm text-muted">{userEmail}</p> : null}
+                        <SignOutForm compact />
+                      </div>
+                    )}
                     <div className="mt-1 flex items-center gap-4 whitespace-nowrap">
                       <Link className="text-xs text-muted transition hover:text-ink" href="/privacy">
                         Privacy

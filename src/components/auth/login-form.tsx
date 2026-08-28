@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { trackFunnelEvent } from "@/lib/funnel-client";
 
 const OTP_LENGTH = 6;
 // Long enough to discourage spamming Supabase's own send endpoint, short
@@ -34,13 +35,14 @@ function GoogleIcon() {
   );
 }
 
-// Only rendered when the server-validated `demo` query token was present and
-// correct (see src/app/login/page.tsx and src/lib/demo/access-token.ts) --
-// this component itself never checks or knows the expected token, it just
-// holds the already-validated one in memory long enough to POST it once. The
-// login-form parent doesn't render this at all for a missing/invalid token,
-// so an ordinary visitor sees nothing different about the page.
-function DemoLoginButton({ token }: { token: string }) {
+// The one low-pressure alternative to signing up: works for every visitor
+// (token undefined), and also still serves the recruiter/private link
+// (token set from the server-validated `?demo=` query param -- see
+// src/app/login/page.tsx and src/lib/demo/access-token.ts). Either way this
+// component never learns or checks the expected token itself; it only ever
+// POSTs whatever it was given (or nothing) to /api/demo-login, which is the
+// only place that decides whether the request is allowed through.
+function DemoExploreButton({ token }: { token?: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,7 +54,7 @@ function DemoLoginButton({ token }: { token: string }) {
       const response = await fetch("/api/demo-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token })
+        body: JSON.stringify(token ? { token } : {})
       });
 
       const body = await response.json().catch(() => null);
@@ -69,9 +71,7 @@ function DemoLoginButton({ token }: { token: string }) {
       // action_link itself only works when opened by the same browser that
       // requested it, which isn't the case for a server-admin-generated
       // link). A normal Supabase session comes out of this, same as any
-      // other verified sign-in. Distinct from the email OTP flow below --
-      // this redeems a server-generated `token_hash` via type "magiclink",
-      // not a user-typed 6-digit code via type "email".
+      // other verified sign-in.
       const supabase = createSupabaseBrowserClient();
       const { error: verifyError } = await supabase.auth.verifyOtp({
         token_hash: body.tokenHash,
@@ -92,17 +92,17 @@ function DemoLoginButton({ token }: { token: string }) {
   }
 
   return (
-    <div className="mt-1 flex flex-col items-start gap-1.5 border-t border-line pt-4">
+    <div className="flex flex-col items-start gap-1.5">
       <button
         type="button"
         onClick={() => void handleClick()}
         disabled={isSubmitting}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-brandTeal/25 bg-accentSoft px-4 text-sm font-medium text-brandTeal outline-none transition hover:border-brandTeal/40 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-ink text-sm font-semibold text-paper outline-none transition hover:bg-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-        Explore demo account
+        Explore demo
       </button>
-      <p className="text-xs text-muted">View NewinMeter with synthetic data</p>
+      <p className="text-xs text-muted">See NewinMeter with sample electricity data, no signup.</p>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
     </div>
   );
@@ -173,6 +173,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
+    trackFunnelEvent("sign_in_started");
 
     try {
       const ok = await sendCode();
@@ -233,6 +234,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
       // Session is created by this same call, inside this same page/PWA
       // context -- no redirect through /auth/callback, so there's no
       // browser hand-off for an installed PWA to get stranded by.
+      trackFunnelEvent("sign_in_completed");
       window.location.href = "/";
     } catch {
       setError("Couldn't verify the code. Check your connection and try again.");
@@ -267,6 +269,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
   async function handleGoogleSignIn() {
     setError("");
     setIsGoogleLoading(true);
+    trackFunnelEvent("sign_in_started");
 
     const supabase = createSupabaseBrowserClient();
     const { error: signInError } = await supabase.auth.signInWithOAuth({
@@ -346,7 +349,15 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      <DemoExploreButton token={demoToken} />
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-line" />
+        <span className="text-xs text-muted">or use your own electricity data</span>
+        <div className="h-px flex-1 bg-line" />
+      </div>
+
       <button
         type="button"
         onClick={() => void handleGoogleSignIn()}
@@ -399,8 +410,6 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
           We&apos;ll email you a 6-digit code. No password to remember.
         </p>
       </form>
-
-      {demoToken ? <DemoLoginButton token={demoToken} /> : null}
     </div>
   );
 }

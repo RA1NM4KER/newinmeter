@@ -7,6 +7,7 @@ const EXEMPT_ROUTES = new Set([
   "src/app/api/beacon/summary/route.ts",
   "src/app/api/cron/auto-sync/route.ts",
   "src/app/api/cron/livemopay-canary/route.ts",
+  "src/app/api/cron/reset-demo/route.ts",
   "src/app/api/cron/stale-check/route.ts"
 ]);
 

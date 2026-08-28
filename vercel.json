@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/stale-check",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/reset-demo",
+      "schedule": "0 3 * * *"
     }
   ]
 }

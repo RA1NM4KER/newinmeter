@@ -214,24 +214,86 @@ function expiresAtFromSeconds(expiresIn: string | number) {
   return new Date(Date.now() + Number(expiresIn) * 1000).toISOString();
 }
 
+// Thrown when Firebase Identity Toolkit rejects the email/password itself
+// (wrong password, unknown email, disabled account) -- distinguished from a
+// generic/network/server failure so the connect route can show copy the
+// resident can actually act on instead of "NewinMeter is broken".
+export class LiveMopayInvalidCredentialsError extends Error {
+  constructor() {
+    super("LiveMopay rejected this email/password combination.");
+    this.name = "LiveMopayInvalidCredentialsError";
+  }
+}
+
+// Firebase's own throttle on repeated failed attempts against one account --
+// distinct from NewinMeter's own rate limiting, and worth its own copy since
+// retrying immediately will not help.
+export class LiveMopayTooManyAttemptsError extends Error {
+  constructor() {
+    super("LiveMopay has temporarily blocked sign-in attempts for this account.");
+    this.name = "LiveMopayTooManyAttemptsError";
+  }
+}
+
+// Identity Toolkit's documented signInWithPassword error codes. Older
+// projects return the specific EMAIL_NOT_FOUND/INVALID_PASSWORD pair; newer
+// ones collapse both into INVALID_LOGIN_CREDENTIALS to avoid confirming
+// which part was wrong. Both shapes are treated identically here -- the
+// caller only needs "the credentials were wrong", never which half.
+const INVALID_CREDENTIALS_CODES = new Set([
+  "EMAIL_NOT_FOUND",
+  "INVALID_PASSWORD",
+  "INVALID_LOGIN_CREDENTIALS",
+  "INVALID_EMAIL",
+  "USER_DISABLED"
+]);
+
 export async function loginWithLiveMopayCredentials(email: string, password: string): Promise<LiveMopaySession> {
   const apiKey = getNewinmeterFirebaseApiKey();
-  const response = await postJson<{
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+    cache: "no-store"
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    // Never logged or included in a thrown message here -- only the
+    // Identity Toolkit error *code* (never the password) drives which typed
+    // error comes back.
+    let code = "";
+    try {
+      code = (JSON.parse(text)?.error?.message as string | undefined) ?? "";
+    } catch {
+      // Non-JSON body (e.g. an upstream 5xx HTML page) -- treated as a
+      // generic failure below.
+    }
+
+    if (code === "TOO_MANY_ATTEMPTS_TRY_LATER") {
+      throw new LiveMopayTooManyAttemptsError();
+    }
+    if (INVALID_CREDENTIALS_CODES.has(code)) {
+      throw new LiveMopayInvalidCredentialsError();
+    }
+    throw new Error(`POST ${url} failed with ${response.status}: ${text}`);
+  }
+
+  const parsed = (text ? JSON.parse(text) : {}) as {
     idToken: string;
     refreshToken: string;
     expiresIn: string;
     localId?: string;
-  }>(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
-    email,
-    password,
-    returnSecureToken: true
-  });
+  };
 
   return {
-    idToken: response.idToken,
-    refreshToken: response.refreshToken,
-    expiresAt: expiresAtFromSeconds(response.expiresIn),
-    localId: response.localId
+    idToken: parsed.idToken,
+    refreshToken: parsed.refreshToken,
+    expiresAt: expiresAtFromSeconds(parsed.expiresIn),
+    localId: parsed.localId
   };
 }
 

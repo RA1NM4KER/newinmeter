@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ChevronRight, Loader2, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
+import { AlertCircle, ChevronRight, HelpCircle, Loader2, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
+import { trackFunnelEvent } from "@/lib/funnel-client";
 
 type AccountOption = { index: number; label: string };
 type Step = "form" | "picker" | "syncing" | "sync-error";
@@ -10,9 +11,10 @@ type Step = "form" | "picker" | "syncing" | "sync-error";
 type ConnectFormProps = {
   defaultEmail: string;
   initialPendingAccounts: AccountOption[] | null;
+  livemopayPortalUrl: string;
 };
 
-export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFormProps) {
+export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPortalUrl }: ConnectFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
@@ -21,6 +23,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
   const [step, setStep] = useState<Step>(initialPendingAccounts ? "picker" : "form");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [invalidCredentials, setInvalidCredentials] = useState(false);
 
   // The whole point of connecting is to see a populated dashboard, not an
   // empty one -- so the first sync runs to completion, with the person
@@ -39,20 +42,24 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
         const body = await response.json().catch(() => ({}));
         setError(body.message || "Could not fetch your LiveMopay history.");
         setStep("sync-error");
+        trackFunnelEvent("initial_sync_failed");
         return;
       }
 
+      trackFunnelEvent("initial_sync_succeeded");
       router.replace("/");
       router.refresh();
     } catch {
       setError("Could not fetch your LiveMopay history.");
       setStep("sync-error");
+      trackFunnelEvent("initial_sync_failed");
     }
   }
 
   async function handleConnect(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setInvalidCredentials(false);
     setIsSubmitting(true);
 
     try {
@@ -69,6 +76,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
 
       if (!response.ok) {
         setError(body.message || "Could not connect your LiveMopay account.");
+        setInvalidCredentials(Boolean(body.invalidCredentials));
         return;
       }
 
@@ -194,9 +202,13 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
   return (
     <div className="rounded-2xl border border-line bg-paper px-6 py-7 text-left">
       <Zap className="h-5 w-5 text-accent" aria-hidden="true" />
-      <h2 className="mt-3 text-base font-semibold text-ink">Connect your LiveMopay account</h2>
+      <h2 className="mt-3 text-base font-semibold text-ink">Log in with your LiveMopay details</h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted">
+        The same email and password you already use for LiveMopay -- not a new account, and often a different email
+        than the one you used to sign in here.
+      </p>
 
-      <form onSubmit={handleConnect} className="mt-6 flex flex-col gap-3">
+      <form onSubmit={handleConnect} className="mt-5 flex flex-col gap-3">
         <div className="relative">
           <Mail
             aria-hidden="true"
@@ -208,7 +220,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="LiveMopay email"
-            className="h-12 w-full rounded-full border border-line bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal"
+            className={`h-12 w-full rounded-full border bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal ${invalidCredentials ? "border-red-300" : "border-line"}`}
           />
         </div>
         <div className="relative">
@@ -222,11 +234,26 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="LiveMopay password"
-            className="h-12 w-full rounded-full border border-line bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal"
+            className={`h-12 w-full rounded-full border bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal ${invalidCredentials ? "border-red-300" : "border-line"}`}
           />
         </div>
 
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+        {error ? (
+          <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <p>{error}</p>
+            {invalidCredentials ? (
+              <a
+                href={livemopayPortalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
+              >
+                <HelpCircle aria-hidden="true" className="h-3 w-3" />
+                Forgot your LiveMopay password? Reset it at the LiveMopay portal
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         <button
           type="submit"
@@ -240,7 +267,10 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts }: ConnectFor
 
       <div className="mt-5 flex items-start gap-2 rounded-xl bg-canvas px-3 py-2.5 text-xs leading-relaxed text-muted">
         <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
-        <p>Your password is used once, to connect. We never store it. Disconnect any time from the dashboard header.</p>
+        <p>
+          Your password is used once, right now, to fetch your electricity history -- then thrown away. NewinMeter
+          never stores it, and you can disconnect any time from the dashboard header.
+        </p>
       </div>
     </div>
   );

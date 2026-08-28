@@ -173,4 +173,47 @@ describe("AppShell viewport-height architecture", () => {
     );
     expect(screen.queryByTestId("foreground-activity-tracker")).toBeNull();
   });
+
+  it("shows the demo badge and a clean 'Use my own data' button in place of email/Sign out, only for demo users", () => {
+    setPathname("/");
+    const { rerender } = render(<AppShell userId="real-user" userEmail="real@example.com">content</AppShell>);
+    expect(screen.queryByText(/Demo account/)).toBeNull();
+    expect(screen.queryByText("real@example.com")).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: "Sign out" }).length).toBeGreaterThan(0);
+
+    rerender(
+      <AppShell isDemo userId="demo-user" userEmail="demo@newinmeter.app">
+        content
+      </AppShell>
+    );
+    expect(screen.getAllByText(/Demo account/).length).toBeGreaterThan(0);
+    // The demo's own login email is never shown -- it's meaningless to a
+    // visitor and reads as a leaked internal detail, not a real account.
+    expect(screen.queryByText("demo@newinmeter.app")).toBeNull();
+    expect(screen.queryAllByRole("button", { name: "Sign out" })).toHaveLength(0);
+
+    const useOwnDataButtons = screen.getAllByRole("button", { name: /Use my own data/ });
+    expect(useOwnDataButtons.length).toBeGreaterThan(0);
+    expect(useOwnDataButtons[0].closest("form")?.getAttribute("action")).toBe("/auth/sign-out");
+  });
+
+  it("puts a clearly-labeled demo action in the always-visible mobile header, not just the hamburger menu", () => {
+    setPathname("/");
+    render(
+      <AppShell isDemo userId="demo-user">
+        content
+      </AppShell>
+    );
+
+    // The mobile TopBar renders unconditionally (hidden via lg:hidden CSS,
+    // not unmounted) -- unlike the "More" sheet, which only mounts its
+    // content once opened. Both the status ("Demo") and the action ("Sign
+    // in") must exist without opening any menu.
+    expect(screen.getByText("Demo")).not.toBeNull();
+    const tag = screen.getByRole("button", {
+      name: "Demo account. Tap to sign in and use your own electricity data."
+    });
+    expect(tag.textContent).toContain("Sign in");
+    expect(tag.closest("form")?.getAttribute("action")).toBe("/auth/sign-out");
+  });
 });

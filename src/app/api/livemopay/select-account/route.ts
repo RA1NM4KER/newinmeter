@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedSession } from "@/lib/auth/session";
+import { recordFunnelEvent } from "@/lib/funnel";
 import { DemoAccountProtectedError, finalizeLivemopayAccountSelection } from "@/lib/newinmeter/connection";
 import { limitUserRequest } from "@/lib/rate-limit";
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   try {
     const body = selectAccountRequestSchema.parse(await request.json());
     const connection = await finalizeLivemopayAccountSelection(session.userId, body.index);
+    await recordFunnelEvent("connect_succeeded");
 
     return NextResponse.json(
       { status: "connected", accountLabel: connection.accountLabel },

@@ -273,28 +273,35 @@ shared demo connection (`is_demo`), which refuses to delete itself -- see "Demo 
 
 ## Demo account
 
-A shared, read-mostly account for job-application reviewers: give them a private one-click URL and
-they land on a fully populated dashboard, analytics, Activities, and assistant -- no real LiveMopay
-account involved, no inbox access needed, and no change to how everyone else signs in.
+A shared account anyone can explore with one click, plus a private link for job-application
+reviewers -- both land on the same fully populated dashboard, analytics, Activities, and assistant.
+No real LiveMopay account involved, no inbox access needed, and no change to how everyone else signs
+in.
 
 **Normal sign-in is untouched.** Every real account still only ever uses Google OAuth or Supabase
 email OTP/magic-link (`signInWithOtp`) -- see `src/components/auth/login-form.tsx`. There is no
 password field anywhere in the normal UI and no password is stored for normal accounts.
 
-**Recruiter access is a separate, token-gated entry point**, not a second auth system:
+**The demo has two entry points into the same account, both through one endpoint:**
 
-1. Give a reviewer `https://<your-domain>/login?demo=<NEWINMETER_DEMO_ACCESS_TOKEN>`.
-2. `src/app/login/page.tsx` (a server component) validates the `demo` query param server-side via
-   `isValidDemoAccessToken` (`src/lib/demo/access-token.ts`, SHA-256 + `timingSafeEqual`, so an
-   invalid guess can't be timed to learn how close it was) _before rendering anything_. A missing or
-   wrong token renders byte-identical to a plain `/login` visit -- no button, no hint a demo account
-   exists. Only a confirmed-valid token is ever passed to the client `LoginForm`.
-3. A valid token shows one extra button beneath the normal auth controls: **Explore demo account**
-   / _View NewinMeter with synthetic data_.
-4. Clicking it `POST`s the token to `/api/demo-login` (`src/app/api/demo-login/route.ts`), which:
+- **Public**: an **Explore demo** button on `/login` itself, visible to every visitor, no token or
+  query param involved. This is the primary "try before you sign up" path.
+- **Recruiter/private link**: `https://<your-domain>/login?demo=<NEWINMETER_DEMO_ACCESS_TOKEN>`, kept
+  for sharing a link outside the normal login page. `src/app/login/page.tsx` validates the `demo`
+  query param server-side via `isValidDemoAccessToken` (`src/lib/demo/access-token.ts`, SHA-256 +
+  `timingSafeEqual`, so an invalid guess can't be timed to learn how close it was) _before rendering
+  anything_; a missing or wrong token renders byte-identical to a plain `/login` visit as far as that
+  param goes.
+
+1. Clicking **Explore demo** `POST`s to `/api/demo-login` (`src/app/api/demo-login/route.ts`) with a
+   `token` field when the page resolved one from the query param, or an empty body for the public
+   button. Either way the route:
    - rate-limits by IP first (`demoLogin` policy, 5/minute, 30/day -- this is the endpoint an
-     attacker would use to brute-force the token)
-   - re-validates the token server-side (never trusts the page's render decision)
+     attacker would use to brute-force the token, or simply hammer the public path)
+   - if a token was supplied, re-validates it server-side (never trusts the page's render decision);
+     if none was supplied, treats the request as the public path and skips straight to the checks
+     below -- the token was never what made this endpoint safe to expose, the fixed target account
+     and the checks that follow are
    - looks up the **one** Supabase Auth user matching `NEWINMETER_DEMO_EMAIL` (server env, never
      taken from the request -- the endpoint cannot be pointed at any other account)
    - confirms that user's connection is actually `is_demo` (catches a misconfigured
@@ -303,10 +310,10 @@ password field anywhere in the normal UI and no password is stored for normal ac
      only its `hashed_token` (never the plaintext OTP, never the service-role key)
    - **never** creates a user, uses `signInWithPassword`, or issues a bespoke session -- only an
      already-existing `is_demo` user can ever be signed in this way
-   - every failure (missing/wrong token, unconfigured feature, misconfigured demo user, upstream
-     Supabase error) returns the identical generic `401 { message: "Invalid or missing demo
-access." }`, so nothing distinguishes "wrong token" from "right token, something else broke"
-5. The browser calls `supabase.auth.verifyOtp({ token_hash, type: "magiclink" })` with the same
+   - every failure (wrong token, unconfigured feature, misconfigured demo user, upstream Supabase
+     error) returns the identical generic `401 { message: "Invalid or missing demo access." }`, so
+     nothing distinguishes "wrong token" from "right token, something else broke"
+2. The browser calls `supabase.auth.verifyOtp({ token_hash, type: "magiclink" })` with the same
    anon-key browser client every other sign-in path already uses. This -- not a redirect through
    `action_link`/`/auth/callback` -- is the correct redemption mechanism here: `action_link` only
    establishes a session via the PKCE `?code=` param when opened by the _same browser_ that called
@@ -317,14 +324,17 @@ access." }`, so nothing distinguishes "wrong token" from "right token, something
    ordinary client. From that point on the reviewer is a normal authenticated Supabase user, subject
    to the same RLS, dashboard loaders, Activities, and assistant code as everyone else.
 
-The demo token only ever exists in the URL bar and in-memory component state for the length of that
-one click -- it is never written to `localStorage`, `sessionStorage`, or a cookie, and it's discarded
-once the redirect fires.
+When a token is used, it only ever exists in the URL bar and in-memory component state for the length
+of that one click -- it is never written to `localStorage`, `sessionStorage`, or a cookie, and it's
+discarded once the redirect fires.
 
-**`NEWINMETER_DEMO_ACCESS_TOKEN` is a bearer secret**: anyone holding the full demo URL can sign in
-as the demo account (though still bound by every restriction below -- they can't reach LiveMopay,
-disconnect, or delete anything). Rotate it by changing the env var and redeploying; the old URL
-stops working immediately, no database change needed.
+**`NEWINMETER_DEMO_ACCESS_TOKEN` is a bearer secret for the recruiter/private-link path only**:
+anyone holding the full demo URL can sign in as the demo account (though still bound by every
+restriction below -- they can't reach LiveMopay, disconnect, or delete anything). Rotate it by
+changing the env var and redeploying; the old URL stops working immediately, no database change
+needed. The **public** `/login` button needs no secret at all -- it's protected by the same
+`demoLogin` IP rate limit and the same server-side `is_demo` re-verification, not by a token, since
+the account itself can't reach LiveMopay/sync/push/be deleted no matter who signs in.
 
 - **`livemopay_connections.is_demo`** (`supabase/migrations/20260817000000_newinmeter_demo_accounts.sql`)
   marks one connection as demo. Everything else about it is a normal connection row: synthetic
@@ -344,12 +354,25 @@ stops working immediately, no database change needed.
   `is_demo=eq.false`, since a demo connection's data is intentionally static and would otherwise
   look permanently stale.
 - **Role/permissions**: seeded as a normal `role: 'user'` with `ai_assistant_enabled: true` and
-  `activities_enabled: true` -- not an admin. Activities create/update/delete are blocked for the
-  demo connection (`403 { demoAccount: true }`) so a shared credential can't permanently spoil the
-  seeded dataset; reading Activities works normally.
+  `activities_enabled: true` -- not an admin. `src/lib/demo/capabilities.ts` is the single policy
+  table every route/UI affordance reads: Activity and notification-read-state mutations stay
+  interactive for every visitor (allowing a shared credential to feel like a real, usable dashboard
+  rather than a read-only screenshot); alert-rule edits, LiveMopay connect/sync, push, and account
+  deletion are blocked.
+- **Nightly reset** (`/api/cron/reset-demo`, `vercel.json`, `CRON_SECRET`-gated like the other
+  crons) reruns the same reseed logic as `npm run seed:demo-account` every night, so the shared
+  Activities/notification state above can't drift far from the canonical walkthrough no matter how
+  many public visitors touch it during the day. A missing/misconfigured `NEWINMETER_DEMO_EMAIL` is a
+  no-op here, not an error -- the public button already refuses to work in that case.
+- **AI cost**: demo questions share one Supabase user id across every visitor (it's the same account
+  for everyone), so the ordinary per-user `assistant` rate-limit policy is already a single pooled
+  budget for all demo traffic combined. `/api/assistant` swaps in the tighter `assistantDemo` policy
+  specifically for the `is_demo` connection and returns demo-specific copy ("connect your own
+  LiveMopay account for unlimited use") once that shared allowance is exhausted for the day.
 - **Indicator**: a small "Demo account · synthetic data" chip in the sidebar footer
-  (`src/components/layout/app-shell.tsx`) makes it obvious a reviewer isn't looking at someone's
-  real electricity records, without covering the product in warnings.
+  (`src/components/layout/app-shell.tsx`), with a quiet "View my own data" link next to it (signs out
+  and returns to `/login`), makes it obvious a visitor isn't looking at someone's real electricity
+  records and gives them an easy way to start their own, without nagging.
 
 ### Provisioning / resetting
 
@@ -357,11 +380,14 @@ stops working immediately, no database change needed.
 NEWINMETER_DEMO_EMAIL=demo@example.com npm run seed:demo-account
 ```
 
-The demo Supabase Auth user has **no password** -- sign-in goes exclusively through the
-`/api/demo-login` magic-link flow above, so there's nothing to generate, rotate, or leak from the
-seed script. `scripts/seed-demo-account.ts` finds-or-creates that Auth user (email-confirmed, no
-password set), finds-or-creates its `livemopay_connections` row (refuses to touch an existing
-connection that isn't already `is_demo`, so an email typo can never convert a real account), wipes
+The actual reseed logic lives in `src/lib/demo/reset.ts` (`resetDemoAccount`), shared by this CLI
+script and the nightly `/api/cron/reset-demo` job above -- both callers produce identical state, so
+they can never drift apart. The demo Supabase Auth user has **no password** -- sign-in goes
+exclusively through the `/api/demo-login` magic-link flow above, so there's nothing to generate,
+rotate, or leak from the seed script. `resetDemoAccount` finds-or-creates that Auth user
+(email-confirmed, no password set), finds-or-creates its `livemopay_connections` row (refuses to
+touch an existing connection that isn't already `is_demo`, so an email typo can never convert a real
+account), wipes
 only that connection's `energy_rows`/`capture_runs`/rollups/`dashboard_summary`/`usage_activities`,
 regenerates ~10 weeks of synthetic data (`src/lib/demo/dataset.ts`), and runs it through the same
 `finish_capture_run` RPC and `refresh_newinmeter_rollups_for_run` trigger a real sync uses -- rollups

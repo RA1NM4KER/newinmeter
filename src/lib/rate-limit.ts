@@ -63,6 +63,24 @@ export const RATE_LIMIT_POLICIES = {
   demoLogin: {
     minuteLimit: 5,
     dayLimit: 30
+  },
+  // /api/funnel/track is unauthenticated by nature (most of the events it
+  // records happen before a session exists) and keyed by IP. Generous
+  // enough for the handful of real onboarding steps one visitor triggers,
+  // tight enough that spamming it can't inflate the aggregate counters or
+  // cost anything -- each call is a single counter increment.
+  funnelTrack: {
+    minuteLimit: 20,
+    dayLimit: 200
+  },
+  // Demo assistant questions share one Supabase user id across every public
+  // visitor (see src/lib/demo/capabilities.ts), so this bucket is a single
+  // shared daily allowance for ALL demo traffic combined, not per-visitor --
+  // deliberately tighter than the real "assistant" policy to bound AI cost
+  // from a link with no signup gate.
+  assistantDemo: {
+    minuteLimit: 4,
+    dayLimit: 40
   }
 } as const;
 

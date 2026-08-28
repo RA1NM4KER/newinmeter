@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   getConnectionForUser: vi.fn(),
   enforceRateLimit: vi.fn(),
   listUsers: vi.fn(),
-  generateLink: vi.fn()
+  generateLink: vi.fn(),
+  recordFunnelEvent: vi.fn()
 }));
 
 vi.mock("@/lib/demo/access-token", () => ({ isValidDemoAccessToken: mocks.isValidDemoAccessToken }));
 vi.mock("@/lib/env", () => ({ getNewinmeterDemoEmail: mocks.getNewinmeterDemoEmail }));
+vi.mock("@/lib/funnel", () => ({ recordFunnelEvent: mocks.recordFunnelEvent }));
 vi.mock("@/lib/newinmeter/connection", () => ({ getConnectionForUser: mocks.getConnectionForUser }));
 vi.mock("@/lib/rate-limit", () => ({
   enforceRateLimit: mocks.enforceRateLimit,
@@ -58,13 +60,21 @@ describe("POST /api/demo-login", () => {
     await expect(response.json()).resolves.toEqual({ tokenHash: "hashed-token-abc" });
   });
 
-  it("rejects a missing token with the generic message, before touching Supabase", async () => {
-    mocks.isValidDemoAccessToken.mockReturnValue(false);
+  it("signs in the configured demo user for the public button (no token at all)", async () => {
     const response = await POST(request({}));
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({ message: "Invalid or missing demo access." });
-    expect(mocks.listUsers).not.toHaveBeenCalled();
-    expect(mocks.generateLink).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ tokenHash: "hashed-token-abc" });
+    expect(mocks.isValidDemoAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("records public_demo_started and demo_reached only for the no-token (public) path", async () => {
+    await POST(request({ token: "correct" }));
+    expect(mocks.recordFunnelEvent).not.toHaveBeenCalled();
+
+    mocks.recordFunnelEvent.mockClear();
+    await POST(request({}));
+    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("public_demo_started");
+    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("demo_reached");
   });
 
   it("rejects an invalid token with the exact same generic message", async () => {

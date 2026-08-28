@@ -1,12 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Check } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { ActivityAssistantDemo } from "@/components/marketing/activity-assistant-demo";
-import { AlertPlayground } from "@/components/marketing/alert-playground";
-import { DayExplorer } from "@/components/marketing/day-explorer";
-import { demoScenarios, type DemoScenarioId } from "@/components/marketing/demo-data";
+import { useEffect, type ReactNode } from "react";
+import { Check } from "lucide-react";
 import { EnergyPlayground } from "@/components/marketing/energy-playground";
 import { Wordmark } from "@/components/layout/wordmark";
 import { SUPPORT_MAILTO } from "@/lib/site-config";
@@ -16,6 +12,13 @@ type AuthShellProps = {
   title: ReactNode;
   description: string;
   children: ReactNode;
+  // "landing" (default) is /login: a first-time visitor who may not know
+  // what NewinMeter is yet, so it keeps one interactive teaser
+  // (EnergyPlayground) beside the sign-in actions. "focused" is /connect: a
+  // signed-in resident who already chose to be here and just needs to get
+  // through one form -- no teaser, no footer sales pitch, nothing to
+  // scroll past. See the login/connect redesign notes in the README.
+  variant?: "landing" | "focused";
 };
 
 function TrustPoint({ children }: { children: ReactNode }) {
@@ -27,37 +30,38 @@ function TrustPoint({ children }: { children: ReactNode }) {
   );
 }
 
-export function AuthShell({ badge, title, description, children }: AuthShellProps) {
-  const [scenarioId, setScenarioId] = useState<DemoScenarioId>("lateNight");
-  const [selectedTime, setSelectedTime] = useState("22:30");
-
-  function chooseScenario(nextScenarioId: DemoScenarioId) {
-    const nextScenario = demoScenarios[nextScenarioId];
-    setScenarioId(nextScenarioId);
-    setSelectedTime(nextScenario.points[nextScenario.focusIndex].time);
-  }
-
+export function AuthShell({ badge, title, description, children, variant = "landing" }: AuthShellProps) {
   useEffect(() => {
     document.documentElement.classList.add("public-smooth-scroll");
     return () => document.documentElement.classList.remove("public-smooth-scroll");
   }, []);
+
+  const isLanding = variant === "landing";
 
   return (
     <div data-public-auth className="min-h-screen overflow-x-clip bg-[#f7f7f3] text-ink">
       <header className="sticky top-0 z-50 border-b border-line/70 bg-[#f7f7f3]">
         <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-5 py-4 sm:px-8 lg:px-12">
           <Wordmark className="text-xl" textClassName="text-ink" accentClassName="text-accent" />
-          <a
-            href="#sign-in"
-            className="rounded-md text-sm font-medium text-ink outline-none transition hover:text-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4"
-          >
-            Sign in
-          </a>
+          {isLanding ? (
+            <a
+              href="#sign-in"
+              className="rounded-md text-sm font-medium text-ink outline-none transition hover:text-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4"
+            >
+              Sign in
+            </a>
+          ) : null}
         </div>
       </header>
 
       <main>
-        <section className="mx-auto grid w-full max-w-[90rem] items-center gap-11 px-5 pb-14 pt-5 sm:px-8 sm:pb-16 sm:pt-9 lg:grid-cols-[minmax(26rem,0.82fr)_minmax(37rem,1.18fr)] lg:gap-14 lg:px-12 lg:pb-20 lg:pt-8 xl:gap-20">
+        <section
+          className={
+            isLanding
+              ? "mx-auto grid w-full max-w-[90rem] items-center gap-11 px-5 pb-14 pt-5 sm:px-8 sm:pb-16 sm:pt-9 lg:grid-cols-[minmax(26rem,0.82fr)_minmax(37rem,1.18fr)] lg:gap-14 lg:px-12 lg:pb-20 lg:pt-8 xl:gap-20"
+              : "mx-auto w-full max-w-2xl px-5 pb-16 pt-8 sm:px-8"
+          }
+        >
           <div className="max-w-[34rem]">
             {badge ? (
               <p className="mb-5 text-xs font-semibold uppercase tracking-[0.18em] text-brandTeal">{badge}</p>
@@ -71,61 +75,41 @@ export function AuthShell({ badge, title, description, children }: AuthShellProp
               {children}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted sm:text-sm">
-              <TrustPoint>Free for Newinbosch residents</TrustPoint>
-              <TrustPoint>Connects to LiveMopay</TrustPoint>
-            </div>
+            {isLanding ? (
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted sm:text-sm">
+                <TrustPoint>Free for Newinbosch residents</TrustPoint>
+                <TrustPoint>Connects to LiveMopay</TrustPoint>
+              </div>
+            ) : null}
           </div>
 
-          <EnergyPlayground scenarioId={scenarioId} onScenarioChange={chooseScenario} onPointChange={setSelectedTime} />
+          {isLanding ? <EnergyPlayground /> : null}
         </section>
-
-        <DayExplorer storyScenarioId={scenarioId} storySelectedTime={selectedTime} />
-        <ActivityAssistantDemo storyScenarioId={scenarioId} storySelectedTime={selectedTime} />
-        <AlertPlayground storyScenarioId={scenarioId} />
       </main>
 
       <footer className="bg-paper">
-        <div className="mx-auto max-w-[86rem] px-5 py-14 sm:px-8 sm:py-16 lg:px-12">
-          <div className="grid gap-7 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-            <div>
-              <h2 className="max-w-3xl text-3xl font-semibold tracking-[-0.04em] text-ink sm:text-5xl">
-                Now look at your own.
-              </h2>
-              <p className="mt-3 text-base text-muted">Sign in to explore your electricity history.</p>
-            </div>
-            <a
-              className="group inline-flex h-11 w-fit items-center gap-2 rounded-md bg-ink px-4 text-sm font-semibold text-paper outline-none transition hover:bg-brandTeal focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-4 motion-reduce:transition-none lg:justify-self-end"
-              href="#sign-in"
-            >
-              Sign in to NewinMeter
-              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transition-none" />
-            </a>
-          </div>
-
-          <div className="mt-12 grid gap-6 border-t border-line pt-7 text-xs leading-5 text-muted md:grid-cols-[0.7fr_1.3fr]">
-            <div>
+        <div className="mx-auto max-w-[86rem] px-5 py-8 sm:px-8 lg:px-12">
+          <div className="flex flex-col gap-4 border-t border-line pt-7 text-xs leading-5 text-muted sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
               <Wordmark textClassName="text-ink" accentClassName="text-accent" />
-              <p className="mt-2">Community-built for Newinbosch residents.</p>
+              <span>Community-built for Newinbosch residents.</span>
             </div>
-            <div className="md:justify-self-end">
-              <nav className="flex items-center gap-4" aria-label="Footer">
-                <Link className="hover:text-ink" href="/privacy">
-                  Privacy
-                </Link>
-                <Link className="hover:text-ink" href="/terms">
-                  Terms
-                </Link>
-                <a className="hover:text-ink" href={SUPPORT_MAILTO}>
-                  Feedback
-                </a>
-              </nav>
-              <p className="mt-3 max-w-2xl">
-                Independent of Newinbosch HOA, Livewire, and LiveMopay. By continuing, you agree to the Terms and
-                Privacy Policy.
-              </p>
-            </div>
+            <nav className="flex items-center gap-4" aria-label="Footer">
+              <Link className="hover:text-ink" href="/privacy">
+                Privacy
+              </Link>
+              <Link className="hover:text-ink" href="/terms">
+                Terms
+              </Link>
+              <a className="hover:text-ink" href={SUPPORT_MAILTO}>
+                Feedback
+              </a>
+            </nav>
           </div>
+          <p className="mt-3 max-w-2xl text-xs text-muted">
+            Independent of Newinbosch HOA, Livewire, and LiveMopay. By continuing, you agree to the Terms and Privacy
+            Policy.
+          </p>
         </div>
       </footer>
     </div>
