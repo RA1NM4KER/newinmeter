@@ -94,7 +94,7 @@ function FilterBarContent({
   // as the bar scrolling a bit before it actually catches and sticks).
   // One element carrying both rules sidesteps the collapse entirely.
   const containerClassName = fullBleed
-    ? `-mx-3 -mt-6 bg-brandTeal px-6 py-6 sm:-mx-6 sm:px-9 lg:-mx-8 lg:px-11 ${sticky ? "lg:sticky lg:top-0 lg:z-10" : ""}`
+    ? `-mx-3 -mt-6 bg-brandTeal px-6 py-6 sm:-mx-6 sm:px-9 lg:-mx-8 lg:px-11 ${sticky ? "lg:sticky lg:top-0 lg:z-20" : ""}`
     : "rounded-lg border border-line bg-brandTeal px-3 py-3";
 
   return (
