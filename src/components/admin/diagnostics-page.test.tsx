@@ -87,6 +87,8 @@ describe("DiagnosticsPage", () => {
     const { container } = render(<DiagnosticsPage snapshot={snapshot()} />);
 
     expect(screen.getByText("Action required")).toBeTruthy();
+    expect(screen.getByText("Status evaluated just now")).toBeTruthy();
+    expect(screen.getByText("Connections needing attention")).toBeTruthy();
     expect(screen.getByText("problem-user@example.test")).toBeTruthy();
     expect(screen.getByText("View all healthy connections")).toBeTruthy();
     expect(container.querySelector("details[open]")).toBeNull();

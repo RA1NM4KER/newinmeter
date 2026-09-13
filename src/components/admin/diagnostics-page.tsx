@@ -248,7 +248,7 @@ export function DiagnosticsPage({
             <span className={`h-2 w-2 shrink-0 rounded-full ${healthDotClass[overview.overall]}`} aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ink">{overallLabel}</p>
-              <p className="mt-0.5 text-xs text-muted">Checked just now</p>
+              <p className="mt-0.5 text-xs text-muted">Status evaluated just now</p>
             </div>
             <DiagnosticsRefreshButton />
           </div>
@@ -288,7 +288,7 @@ export function DiagnosticsPage({
 
         <section aria-labelledby="needs-attention-heading">
           <SectionLabel detail={`${problems.length} connection${problems.length === 1 ? "" : "s"}`}>
-            <span id="needs-attention-heading">Needs attention</span>
+            <span id="needs-attention-heading">Connections needing attention</span>
           </SectionLabel>
           {problems.length ? (
             <Card className="overflow-hidden">

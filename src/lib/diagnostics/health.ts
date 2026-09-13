@@ -51,7 +51,7 @@ export function classifySchedulerHealth(lastInvocationAt: string | null, now: Da
     return { state: "critical", reason: `Scheduler worker has not checked in for ${Math.floor(minutes)} minutes.` };
   }
   if (minutes > SCHEDULER_WARNING_AFTER_MINUTES) {
-    return { state: "warning", reason: `Scheduler worker is ${Math.floor(minutes)} minutes behind.` };
+    return { state: "warning", reason: `Last scheduler check-in was ${Math.floor(minutes)} minutes ago.` };
   }
   return { state: "healthy", reason: "Scheduler worker activity is on time." };
 }

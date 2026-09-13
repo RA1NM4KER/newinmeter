@@ -44,7 +44,10 @@ describe("diagnostics health classification", () => {
 
   it("uses the five-minute scheduler heartbeat without over-alerting on a short delay", () => {
     expect(classifySchedulerHealth("2026-08-26T11:50:00.000Z", now).state).toBe("healthy");
-    expect(classifySchedulerHealth("2026-08-26T11:40:00.000Z", now).state).toBe("warning");
+    expect(classifySchedulerHealth("2026-08-26T11:40:00.000Z", now)).toEqual({
+      state: "warning",
+      reason: "Last scheduler check-in was 20 minutes ago."
+    });
     expect(classifySchedulerHealth("2026-08-26T11:20:00.000Z", now).state).toBe("critical");
   });
 
