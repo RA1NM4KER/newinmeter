@@ -294,6 +294,9 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
           <p className="mt-1 text-xs text-muted">
             We sent a 6-digit sign-in code to <span className="font-medium text-ink">{email}</span>
           </p>
+          <p className="mt-1 text-xs text-muted">
+            Don&apos;t see it? Check your spam or junk folder.
+          </p>
         </div>
 
         <form onSubmit={handleSubmitCode} className="mt-2 flex w-full flex-col items-center gap-3">
