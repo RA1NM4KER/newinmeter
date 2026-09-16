@@ -14,6 +14,18 @@ agent have found this faster if it were written down? If yes, write it down, one
 to the section it fits. If the fix was routine (typo, straightforward logic error with no hidden
 trap), skip it, this file is for gotchas worth reusing, not a changelog.
 
+**Write the doc entry only once the fix is actually verified, not while you still believe it's
+right.** Tests passing is a start; if the user can confirm it live (they tested it, the bug
+stopped happening), wait for that before writing the entry, right before the commit/push that
+ships the fix, not mid-investigation. A confidently-wrong diagnosis written into the runbook is
+worse than no entry, a future agent trusts it as settled team knowledge instead of re-deriving it,
+and gets misled further than if nothing were written at all.
+
+**Every entry in `docs/debugging-runbook.md` is a starting hypothesis to verify against current
+state, not a settled fact**, the same way you'd treat any other note about a codebase that could
+have changed since it was written. Confirm it still matches reality before acting on it, especially
+before telling a user something is "known behavior" because a doc says so.
+
 ## What this is
 
 NewinMeter: a Next.js (App Router) multi-user dashboard that pulls a user's LiveMopay
