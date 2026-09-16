@@ -86,7 +86,14 @@ export async function POST(request: Request) {
     }
 
     await recordFunnelEvent("connect_succeeded");
-    return NextResponse.json({ status: "connected", accountLabel: connection.accountLabel }, { headers: rateHeaders });
+    return NextResponse.json(
+      {
+        status: "connected",
+        accountLabel: connection.accountLabel,
+        requiresRestoration: connection.dataState !== "warm"
+      },
+      { headers: rateHeaders }
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -119,7 +126,8 @@ export async function POST(request: Request) {
     if (error instanceof LiveMopayTooManyAttemptsError) {
       return NextResponse.json(
         {
-          message: "LiveMopay has temporarily blocked further sign-in attempts on this account. Wait a while and try again."
+          message:
+            "LiveMopay has temporarily blocked further sign-in attempts on this account. Wait a while and try again."
         },
         { status: 429, headers: rateHeaders }
       );
@@ -127,7 +135,10 @@ export async function POST(request: Request) {
 
     console.error("livemopay_connect_failed", error instanceof Error ? error.message : "unknown_error");
     return NextResponse.json(
-      { message: "Could not connect your LiveMopay account. This looks like a NewinMeter problem, not yours -- try again shortly." },
+      {
+        message:
+          "Could not connect your LiveMopay account. This looks like a NewinMeter problem, not yours -- try again shortly."
+      },
       { status: 500, headers: rateHeaders }
     );
   }

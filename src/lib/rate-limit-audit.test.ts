@@ -6,6 +6,7 @@ const API_ROOT = join(process.cwd(), "src/app/api");
 const EXEMPT_ROUTES = new Set([
   "src/app/api/beacon/summary/route.ts",
   "src/app/api/cron/auto-sync/route.ts",
+  "src/app/api/cron/cold-storage/route.ts",
   "src/app/api/cron/livemopay-canary/route.ts",
   "src/app/api/cron/reset-demo/route.ts",
   "src/app/api/cron/stale-check/route.ts"
@@ -39,7 +40,9 @@ describe("API rate-limit audit", () => {
     for (const path of routeFiles()) {
       const source = readFileSync(path, "utf8");
       const route = publicRoute(path);
-      const auditLines = audit.split("\n").filter((line) => line.includes(`| \`${route}\` |`));
+      const auditLines = audit
+        .split("\n")
+        .filter((line) => line.startsWith("| `" + route + "`"));
       expect(auditLines, `${route} is missing from the audit`).not.toHaveLength(0);
 
       for (const match of Array.from(source.matchAll(/export async function (GET|POST|PATCH|PUT|DELETE)\b/g))) {

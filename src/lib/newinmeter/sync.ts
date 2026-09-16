@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import {
   currentNewinmeterLocalYear,
@@ -14,8 +15,8 @@ import { resolveTariffBand } from "./tariff-profiles";
 
 const BATCH_SIZE = 500;
 
-type SyncMode = "incremental" | "full";
-export type SyncTrigger = "manual" | "auto";
+export type SyncMode = "incremental" | "full" | "restore";
+export type SyncTrigger = "manual" | "auto" | "restore";
 
 export class SyncAlreadyRunningError extends Error {
   constructor() {
@@ -24,7 +25,37 @@ export class SyncAlreadyRunningError extends Error {
   }
 }
 
-type CaptureRunRow = { id: string };
+type CaptureRunRow = { id: string; status: "running" | "success" | "failed" };
+
+const TRANSIENT_SUPABASE_RETRY_ATTEMPTS = 3;
+const TRANSIENT_SUPABASE_RETRY_DELAY_MS = 250;
+
+// A gateway timeout is ambiguous: PostgREST may have completed the statement
+// even though the caller did not receive its response. Only use retries for
+// operations that are naturally idempotent, or after reconciling their state.
+function isTransientSupabaseError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(502|503|504)\b|gateway timeout|fetch failed|network/i.test(message);
+}
+
+async function retryTransientSupabaseOperation<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < TRANSIENT_SUPABASE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientSupabaseError(error) || attempt === TRANSIENT_SUPABASE_RETRY_ATTEMPTS - 1) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, TRANSIENT_SUPABASE_RETRY_DELAY_MS * 2 ** attempt));
+    }
+  }
+
+  throw lastError;
+}
 
 export type LivemopaySyncParams = {
   connectionId: string;
@@ -37,28 +68,39 @@ export type LivemopaySyncParams = {
   onRefreshTokenRotated: (newRefreshToken: string) => Promise<void>;
 };
 
+export function recentRestoreStartDate(now = new Date()) {
+  return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
 
 async function latestPeriodDateForConnection(connectionId: string) {
-  const rows = await adminSupabaseFetch<Array<{ period_dt: string }>>(
-    `/energy_rows?select=period_dt&connection_id=eq.${encodeURIComponent(connectionId)}&order=period_dt.desc&limit=1`
+  const rows = await retryTransientSupabaseOperation(() =>
+    adminSupabaseFetch<Array<{ period_dt: string }>>(
+      `/energy_rows?select=period_dt&connection_id=eq.${encodeURIComponent(connectionId)}&order=period_dt.desc&limit=1`
+    )
   );
 
   return rows[0]?.period_dt?.split(" ", 1)[0] || null;
 }
 
 async function startCaptureRun(connectionId: string, mode: SyncMode, trigger: SyncTrigger) {
+  // Supplying the id ourselves makes an ambiguous POST safely reconcilable.
+  // A retry can then discover this exact run instead of accidentally creating
+  // a second one (or mistaking the partial unique-index conflict for another
+  // worker's active sync).
+  const runId = randomUUID();
   try {
-    const response = await adminSupabaseRequest<CaptureRunRow[]>(
-      "POST",
-      "/capture_runs",
-      [{ connection_id: connectionId, mode, trigger, status: "running" }],
-      "return=representation"
-    );
+    const response = await adminSupabaseRequest<CaptureRunRow[]>("POST", "/rpc/start_capture_run", {
+      p_run_id: runId,
+      p_connection_id: connectionId,
+      p_mode: mode,
+      p_trigger: trigger
+    });
 
-    return response[0]?.id;
+    return response[0]?.id ?? runId;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // capture_runs_one_running_per_connection is a partial unique index on
@@ -66,6 +108,15 @@ async function startCaptureRun(connectionId: string, mode: SyncMode, trigger: Sy
     // concurrency guard replacing the old in-memory `activeSync` variable.
     if (message.includes("23505") || message.includes("duplicate key")) {
       throw new SyncAlreadyRunningError();
+    }
+
+    if (isTransientSupabaseError(error)) {
+      const existing = await retryTransientSupabaseOperation(() =>
+        adminSupabaseFetch<CaptureRunRow[]>(`/capture_runs?select=id,status&id=eq.${encodeURIComponent(runId)}&limit=1`)
+      );
+      if (existing[0]) {
+        return runId;
+      }
     }
 
     throw error;
@@ -81,17 +132,44 @@ async function finishCaptureRun(
   // raise statement_timeout for itself before the UPDATE -- and its
   // cascading rollup-refresh trigger -- begins executing. See
   // supabase/migrations/20260726030000_newinmeter_finish_capture_run_rpc.sql.
-  await adminSupabaseRequest(
-    "POST",
-    "/rpc/finish_capture_run",
-    {
-      p_run_id: runId,
-      p_status: status,
-      p_rows_synced: options.rowsSynced ?? null,
-      p_error: options.error ?? null
-    },
-    "return=minimal"
-  );
+  const finalize = () =>
+    adminSupabaseRequest(
+      "POST",
+      "/rpc/finish_capture_run",
+      {
+        p_run_id: runId,
+        p_status: status,
+        p_rows_synced: options.rowsSynced ?? null,
+        p_error: options.error ?? null
+      },
+      "return=minimal"
+    );
+
+  try {
+    await finalize();
+  } catch (error) {
+    if (!isTransientSupabaseError(error)) throw error;
+
+    // Do not turn a successfully finalized run into a failure merely because
+    // its response was lost. The RPC's conditional transition (migration
+    // 20260912000000) makes a same-status retry safe as well.
+    const existing = await retryTransientSupabaseOperation(() =>
+      adminSupabaseFetch<CaptureRunRow[]>(`/capture_runs?select=id,status&id=eq.${encodeURIComponent(runId)}&limit=1`)
+    );
+    if (existing[0]?.status === status) return;
+    if (existing[0] && existing[0].status !== "running") {
+      throw new Error(`Capture run was already finalized as ${existing[0].status}.`);
+    }
+
+    await retryTransientSupabaseOperation(finalize);
+
+    const reconciled = await retryTransientSupabaseOperation(() =>
+      adminSupabaseFetch<CaptureRunRow[]>(`/capture_runs?select=id,status&id=eq.${encodeURIComponent(runId)}&limit=1`)
+    );
+    if (reconciled[0]?.status !== status) {
+      throw new Error("Capture run finalization could not be confirmed.");
+    }
+  }
 }
 
 // A fingerprint of what the OLD parser would have written for a ledger entry
@@ -193,7 +271,9 @@ async function deleteMisparsedRefundTopups(connectionId: string, matchers: Refun
     return 0;
   }
 
-  const removed = await adminSupabaseRequest<Array<{ id: string }>>("DELETE", path, undefined, "return=representation");
+  const removed = await retryTransientSupabaseOperation(() =>
+    adminSupabaseRequest<Array<{ id: string }>>("DELETE", path, undefined, "return=representation")
+  );
 
   return removed.length;
 }
@@ -240,8 +320,10 @@ export function buildEnergyRowsUpsertBatch(
 async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string) {
   const syncedAt = nowIso();
   const onConflict = encodeURIComponent("connection_id,charge_label,period_dt,cost,balance");
-  const connectionRows = await adminSupabaseFetch<Array<{ tariff_profile: string | null }>>(
-    `/livemopay_connections?select=tariff_profile&id=eq.${encodeURIComponent(connectionId)}&limit=1`
+  const connectionRows = await retryTransientSupabaseOperation(() =>
+    adminSupabaseFetch<Array<{ tariff_profile: string | null }>>(
+      `/livemopay_connections?select=tariff_profile&id=eq.${encodeURIComponent(connectionId)}&limit=1`
+    )
   );
   const tariffProfile = connectionRows[0]?.tariff_profile ?? null;
   let total = 0;
@@ -259,11 +341,13 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
       continue;
     }
 
-    await adminSupabaseRequest(
-      "POST",
-      `/energy_rows?on_conflict=${onConflict}`,
-      batch,
-      "resolution=merge-duplicates,return=minimal"
+    await retryTransientSupabaseOperation(() =>
+      adminSupabaseRequest(
+        "POST",
+        `/energy_rows?on_conflict=${onConflict}`,
+        batch,
+        "resolution=merge-duplicates,return=minimal"
+      )
     );
 
     total += batch.length;
@@ -291,7 +375,9 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
     const startDate =
       params.mode === "full"
         ? "2000-01-01"
-        : (await latestPeriodDateForConnection(params.connectionId)) || `${currentNewinmeterLocalYear()}-01-01`;
+        : params.mode === "restore"
+          ? recentRestoreStartDate()
+          : (await latestPeriodDateForConnection(params.connectionId)) || `${currentNewinmeterLocalYear()}-01-01`;
 
     const rows = await fetchLiveMopayLedger({
       idToken: session.idToken,
@@ -318,7 +404,14 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       rowsSynced: synced
     };
   } catch (error) {
-    await finishCaptureRun(runId, "failed", { error: error instanceof Error ? error.message : String(error) });
+    try {
+      await finishCaptureRun(runId, "failed", { error: error instanceof Error ? error.message : String(error) });
+    } catch (finalizeError) {
+      // Preserve the original cause. The stale-run recovery job will close an
+      // inconclusive failure after its lease expires instead of leaving the
+      // connection locked forever.
+      console.error("newinmeter_capture_run_failure_finalize_inconclusive", runId, finalizeError);
+    }
     throw error;
   }
 }

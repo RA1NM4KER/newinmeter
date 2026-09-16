@@ -14,11 +14,14 @@ import {
   markAutoSyncFailure,
   markAutoSyncSuccess,
   markConnectionAuthError,
+  recoverStaleCaptureRuns,
+  recoverStaleConnectionRestores,
   releaseAutoSyncClaim,
   replaceConnectionRefreshToken,
   type ClaimedAutoSyncConnection
 } from "@/lib/newinmeter/connection";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
+import { LiveMopayRefreshTokenInvalidError } from "@/lib/newinmeter/web";
 import { decryptRefreshToken, TokenDecryptionError } from "@/lib/token-encryption";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +41,7 @@ const AUTO_SYNC_CLAIM_BATCH_LIMIT = 10;
 // may reclaim the same connection. Comfortably longer than any real
 // incremental sync takes.
 const AUTO_SYNC_CLAIM_TTL_MINUTES = 10;
+const CAPTURE_RUN_RECOVERY_TTL_MINUTES = 15;
 // "3 to 5 concurrent" per the design brief -- polite to LiveMopay, not one
 // request at a time either.
 const AUTO_SYNC_CONCURRENCY = 4;
@@ -84,7 +88,7 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
       return "alreadyRunning";
     }
 
-    if (error instanceof TokenDecryptionError) {
+    if (error instanceof TokenDecryptionError || error instanceof LiveMopayRefreshTokenInvalidError) {
       // Not retryable -- same reasoning as the manual /api/sync path.
       // markConnectionAuthError flips status out of 'connected' (excluding
       // it from future claims) and clears next_sync_at/sync_claimed_at.
@@ -120,6 +124,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
+  // Recover runs abandoned by a worker crash or an ambiguous database gateway
+  // timeout before attempting new work. Without this, the unique running-run
+  // index blocks that connection forever even though its scheduler claim has
+  // already expired.
+  const recoveredRuns = await recoverStaleCaptureRuns(CAPTURE_RUN_RECOVERY_TTL_MINUTES);
+  const recoveredRestores = await recoverStaleConnectionRestores(30);
+  if (recoveredRuns.length) {
+    console.warn("newinmeter_stale_capture_runs_recovered", recoveredRuns.length);
+  }
+
   const claimed = await claimDueAutoSyncConnections(AUTO_SYNC_CLAIM_BATCH_LIMIT, AUTO_SYNC_CLAIM_TTL_MINUTES);
 
   const results = await mapWithConcurrency(claimed, AUTO_SYNC_CONCURRENCY, processClaimedConnection);
@@ -138,7 +152,12 @@ export async function POST(request: Request) {
   }
 
   await Promise.all([
-    recordSchedulerInvocation({ claimed: claimed.length, ...counts }).catch(() => {
+    recordSchedulerInvocation({
+      claimed: claimed.length,
+      recoveredRuns: recoveredRuns.length,
+      recoveredRestores: recoveredRestores.length,
+      ...counts
+    }).catch(() => {
       console.error("newinmeter_scheduler_heartbeat_failed");
     }),
     reportBroadSyncOutcome(counts).catch(() => {
@@ -146,5 +165,11 @@ export async function POST(request: Request) {
     })
   ]);
 
-  return NextResponse.json({ ok: true, claimed: claimed.length, ...counts });
+  return NextResponse.json({
+    ok: true,
+    claimed: claimed.length,
+    recoveredRuns: recoveredRuns.length,
+    recoveredRestores: recoveredRestores.length,
+    ...counts
+  });
 }

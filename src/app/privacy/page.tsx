@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <DocumentShell title="Privacy Policy" updated="26 July 2026">
+    <DocumentShell title="Privacy Policy" updated="16 September 2026">
       <p className="text-ink/80">
         NewinMeter is a community-built dashboard for Newinbosch residents that connects to your own LiveMopay prepaid
         electricity and water account and turns your existing usage data into charts, history, and balance tracking.
@@ -71,6 +71,15 @@ export default function PrivacyPolicyPage() {
           your browser. Row-level security in our database ensures your data is only ever readable by your own account.
           Disconnecting your LiveMopay connection (from Settings) clears the stored refresh token immediately, while
           keeping your historical usage data intact.
+        </p>
+      </Section>
+
+      <Section title="Inactive-account storage">
+        <p>
+          After 45 days without genuine foreground use, we may remove reproducible high-volume meter detail from an
+          otherwise connected account. We keep your sign-in, encrypted LiveMopay connection, daily dashboard summaries,
+          activities, alerts, and preferences. When you return, NewinMeter restores the latest 90 days before reopening
+          the dashboard. Accounts with enabled alerts or live meter hardware are not archived.
         </p>
       </Section>
 

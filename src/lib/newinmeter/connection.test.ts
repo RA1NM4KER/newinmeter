@@ -62,7 +62,11 @@ const demoRow = {
   updated_at: "2026-01-01T00:00:00.000Z",
   last_synced_at: null,
   last_error: null,
-  is_demo: true
+  is_demo: true,
+  data_state: "warm",
+  cold_at: null,
+  restore_started_at: null,
+  restore_error: null
 };
 
 const realRow = { ...demoRow, id: "conn-real", user_id: "user-real", is_demo: false };
@@ -121,9 +125,7 @@ describe("newinmeter-connection demo protections", () => {
     mocks.adminSupabaseFetch.mockResolvedValue([
       { ...demoRow, status: "pending_selection", pending_accounts: [{ accountId: "a" }] }
     ]);
-    await expect(finalizeLivemopayAccountSelection("user-demo", 0)).rejects.toBeInstanceOf(
-      DemoAccountProtectedError
-    );
+    await expect(finalizeLivemopayAccountSelection("user-demo", 0)).rejects.toBeInstanceOf(DemoAccountProtectedError);
     expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
   });
 
@@ -219,11 +221,10 @@ describe("newinmeter-connection auto-sync scheduling", () => {
 
     const claimed = await claimDueAutoSyncConnections(5, 10);
 
-    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith(
-      "POST",
-      "/rpc/claim_due_auto_sync_connections",
-      { p_limit: 5, p_claim_ttl: "10 minutes" }
-    );
+    expect(mocks.adminSupabaseRequest).toHaveBeenCalledWith("POST", "/rpc/claim_due_auto_sync_connections", {
+      p_limit: 5,
+      p_claim_ttl: "10 minutes"
+    });
     expect(claimed).toEqual([
       {
         id: "conn-auto",

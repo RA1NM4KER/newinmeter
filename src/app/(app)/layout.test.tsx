@@ -36,7 +36,7 @@ vi.mock("next/navigation", () => ({
 
 import AppGroupLayout from "./layout";
 
-const connectedConnection = { status: "connected", isDemo: false };
+const connectedConnection = { status: "connected", dataState: "warm", isDemo: false };
 const session = { userId: "user-a", email: "a@example.com", accessToken: "token" };
 
 describe("(app)/layout", () => {
@@ -75,10 +75,21 @@ describe("(app)/layout", () => {
 
   it("redirects to /connect when connected status is anything other than 'connected'", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);
-    mocks.getConnectionForUser.mockResolvedValue({ status: "pending_selection", isDemo: false });
+    mocks.getConnectionForUser.mockResolvedValue({ status: "pending_selection", dataState: "warm", isDemo: false });
 
     await expect(AppGroupLayout({ children: <div /> })).rejects.toThrow("NEXT_REDIRECT:/connect");
   });
+
+  it.each(["hibernating", "cold", "restoring", "restore_failed"])(
+    "redirects %s data to the dedicated restoration route",
+    async (dataState) => {
+      mocks.getAuthenticatedSession.mockResolvedValue(session);
+      mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState, isDemo: false });
+
+      await expect(AppGroupLayout({ children: <div /> })).rejects.toThrow("NEXT_REDIRECT:/restore");
+      expect(mocks.redirect).toHaveBeenCalledWith("/restore");
+    }
+  );
 
   it("renders the app shell with the caller's own resolved identity when authenticated and connected", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);
@@ -97,7 +108,7 @@ describe("(app)/layout", () => {
 
   it("marks the shell as demo when the connection is the shared is_demo connection", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);
-    mocks.getConnectionForUser.mockResolvedValue({ status: "connected", isDemo: true });
+    mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState: "warm", isDemo: true });
 
     const ui = await AppGroupLayout({ children: <div /> });
     render(ui);

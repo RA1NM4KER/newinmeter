@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCronSecret: vi.fn(),
   claimDueAutoSyncConnections: vi.fn(),
+  recoverStaleCaptureRuns: vi.fn(),
+  recoverStaleConnectionRestores: vi.fn(),
   markAutoSyncSuccess: vi.fn(),
   markAutoSyncFailure: vi.fn(),
   markConnectionAuthError: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock("@/lib/diagnostics/operations", () => ({
 }));
 vi.mock("@/lib/newinmeter/connection", () => ({
   claimDueAutoSyncConnections: mocks.claimDueAutoSyncConnections,
+  recoverStaleCaptureRuns: mocks.recoverStaleCaptureRuns,
+  recoverStaleConnectionRestores: mocks.recoverStaleConnectionRestores,
   markAutoSyncSuccess: mocks.markAutoSyncSuccess,
   markAutoSyncFailure: mocks.markAutoSyncFailure,
   markConnectionAuthError: mocks.markConnectionAuthError,
@@ -72,6 +76,8 @@ describe("POST /api/cron/auto-sync", () => {
     vi.clearAllMocks();
     mocks.getCronSecret.mockReturnValue(CRON_SECRET);
     mocks.decryptRefreshToken.mockReturnValue("plain-refresh-token");
+    mocks.recoverStaleCaptureRuns.mockResolvedValue([]);
+    mocks.recoverStaleConnectionRestores.mockResolvedValue([]);
     mocks.markAutoSyncSuccess.mockResolvedValue(undefined);
     mocks.markAutoSyncFailure.mockResolvedValue(undefined);
     mocks.markConnectionAuthError.mockResolvedValue(undefined);
@@ -103,6 +109,18 @@ describe("POST /api/cron/auto-sync", () => {
 
     expect(body).toMatchObject({ ok: true, claimed: 0 });
     expect(mocks.runLivemopaySync).not.toHaveBeenCalled();
+  });
+
+  it("recovers abandoned capture runs before claiming new work", async () => {
+    mocks.recoverStaleCaptureRuns.mockResolvedValue([{ id: "run-a", connectionId: "a" }]);
+    mocks.claimDueAutoSyncConnections.mockResolvedValue([]);
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(mocks.recoverStaleCaptureRuns).toHaveBeenCalledWith(15);
+    expect(body).toMatchObject({ recoveredRuns: 1, claimed: 0 });
+    expect(mocks.recordScheduler).toHaveBeenCalledWith(expect.objectContaining({ recoveredRuns: 1 }));
   });
 
   it("one claimed connection failing does not abort the others in the same batch", async () => {

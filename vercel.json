@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/reset-demo",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cold-storage",
+      "schedule": "15 4 * * *"
     }
   ]
 }

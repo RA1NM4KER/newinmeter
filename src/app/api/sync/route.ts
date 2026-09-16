@@ -16,6 +16,7 @@ import {
   reportConnectionSyncSuccess
 } from "@/lib/diagnostics/operations";
 import { runLivemopaySync, SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
+import { LiveMopayRefreshTokenInvalidError } from "@/lib/newinmeter/web";
 import { TokenDecryptionError } from "@/lib/token-encryption";
 import { limitUserRequest } from "@/lib/rate-limit";
 
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: error.message }, { status: 409 });
     }
 
-    if (error instanceof TokenDecryptionError) {
+    if (error instanceof TokenDecryptionError || error instanceof LiveMopayRefreshTokenInvalidError) {
       // Not retryable -- the stored token can never decrypt successfully
       // again (see markConnectionAuthError). Flip the connection out of
       // "connected" now rather than leaving the user stuck on a sync

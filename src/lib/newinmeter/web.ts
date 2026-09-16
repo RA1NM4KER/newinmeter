@@ -186,20 +186,6 @@ async function postJson<T>(url: string, payload: unknown, headers?: Record<strin
   return readJsonResponse<T>(response, `POST ${url}`);
 }
 
-async function postForm<T>(url: string, payload: Record<string, string>, headers?: Record<string, string>) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      ...(headers ?? {})
-    },
-    body: new URLSearchParams(payload).toString(),
-    cache: "no-store"
-  });
-
-  return readJsonResponse<T>(response, `POST ${url}`);
-}
-
 async function getJson<T>(url: string, headers: Record<string, string>) {
   const response = await fetch(url, {
     method: "GET",
@@ -232,6 +218,13 @@ export class LiveMopayTooManyAttemptsError extends Error {
   constructor() {
     super("LiveMopay has temporarily blocked sign-in attempts for this account.");
     this.name = "LiveMopayTooManyAttemptsError";
+  }
+}
+
+export class LiveMopayRefreshTokenInvalidError extends Error {
+  constructor() {
+    super("The stored LiveMopay session has expired or been revoked.");
+    this.name = "LiveMopayRefreshTokenInvalidError";
   }
 }
 
@@ -299,21 +292,40 @@ export async function loginWithLiveMopayCredentials(email: string, password: str
 
 export async function refreshLiveMopaySession(refreshToken: string): Promise<LiveMopaySession> {
   const apiKey = getNewinmeterFirebaseApiKey();
-  const response = await postForm<{
+  const url = `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }).toString(),
+    cache: "no-store"
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    let code = "";
+    try {
+      code = (JSON.parse(text)?.error?.message as string | undefined) ?? "";
+    } catch {
+      // A non-JSON response is an upstream failure, not proof that the
+      // credential is invalid.
+    }
+    if (/INVALID_REFRESH_TOKEN|TOKEN_EXPIRED|USER_DISABLED|USER_NOT_FOUND/i.test(code)) {
+      throw new LiveMopayRefreshTokenInvalidError();
+    }
+    throw new Error(`POST ${url} failed with ${response.status}: ${text}`);
+  }
+
+  const parsed = (text ? JSON.parse(text) : {}) as {
     id_token: string;
     refresh_token: string;
     expires_in: string;
     user_id?: string;
-  }>(`https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(apiKey)}`, {
-    grant_type: "refresh_token",
-    refresh_token: refreshToken
-  });
+  };
 
   return {
-    idToken: response.id_token,
-    refreshToken: response.refresh_token,
-    expiresAt: expiresAtFromSeconds(response.expires_in),
-    localId: response.user_id
+    idToken: parsed.id_token,
+    refreshToken: parsed.refresh_token,
+    expiresAt: expiresAtFromSeconds(parsed.expires_in),
+    localId: parsed.user_id
   };
 }
 

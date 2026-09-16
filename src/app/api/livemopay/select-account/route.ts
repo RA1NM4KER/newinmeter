@@ -26,7 +26,11 @@ export async function POST(request: Request) {
     await recordFunnelEvent("connect_succeeded");
 
     return NextResponse.json(
-      { status: "connected", accountLabel: connection.accountLabel },
+      {
+        status: "connected",
+        accountLabel: connection.accountLabel,
+        requiresRestoration: connection.dataState !== "warm"
+      },
       { headers: rate.headers }
     );
   } catch (error) {

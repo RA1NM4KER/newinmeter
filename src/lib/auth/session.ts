@@ -71,7 +71,7 @@ export async function requireConnectedSession(): Promise<RequireConnectedSession
 
   const connection = await getConnectionForUser(session.userId);
 
-  if (!connection || connection.status !== "connected") {
+  if (!connection || connection.status !== "connected" || connection.dataState !== "warm") {
     return { ok: false, status: 409 };
   }
 

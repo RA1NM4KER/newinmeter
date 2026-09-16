@@ -348,6 +348,22 @@ order by start_time desc
 limit 20;
 ```
 
+## 20. Inactive-user cold storage
+
+Migration `20260916121835_inactive_user_cold_storage.sql` adds the connection lifecycle and privileged claim/purge/restore
+RPCs. Vercel Cron calls `/api/cron/cold-storage` daily using the existing `CRON_SECRET`; no additional Vault secret is
+required. The inactivity threshold is fixed at a minimum of 45 days in the database, and normal auto-sync only claims
+`data_state = 'warm'` connections.
+
+Before enabling the schedule in a new environment, preview candidates with the service role and confirm the exemptions:
+
+```sql
+select * from public.list_cold_storage_candidates(interval '45 days', 100);
+```
+
+Do not grant this or any purge/finalize function to browser roles. See `docs/cold-storage-operations.md` for preserved
+data, restoration behavior, monitoring, and the separately reviewed compaction follow-up.
+
 Open `/admin/diagnostics` as an admin after the first scheduler tick and canary run. Until the URL
 or environment variables are configured, the canary correctly remains critical/not-yet-run.
 Operational pushes reuse the existing VAPID setup and go only to users whose `user_roles.role` is

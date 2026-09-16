@@ -16,7 +16,7 @@ export default async function ConnectPage() {
 
   const connection = await getConnectionForUser(session.userId);
   if (connection?.status === "connected") {
-    redirect("/");
+    redirect(connection.dataState === "warm" ? "/" : "/restore");
   }
 
   const initialPendingAccounts =

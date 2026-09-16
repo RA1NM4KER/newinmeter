@@ -19,6 +19,9 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   // page below still guards itself too, but that check runs after this
   // shell has already painted.
   const earlyConnection = await getConnectionForUser(session.userId);
+  if (earlyConnection && earlyConnection.dataState !== "warm") {
+    redirect("/restore");
+  }
   if (!earlyConnection || earlyConnection.status !== "connected") {
     redirect("/connect");
   }

@@ -51,11 +51,22 @@ describe("/connect page", () => {
 
   it("redirects already-connected users to / instead of showing the connect form again", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);
-    mocks.getConnectionForUser.mockResolvedValue({ status: "connected" });
+    mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState: "warm" });
 
     await expect(ConnectPage()).rejects.toThrow("NEXT_REDIRECT:/");
     expect(mocks.redirect).toHaveBeenCalledWith("/");
   });
+
+  it.each(["hibernating", "cold", "restoring", "restore_failed"])(
+    "redirects %s data to the restoration route instead of /",
+    async (dataState) => {
+      mocks.getAuthenticatedSession.mockResolvedValue(session);
+      mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState });
+
+      await expect(ConnectPage()).rejects.toThrow("NEXT_REDIRECT:/restore");
+      expect(mocks.redirect).toHaveBeenCalledWith("/restore");
+    }
+  );
 
   it("renders the connect form for an authenticated, not-yet-connected user, and records the funnel view", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);

@@ -87,7 +87,12 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
       }
 
       setAccountLabel(body.accountLabel ?? null);
-      await runInitialSync();
+      if (body.requiresRestoration) {
+        router.replace("/restore");
+        router.refresh();
+      } else {
+        await runInitialSync();
+      }
     } catch {
       setError("Could not connect your LiveMopay account.");
     } finally {
@@ -113,7 +118,12 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
       }
 
       setAccountLabel(body.accountLabel ?? null);
-      await runInitialSync();
+      if (body.requiresRestoration) {
+        router.replace("/restore");
+        router.refresh();
+      } else {
+        await runInitialSync();
+      }
     } catch {
       setError("Could not finish connecting your account.");
     } finally {
@@ -204,8 +214,8 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
       <Zap className="h-5 w-5 text-accent" aria-hidden="true" />
       <h2 className="mt-3 text-base font-semibold text-ink">Log in with your LiveMopay details</h2>
       <p className="mt-1.5 text-sm leading-relaxed text-muted">
-        The same email and password you already use for LiveMopay -- not a new account, and often a different email
-        than the one you used to sign in here.
+        The same email and password you already use for LiveMopay -- not a new account, and often a different email than
+        the one you used to sign in here.
       </p>
 
       <form onSubmit={handleConnect} className="mt-5 flex flex-col gap-3">
@@ -268,8 +278,8 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
       <div className="mt-5 flex items-start gap-2 rounded-xl bg-canvas px-3 py-2.5 text-xs leading-relaxed text-muted">
         <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
         <p>
-          Your password is used once, right now, to fetch your electricity history -- then thrown away. NewinMeter
-          never stores it, and you can disconnect any time from the dashboard header.
+          Your password is used once, right now, to fetch your electricity history -- then thrown away. NewinMeter never
+          stores it, and you can disconnect any time from the dashboard header.
         </p>
       </div>
     </div>

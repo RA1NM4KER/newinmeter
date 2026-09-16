@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildEnergyRowsUpsertBatch, buildRefundTopupDeletePath, refundTopupMatchers } from "@/lib/newinmeter/sync";
+import {
+  buildEnergyRowsUpsertBatch,
+  buildRefundTopupDeletePath,
+  recentRestoreStartDate,
+  refundTopupMatchers
+} from "@/lib/newinmeter/sync";
 import type { NewinmeterCsvRow } from "@/lib/newinmeter/web";
 
 function row(overrides: Partial<NewinmeterCsvRow>): NewinmeterCsvRow {
@@ -50,6 +55,13 @@ describe("refundTopupMatchers", () => {
   it("recognises any '... Refund' description generically", () => {
     const matchers = refundTopupMatchers([row({ charge_label: "Some Other Refund" })]);
     expect(matchers).toHaveLength(1);
+  });
+});
+
+describe("recentRestoreStartDate", () => {
+  it("uses a bounded 90-day window instead of the full-history sentinel", () => {
+    expect(recentRestoreStartDate(new Date("2026-09-16T12:00:00.000Z"))).toBe("2026-06-18");
+    expect(recentRestoreStartDate(new Date("2026-09-16T12:00:00.000Z"))).not.toBe("2000-01-01");
   });
 });
 

@@ -2,13 +2,14 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { cache } from "react";
-import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
+import { adminSupabaseFetch, adminSupabaseRequest, authenticatedSupabaseFetch } from "../supabase-rest";
 import { createSupabaseAdminClient } from "../supabase/admin-client";
 import { decryptRefreshToken, encryptRefreshToken } from "../token-encryption";
 import { computeAutoSyncRetryAt, computeNextAutoSyncAt } from "./schedule";
 import type { LiveMopayAccountCandidate } from "./web";
 
 export type ConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
+export type ConnectionDataState = "warm" | "hibernating" | "cold" | "restoring" | "restore_failed";
 
 // Thrown by every mutation that would destroy or repoint the shared demo
 // connection (reconnect, disconnect, account delete). This is the backstop
@@ -53,6 +54,10 @@ type ConnectionRow = {
   // here: never user-writable, and there is no authenticated RLS write path
   // to it (see 20260824050000's own comment on this column).
   tariff_profile: string | null;
+  data_state: ConnectionDataState;
+  cold_at: string | null;
+  restore_started_at: string | null;
+  restore_error: string | null;
 };
 
 export type LivemopayConnection = {
@@ -79,13 +84,18 @@ export type LivemopayConnection = {
   lastAutoSyncError: string | null;
   alertsEnabled: boolean;
   tariffProfile: string | null;
+  dataState: ConnectionDataState;
+  coldAt: string | null;
+  restoreStartedAt: string | null;
+  restoreError: string | null;
 };
 
 const CONNECTION_SELECT =
   "id,user_id,livemopay_email,firebase_local_id,account_id,company_id,property_id,account_label," +
   "refresh_token_ciphertext,refresh_token_iv,refresh_token_auth_tag,pending_accounts,status," +
   "connected_at,updated_at,last_synced_at,last_error,is_demo,auto_sync_enabled,next_sync_at," +
-  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at,alerts_enabled,tariff_profile";
+  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at,alerts_enabled,tariff_profile," +
+  "data_state,cold_at,restore_started_at,restore_error";
 
 function toConnection(row: ConnectionRow): LivemopayConnection {
   return {
@@ -108,7 +118,11 @@ function toConnection(row: ConnectionRow): LivemopayConnection {
     lastAutoSyncStatus: row.last_auto_sync_status,
     lastAutoSyncError: row.last_auto_sync_error,
     alertsEnabled: row.alerts_enabled,
-    tariffProfile: row.tariff_profile
+    tariffProfile: row.tariff_profile,
+    dataState: row.data_state,
+    coldAt: row.cold_at,
+    restoreStartedAt: row.restore_started_at,
+    restoreError: row.restore_error
   };
 }
 
@@ -177,7 +191,9 @@ export async function beginLivemopayConnection(params: BeginConnectionParams): P
   // never a stale one left over from before a disconnect.
   const autoSyncEnabled = existing?.auto_sync_enabled ?? true;
   const connectionId = existing?.id ?? randomUUID();
-  const nextSyncAt = single && autoSyncEnabled ? computeNextAutoSyncAt(connectionId, new Date()).toISOString() : null;
+  const dataIsWarm = !existing || existing.data_state === "warm";
+  const nextSyncAt =
+    single && autoSyncEnabled && dataIsWarm ? computeNextAutoSyncAt(connectionId, new Date()).toISOString() : null;
 
   const payload = {
     id: connectionId,
@@ -241,7 +257,8 @@ export async function finalizeLivemopayAccountSelection(userId: string, index: n
   // This is the "becomes connected" transition for the multi-candidate
   // flow -- same rule as beginLivemopayConnection's single-candidate path:
   // a fresh next_sync_at when auto-sync is (still) enabled.
-  const nextSyncAt = row.auto_sync_enabled ? computeNextAutoSyncAt(row.id, new Date()).toISOString() : null;
+  const nextSyncAt =
+    row.auto_sync_enabled && row.data_state === "warm" ? computeNextAutoSyncAt(row.id, new Date()).toISOString() : null;
 
   const rows = await adminSupabaseRequest<ConnectionRow[]>(
     "PATCH",
@@ -377,7 +394,10 @@ export type StaleCheckConnection = {
 export async function listConnectionsForStaleCheck(): Promise<StaleCheckConnection[]> {
   const rows = await adminSupabaseFetch<
     Array<Pick<ConnectionRow, "id" | "user_id" | "last_synced_at"> & { stale_notified_at: string | null }>
-  >("/livemopay_connections?select=id,user_id,last_synced_at,stale_notified_at&status=eq.connected&is_demo=eq.false");
+  >(
+    "/livemopay_connections?select=id,user_id,last_synced_at,stale_notified_at" +
+      "&status=eq.connected&data_state=eq.warm&is_demo=eq.false"
+  );
 
   return rows.map((row) => ({
     id: row.id,
@@ -406,6 +426,11 @@ export async function markConnectionStaleNotified(connectionId: string): Promise
 // naturally routes the user back through /connect) and the dead token
 // fields are cleared rather than left around unusable.
 export async function markConnectionAuthError(connectionId: string): Promise<void> {
+  const lifecycleRows = await adminSupabaseFetch<Array<{ data_state: ConnectionDataState }>>(
+    `/livemopay_connections?select=data_state&id=eq.${encodeURIComponent(connectionId)}&limit=1`
+  );
+  const isRestoring = lifecycleRows[0]?.data_state === "restoring";
+
   await adminSupabaseRequest(
     "PATCH",
     `/livemopay_connections?id=eq.${encodeURIComponent(connectionId)}`,
@@ -424,6 +449,12 @@ export async function markConnectionAuthError(connectionId: string): Promise<voi
       sync_claimed_at: null,
       last_auto_sync_status: "failed",
       last_auto_sync_error: "Reconnect required.",
+      ...(isRestoring
+        ? {
+            data_state: "restore_failed",
+            restore_error: "Your LiveMopay connection expired. Reconnect to restore your data."
+          }
+        : {}),
       updated_at: new Date().toISOString()
     },
     "return=minimal"
@@ -452,7 +483,10 @@ export async function setAutoSyncEnabled(userId: string, enabled: boolean): Prom
     throw new DemoAccountProtectedError("automatic sync");
   }
 
-  const nextSyncAt = enabled && row.status === "connected" ? computeNextAutoSyncAt(row.id, new Date()).toISOString() : null;
+  const nextSyncAt =
+    enabled && row.status === "connected" && row.data_state === "warm"
+      ? computeNextAutoSyncAt(row.id, new Date()).toISOString()
+      : null;
 
   const rows = await adminSupabaseRequest<ConnectionRow[]>(
     "PATCH",
@@ -516,6 +550,27 @@ type ClaimRpcRow = {
   refresh_token_auth_tag: string;
 };
 
+export type RecoveredCaptureRun = {
+  id: string;
+  connectionId: string;
+};
+
+type RecoveredCaptureRunRpcRow = {
+  id: string;
+  connection_id: string;
+};
+
+// Closes an abandoned capture run before the scheduler claims due work. The
+// database function has a conservative 15-minute lease; it only changes the
+// run's terminal status and never touches ledger data.
+export async function recoverStaleCaptureRuns(staleAfterMinutes: number): Promise<RecoveredCaptureRun[]> {
+  const rows = await adminSupabaseRequest<RecoveredCaptureRunRpcRow[]>("POST", "/rpc/recover_stale_capture_runs", {
+    p_stale_after: `${staleAfterMinutes} minutes`
+  });
+
+  return rows.map((row) => ({ id: row.id, connectionId: row.connection_id }));
+}
+
 // Atomically claims up to `limit` due connections via the
 // claim_due_auto_sync_connections RPC (see the auto-sync-schedule
 // migration) -- the scheduler-claim layer that sits above
@@ -541,6 +596,88 @@ export async function claimDueAutoSyncConnections(
     refreshTokenIv: row.refresh_token_iv,
     refreshTokenAuthTag: row.refresh_token_auth_tag
   }));
+}
+
+export type ClaimedColdStorageConnection = { connectionId: string; userId: string };
+
+type ClaimedColdStorageRpcRow = { connection_id: string; user_id: string };
+
+export async function claimColdStorageCandidates(limit: number): Promise<ClaimedColdStorageConnection[]> {
+  const rows = await adminSupabaseRequest<ClaimedColdStorageRpcRow[]>("POST", "/rpc/claim_cold_storage_candidates", {
+    p_limit: limit,
+    p_inactive_for: "45 days",
+    p_claim_ttl: "15 minutes"
+  });
+  return rows.map((row) => ({ connectionId: row.connection_id, userId: row.user_id }));
+}
+
+type PurgeColdStorageRpcRow = {
+  energy_rows_deleted: number;
+  hourly_rollups_deleted: number;
+  interval_rollups_deleted: number;
+  remaining: boolean;
+};
+
+export async function purgeColdStorageBatch(connectionId: string, batchSize: number) {
+  const rows = await adminSupabaseRequest<PurgeColdStorageRpcRow[]>("POST", "/rpc/purge_cold_storage_batch", {
+    p_connection_id: connectionId,
+    p_batch_size: batchSize
+  });
+  const row = rows[0];
+  if (!row) throw new Error("Cold-storage purge returned no result.");
+  return {
+    energyRowsDeleted: Number(row.energy_rows_deleted),
+    hourlyRollupsDeleted: Number(row.hourly_rollups_deleted),
+    intervalRollupsDeleted: Number(row.interval_rollups_deleted),
+    remaining: row.remaining
+  };
+}
+
+export async function completeConnectionHibernation(connectionId: string) {
+  await adminSupabaseRequest("POST", "/rpc/complete_connection_hibernation", { p_connection_id: connectionId });
+}
+
+export async function markConnectionHibernationError(connectionId: string, message: string) {
+  await adminSupabaseRequest("POST", "/rpc/mark_connection_hibernation_error", {
+    p_connection_id: connectionId,
+    p_error: message
+  });
+}
+
+type RestoreRequestRpcRow = {
+  connection_id: string;
+  data_state: ConnectionDataState;
+  should_start: boolean;
+};
+
+export async function requestConnectionRestore(accessToken: string) {
+  const rows = await authenticatedSupabaseFetch<RestoreRequestRpcRow[]>("/rpc/request_livemopay_restore", accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}"
+  });
+  const row = rows[0];
+  return row ? { connectionId: row.connection_id, dataState: row.data_state, shouldStart: row.should_start } : null;
+}
+
+export async function completeConnectionRestore(connectionId: string) {
+  await adminSupabaseRequest("POST", "/rpc/complete_connection_restore", { p_connection_id: connectionId });
+}
+
+export async function failConnectionRestore(connectionId: string, message: string) {
+  await adminSupabaseRequest("POST", "/rpc/fail_connection_restore", {
+    p_connection_id: connectionId,
+    p_error: message
+  });
+}
+
+export async function recoverStaleConnectionRestores(staleAfterMinutes: number): Promise<string[]> {
+  const rows = await adminSupabaseRequest<Array<{ connection_id: string }>>(
+    "POST",
+    "/rpc/recover_stale_connection_restores",
+    { p_stale_after: `${staleAfterMinutes} minutes` }
+  );
+  return rows.map((row) => row.connection_id);
 }
 
 // Successful automatic sync: preserves the general last_synced_at/last_error

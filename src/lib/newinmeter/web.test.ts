@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LiveMopayInvalidCredentialsError,
+  LiveMopayRefreshTokenInvalidError,
   LiveMopayTooManyAttemptsError,
   loginWithLiveMopayCredentials,
-  normalizeLedgerRow
+  normalizeLedgerRow,
+  refreshLiveMopaySession
 } from "@/lib/newinmeter/web";
 
 // Fixtures mirror the real LiveMopay ledger API response shape.
@@ -80,6 +82,44 @@ describe("normalizeLedgerRow", () => {
   });
 });
 
+describe("refreshLiveMopaySession", () => {
+  const originalApiKey = process.env.NEWINMETER_FIREBASE_API_KEY;
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    process.env.NEWINMETER_FIREBASE_API_KEY = "test-api-key";
+  });
+
+  afterEach(() => {
+    if (originalApiKey === undefined) delete process.env.NEWINMETER_FIREBASE_API_KEY;
+    else process.env.NEWINMETER_FIREBASE_API_KEY = originalApiKey;
+    global.fetch = originalFetch;
+  });
+
+  it.each(["INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_DISABLED", "USER_NOT_FOUND"])(
+    "classifies %s as a reconnect-required credential failure",
+    async (code) => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: { message: code } }), { status: 400 })
+        ) as unknown as typeof fetch;
+
+      await expect(refreshLiveMopaySession("expired-token")).rejects.toBeInstanceOf(LiveMopayRefreshTokenInvalidError);
+    }
+  );
+
+  it("keeps upstream failures retryable rather than misclassifying credentials", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: "INTERNAL_ERROR" } }), { status: 503 })
+      ) as unknown as typeof fetch;
+
+    await expect(refreshLiveMopaySession("token")).rejects.not.toBeInstanceOf(LiveMopayRefreshTokenInvalidError);
+  });
+});
+
 describe("loginWithLiveMopayCredentials", () => {
   const originalApiKey = process.env.NEWINMETER_FIREBASE_API_KEY;
   const originalFetch = global.fetch;
@@ -96,9 +136,7 @@ describe("loginWithLiveMopayCredentials", () => {
   });
 
   function mockFetchResponse(status: number, body: unknown) {
-    global.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(body), { status })
-    ) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
   }
 
   it("returns a session on success", async () => {
