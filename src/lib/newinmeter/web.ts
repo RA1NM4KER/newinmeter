@@ -8,7 +8,7 @@ import {
   getNewinmeterWebPortalOrigin
 } from "../env";
 
-const ENERGY_LABEL_RE = /^(.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)$/;
+const ENERGY_LABEL_RE = /^(.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: to \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\)$/;
 const WATER_LABEL_RE = /^(Water:.+?) \((\d{4}-\d{2}-\d{2} \d{2}:\d{2})(?: to \d{4}-\d{2}-\d{2} \d{2}:\d{2})?\)$/;
 const FIXED_LABEL_RE = /^(Daily .+?) - (\d{4}-\d{2}-\d{2})$/;
 // Credits whose description mentions a refund (e.g. "Incorrect Tariff Refund")
