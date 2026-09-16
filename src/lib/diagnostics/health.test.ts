@@ -19,6 +19,8 @@ function connection(overrides: Partial<ConnectionHealthInput> = {}): ConnectionH
     lastAutoSyncStatus: "success",
     syncClaimedAt: null,
     consecutiveFailures: 0,
+    dataState: "warm",
+    hibernationError: null,
     ...overrides
   };
 }
@@ -40,6 +42,32 @@ describe("diagnostics health classification", () => {
     expect(classifyConnectionHealth(connection({ syncClaimedAt: "2026-08-26T11:40:00.000Z" }), now).state).toBe(
       "critical"
     );
+  });
+
+  it("treats a cold connection as healthy instead of flagging stale sync", () => {
+    const result = classifyConnectionHealth(
+      connection({ dataState: "cold", lastSuccessfulSyncAt: "2026-06-01T00:00:00.000Z", nextSyncAt: null }),
+      now
+    );
+    expect(result.state).toBe("healthy");
+  });
+
+  it("treats a hibernating connection as a warning, not a stale-sync critical", () => {
+    const result = classifyConnectionHealth(connection({ dataState: "hibernating" }), now);
+    expect(result.state).toBe("warning");
+  });
+
+  it("escalates a hibernating connection with a purge error to critical", () => {
+    const result = classifyConnectionHealth(
+      connection({ dataState: "hibernating", hibernationError: "statement timeout" }),
+      now
+    );
+    expect(result.state).toBe("critical");
+    expect(result.reason).toContain("statement timeout");
+  });
+
+  it("classifies a failed restoration as critical", () => {
+    expect(classifyConnectionHealth(connection({ dataState: "restore_failed" }), now).state).toBe("critical");
   });
 
   it("uses the five-minute scheduler heartbeat without over-alerting on a short delay", () => {

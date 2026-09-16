@@ -19,7 +19,8 @@ import {
 
 export const DIAGNOSTIC_CONNECTION_SELECT =
   "id,user_id,account_label,status,connected_at,last_synced_at,last_error,auto_sync_enabled,next_sync_at," +
-  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at";
+  "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at," +
+  "data_state,hibernation_error,cold_at,restore_started_at,restore_error";
 
 type DiagnosticConnectionRow = {
   id: string;
@@ -35,6 +36,11 @@ type DiagnosticConnectionRow = {
   last_auto_sync_status: "success" | "failed" | null;
   last_auto_sync_error: string | null;
   sync_claimed_at: string | null;
+  data_state: "warm" | "hibernating" | "cold" | "restoring" | "restore_failed";
+  hibernation_error: string | null;
+  cold_at: string | null;
+  restore_started_at: string | null;
+  restore_error: string | null;
 };
 
 type CaptureRunRow = {
@@ -81,6 +87,11 @@ export type DiagnosticConnection = {
   stale: boolean;
   consecutiveFailures: number;
   recentRuns: DiagnosticSyncRun[];
+  dataState: DiagnosticConnectionRow["data_state"];
+  hibernationError: string | null;
+  coldAt: string | null;
+  restoreStartedAt: string | null;
+  restoreError: string | null;
 };
 
 export type DiagnosticsSnapshot = {
@@ -101,6 +112,11 @@ export type DiagnosticsSnapshot = {
     lastApiContractSuccessAt: string | null;
     activePushSubscriptions: number;
     pushStatus: HealthState | null;
+    warmConnections: number;
+    hibernatingConnections: number;
+    coldConnections: number;
+    restoringConnections: number;
+    restoreFailedConnections: number;
   };
   connections: DiagnosticConnection[];
   events: Array<{
@@ -196,7 +212,9 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
         lastAttemptStatus: lastAttempt?.status ?? null,
         lastAutoSyncStatus: row.last_auto_sync_status,
         syncClaimedAt: row.sync_claimed_at,
-        consecutiveFailures: failureCount
+        consecutiveFailures: failureCount,
+        dataState: row.data_state,
+        hibernationError: row.hibernation_error
       },
       now
     );
@@ -220,7 +238,12 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
       claimStuck: Boolean(row.sync_claimed_at && now.getTime() - Date.parse(row.sync_claimed_at) > 15 * 60_000),
       stale: Boolean(lastSuccessfulSyncAt && now.getTime() - Date.parse(lastSuccessfulSyncAt) > 8 * 3_600_000),
       consecutiveFailures: failureCount,
-      recentRuns
+      recentRuns,
+      dataState: row.data_state,
+      hibernationError: row.hibernation_error ? sanitizeDiagnosticMessage(row.hibernation_error) : null,
+      coldAt: row.cold_at,
+      restoreStartedAt: row.restore_started_at,
+      restoreError: row.restore_error ? sanitizeDiagnosticMessage(row.restore_error) : null
     };
   });
   connections.sort((a, b) => {
@@ -266,7 +289,12 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
       lastApiContractCheckAt: canaryState?.lastCheckedAt ?? null,
       lastApiContractSuccessAt: canaryState?.lastSuccessAt ?? null,
       activePushSubscriptions,
-      pushStatus: pushState?.status ?? null
+      pushStatus: pushState?.status ?? null,
+      warmConnections: connections.filter((connection) => connection.dataState === "warm").length,
+      hibernatingConnections: connections.filter((connection) => connection.dataState === "hibernating").length,
+      coldConnections: connections.filter((connection) => connection.dataState === "cold").length,
+      restoringConnections: connections.filter((connection) => connection.dataState === "restoring").length,
+      restoreFailedConnections: connections.filter((connection) => connection.dataState === "restore_failed").length
     },
     connections,
     events: events.map((event) => ({

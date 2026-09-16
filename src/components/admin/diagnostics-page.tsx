@@ -29,6 +29,33 @@ const healthTextClass: Record<HealthState, string> = {
   critical: "text-red-600 dark:text-red-400"
 };
 
+const dataStateLabel: Record<DiagnosticConnection["dataState"], string> = {
+  warm: "Warm",
+  hibernating: "Hibernating",
+  cold: "Cold",
+  restoring: "Restoring",
+  restore_failed: "Restore failed"
+};
+
+const dataStateBadgeClass: Record<DiagnosticConnection["dataState"], string> = {
+  warm: "",
+  hibernating: "border-amber-200 bg-amberSoft text-amber-800 dark:border-amber-900/70 dark:text-amber-300",
+  cold: "border-line bg-canvas text-muted",
+  restoring: "border-amber-200 bg-amberSoft text-amber-800 dark:border-amber-900/70 dark:text-amber-300",
+  restore_failed: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-400"
+};
+
+function DataStateBadge({ connection }: { connection: DiagnosticConnection }) {
+  if (connection.dataState === "warm") return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[0.6875rem] font-medium ${dataStateBadgeClass[connection.dataState]}`}
+    >
+      {dataStateLabel[connection.dataState]}
+    </span>
+  );
+}
+
 function when(value: string | null) {
   return value ? localDateTime.format(new Date(value)) : "Never";
 }
@@ -119,6 +146,7 @@ function ConnectionRow({ connection, selected }: { connection: DiagnosticConnect
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate text-sm font-medium text-ink">{connection.userEmail ?? "Unknown user"}</span>
             <StatusText state={connection.health} />
+            <DataStateBadge connection={connection} />
           </span>
           <span className="mt-0.5 block truncate text-xs text-muted">
             {connection.accountLabel ?? "Unlabelled account"} · {connection.status.replaceAll("_", " ")} ·{" "}
@@ -156,12 +184,31 @@ function ConnectionRow({ connection, selected }: { connection: DiagnosticConnect
             <span className="block text-muted">Next scheduled</span>
             <span className="text-ink">{when(connection.nextSyncAt)}</span>
           </div>
+          {connection.dataState !== "warm" ? (
+            <div>
+              <span className="block text-muted">Data lifecycle</span>
+              <span className="text-ink">
+                {dataStateLabel[connection.dataState]}
+                {connection.dataState === "cold" && connection.coldAt ? ` since ${when(connection.coldAt)}` : ""}
+                {connection.dataState === "restoring" && connection.restoreStartedAt
+                  ? ` since ${when(connection.restoreStartedAt)}`
+                  : ""}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {connection.claimStuck || connection.lastAutoSyncError || connection.lastError ? (
           <p className="mt-3 rounded-md border border-amber-200 bg-amberSoft px-3 py-2 text-xs text-amber-800 dark:border-amber-900/70 dark:text-amber-300">
             {connection.claimStuck ? "The scheduler claim is older than its expected lease. " : ""}
             {connection.lastAutoSyncError ?? connection.lastError ?? ""}
+          </p>
+        ) : null}
+
+        {connection.hibernationError || connection.restoreError ? (
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-400">
+            {connection.hibernationError ? `Cold-storage purge error: ${connection.hibernationError} ` : ""}
+            {connection.restoreError ? `Restore error: ${connection.restoreError}` : ""}
           </p>
         ) : null}
 
@@ -269,6 +316,17 @@ export function DiagnosticsPage({
                 state={connectionState}
                 label={`${overview.healthyConnections} / ${overview.connectionCount} healthy`}
               />
+            }
+          />
+          <StatusRow
+            label="Data lifecycle"
+            value={
+              <span className="text-xs text-muted">
+                {overview.warmConnections} warm · {overview.coldConnections} cold
+                {overview.hibernatingConnections ? ` · ${overview.hibernatingConnections} hibernating` : ""}
+                {overview.restoringConnections ? ` · ${overview.restoringConnections} restoring` : ""}
+                {overview.restoreFailedConnections ? ` · ${overview.restoreFailedConnections} restore failed` : ""}
+              </span>
             }
           />
           <StatusRow

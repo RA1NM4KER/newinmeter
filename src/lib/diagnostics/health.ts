@@ -29,6 +29,8 @@ export type ConnectionHealthInput = {
   lastAutoSyncStatus: "success" | "failed" | null;
   syncClaimedAt: string | null;
   consecutiveFailures: number;
+  dataState: "warm" | "hibernating" | "cold" | "restoring" | "restore_failed";
+  hibernationError: string | null;
 };
 
 function ageMs(iso: string, now: Date) {
@@ -88,6 +90,22 @@ export function classifyConnectionHealth(connection: ConnectionHealthInput, now:
   }
   if (connection.status !== "connected") {
     return { state: "warning", reason: "Connection setup is incomplete." };
+  }
+
+  if (connection.dataState === "restore_failed") {
+    return { state: "critical", reason: "Restoration failed; the user needs to reconnect." };
+  }
+  if (connection.dataState === "hibernating" && connection.hibernationError) {
+    return { state: "critical", reason: `Cold-storage purge is stuck: ${connection.hibernationError}` };
+  }
+  if (connection.dataState === "hibernating") {
+    return { state: "warning", reason: "Cold-storage purge is in progress." };
+  }
+  if (connection.dataState === "restoring") {
+    return { state: "warning", reason: "Restoring the last 90 days after return." };
+  }
+  if (connection.dataState === "cold") {
+    return { state: "healthy", reason: "Dormant: reproducible detail archived after inactivity." };
   }
 
   if (connection.syncClaimedAt && ageMs(connection.syncClaimedAt, now) > SYNC_CLAIM_STUCK_AFTER_MINUTES * MINUTE_MS) {

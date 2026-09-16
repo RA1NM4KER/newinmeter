@@ -10,7 +10,11 @@ vi.mock("./diagnostics-refresh-button", () => ({
 
 import { DiagnosticsPage } from "./diagnostics-page";
 
-function connection(id: string, health: "healthy" | "warning" | "critical"): DiagnosticConnection {
+function connection(
+  id: string,
+  health: "healthy" | "warning" | "critical",
+  overrides: Partial<DiagnosticConnection> = {}
+): DiagnosticConnection {
   return {
     id,
     userEmail: `${id}@example.test`,
@@ -30,7 +34,13 @@ function connection(id: string, health: "healthy" | "warning" | "critical"): Dia
     claimStuck: false,
     stale: health !== "healthy",
     consecutiveFailures: health === "critical" ? 3 : health === "warning" ? 1 : 0,
-    recentRuns: []
+    recentRuns: [],
+    dataState: "warm",
+    hibernationError: null,
+    coldAt: null,
+    restoreStartedAt: null,
+    restoreError: null,
+    ...overrides
   };
 }
 
@@ -52,7 +62,12 @@ function snapshot(): DiagnosticsSnapshot {
       lastApiContractCheckAt: "2026-08-26T08:00:00.000Z",
       lastApiContractSuccessAt: "2026-08-26T08:00:00.000Z",
       activePushSubscriptions: 3,
-      pushStatus: "healthy"
+      pushStatus: "healthy",
+      warmConnections: 2,
+      hibernatingConnections: 0,
+      coldConnections: 0,
+      restoringConnections: 0,
+      restoreFailedConnections: 0
     },
     connections: [connection("healthy-user", "healthy"), connection("problem-user", "critical")],
     events: [
@@ -112,5 +127,20 @@ describe("DiagnosticsPage", () => {
     render(<DiagnosticsPage snapshot={data} />);
 
     expect(screen.getByText("No unresolved incidents.")).toBeTruthy();
+  });
+
+  it("shows the data-lifecycle counts and a badge on a non-warm connection", () => {
+    const data = snapshot();
+    data.overview.warmConnections = 1;
+    data.overview.coldConnections = 1;
+    data.connections = [
+      connection("healthy-user", "healthy"),
+      connection("cold-user", "healthy", { dataState: "cold", coldAt: "2026-08-01T00:00:00.000Z" })
+    ];
+
+    render(<DiagnosticsPage snapshot={data} />);
+
+    expect(screen.getByText("1 warm · 1 cold")).toBeTruthy();
+    expect(screen.getAllByText("Cold").length).toBeGreaterThan(0);
   });
 });

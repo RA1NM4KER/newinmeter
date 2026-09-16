@@ -31,7 +31,12 @@ describe("diagnostics serialization boundary", () => {
         lastApiContractCheckAt: null,
         lastApiContractSuccessAt: null,
         activePushSubscriptions: 0,
-        pushStatus: null
+        pushStatus: null,
+        warmConnections: 0,
+        hibernatingConnections: 0,
+        coldConnections: 0,
+        restoringConnections: 0,
+        restoreFailedConnections: 0
       },
       connections: [],
       events: []
