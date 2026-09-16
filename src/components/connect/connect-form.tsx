@@ -282,6 +282,19 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
           stores it, and you can disconnect any time from the dashboard header.
         </p>
       </div>
+
+      <p className="mt-3 text-center text-xs text-muted">
+        Not sure what your LiveMopay login is?{" "}
+        <a
+          href="https://wa.me/27649367138?text=Hi%2C%20I%27m%20having%20trouble%20connecting%20my%20LiveMopay%20account%20to%20NewinMeter"
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-brandTeal underline underline-offset-2 hover:no-underline"
+        >
+          WhatsApp me
+        </a>
+        , happy to help.
+      </p>
     </div>
   );
 }
