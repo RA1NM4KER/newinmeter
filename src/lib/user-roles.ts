@@ -31,8 +31,19 @@ function toPermissions(row: UserRoleRow): UserPermissions {
 // signed-in user has one without needing a signup-time hook. Defaults to
 // 'user' -- the one seed admin is created by migration instead.
 // cache()'d because the layout and every page under it each call this
-// independently -- without it, one navigation reads (or worse, tries to
-// provision) the same user's role row 2+ times.
+// independently within one request -- without it, one navigation reads (or
+// worse, tries to provision) the same user's role row 2+ times.
+//
+// cache() only dedupes calls within a single request, not across two
+// genuinely concurrent requests (two tabs, a double-tap, a slow first load
+// racing a retry), so the fallback write below is an upsert
+// (on_conflict=user_id, resolution=merge-duplicates), not a plain insert.
+// A plain POST here previously caused a real production crash: two
+// concurrent requests for a brand-new user both passed the select-empty
+// check, then raced to insert the same user_id, and the loser hit a
+// user_roles_pkey unique violation that surfaced as an unhandled 500 on the
+// homepage. The upsert makes both requests succeed and return the same row
+// no matter which one "wins."
 export const getOrCreateUserPermissions = cache(async (userId: string): Promise<UserPermissions> => {
   const rows = await adminSupabaseFetch<UserRoleRow[]>(
     `/user_roles?select=${SELECT}&user_id=eq.${encodeURIComponent(userId)}&limit=1`
@@ -44,9 +55,9 @@ export const getOrCreateUserPermissions = cache(async (userId: string): Promise<
 
   const created = await adminSupabaseRequest<UserRoleRow[]>(
     "POST",
-    "/user_roles",
+    "/user_roles?on_conflict=user_id",
     [{ user_id: userId }],
-    "return=representation"
+    "resolution=merge-duplicates,return=representation"
   );
 
   return toPermissions(created[0]);
