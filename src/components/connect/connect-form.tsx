@@ -279,7 +279,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
         <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
         <p>
           Your password is used once, right now, to fetch your electricity history, then thrown away. NewinMeter never
-          stores it, and you can disconnect any time from the dashboard header.
+          stores it, and you can disconnect any time from Settings.
         </p>
       </div>
 
