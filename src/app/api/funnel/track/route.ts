@@ -14,8 +14,10 @@ export const runtime = "nodejs";
 // ConnectForm reading /api/sync's response, not by /api/sync itself (which
 // also serves ordinary resyncs and has no "this is onboarding" context).
 const CLIENT_TRACKABLE_EVENTS = new Set([
-  "sign_in_started",
-  "sign_in_completed",
+  "sign_in_started_google",
+  "sign_in_started_email",
+  "sign_in_completed_google",
+  "sign_in_completed_email",
   "initial_sync_succeeded",
   "initial_sync_failed"
 ]);

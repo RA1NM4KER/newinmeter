@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const supabase = createServerSupabaseClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      await recordFunnelEvent("sign_in_completed");
+      await recordFunnelEvent("sign_in_completed_google");
     }
   }
 

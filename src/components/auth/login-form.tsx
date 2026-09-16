@@ -173,7 +173,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
-    trackFunnelEvent("sign_in_started");
+    trackFunnelEvent("sign_in_started_email");
 
     try {
       const ok = await sendCode();
@@ -234,7 +234,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
       // Session is created by this same call, inside this same page/PWA
       // context -- no redirect through /auth/callback, so there's no
       // browser hand-off for an installed PWA to get stranded by.
-      trackFunnelEvent("sign_in_completed");
+      trackFunnelEvent("sign_in_completed_email");
       window.location.href = "/";
     } catch {
       setError("Couldn't verify the code. Check your connection and try again.");
@@ -269,7 +269,7 @@ export function LoginForm({ demoToken }: { demoToken?: string }) {
   async function handleGoogleSignIn() {
     setError("");
     setIsGoogleLoading(true);
-    trackFunnelEvent("sign_in_started");
+    trackFunnelEvent("sign_in_started_google");
 
     const supabase = createSupabaseBrowserClient();
     const { error: signInError } = await supabase.auth.signInWithOAuth({

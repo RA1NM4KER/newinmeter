@@ -3,15 +3,17 @@ import "server-only";
 import { adminSupabaseRequest } from "./supabase-rest";
 
 // Keep this list in sync with the check constraint in
-// 20260828100000_onboarding_funnel.sql. Deliberately small and named after
-// product steps, not routes -- there is no page-view-by-page-view tracking
-// here, only these specific onboarding milestones.
+// 20260828100000_onboarding_funnel.sql and 20260916153000_funnel_sign_in_method.sql.
+// Deliberately small and named after product steps, not routes. There is no
+// page-view-by-page-view tracking here, only these specific onboarding milestones.
 export const FUNNEL_EVENT_TYPES = [
   "login_page_viewed",
   "public_demo_started",
   "demo_reached",
-  "sign_in_started",
-  "sign_in_completed",
+  "sign_in_started_google",
+  "sign_in_started_email",
+  "sign_in_completed_google",
+  "sign_in_completed_email",
   "connect_screen_viewed",
   "connect_attempted",
   "connect_invalid_credentials",

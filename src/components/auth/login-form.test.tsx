@@ -69,10 +69,10 @@ describe("LoginForm", () => {
     });
   });
 
-  it("tracks sign_in_started when Google is clicked", async () => {
+  it("tracks sign_in_started_google when Google is clicked", async () => {
     render(<LoginForm />);
     fireEvent.click(screen.getByText("Continue with Google"));
-    await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_started"));
+    await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_started_google"));
   });
 
   it("posts no token to /api/demo-login for the public button (no demoToken prop)", async () => {
@@ -210,7 +210,7 @@ describe("LoginForm", () => {
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     });
 
-    it("tracks sign_in_completed on successful code verification", async () => {
+    it("tracks sign_in_completed_email on successful code verification", async () => {
       const originalLocation = window.location;
       Object.defineProperty(window, "location", {
         configurable: true,
@@ -221,7 +221,7 @@ describe("LoginForm", () => {
       await sendCode();
       enterCode("123456");
 
-      await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_completed"));
+      await waitFor(() => expect(mocks.trackFunnelEvent).toHaveBeenCalledWith("sign_in_completed_email"));
 
       Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
     });

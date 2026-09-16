@@ -32,9 +32,9 @@ describe("POST /api/funnel/track", () => {
   });
 
   it("records an allow-listed client-trackable event", async () => {
-    const response = await POST(request({ event: "sign_in_started" }));
+    const response = await POST(request({ event: "sign_in_started_email" }));
     expect(response.status).toBe(204);
-    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("sign_in_started");
+    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("sign_in_started_email");
   });
 
   it("silently no-ops (204, no crash) for a valid-but-not-client-trackable event", async () => {
@@ -51,7 +51,7 @@ describe("POST /api/funnel/track", () => {
 
   it("is rate limited by IP", async () => {
     mocks.enforceRateLimit.mockResolvedValue({ allowed: false, minute: {}, day: {} });
-    const response = await POST(request({ event: "sign_in_started" }));
+    const response = await POST(request({ event: "sign_in_started_email" }));
     expect(response.status).toBe(429);
     expect(mocks.recordFunnelEvent).not.toHaveBeenCalled();
   });

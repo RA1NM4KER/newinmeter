@@ -17,14 +17,14 @@ describe("GET /auth/callback", () => {
     vi.clearAllMocks();
   });
 
-  it("redirects home and records sign_in_completed on a successful code exchange", async () => {
+  it("redirects home and records sign_in_completed_google on a successful code exchange", async () => {
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
 
     const response = await GET(new Request("http://localhost/auth/callback?code=abc123"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost/");
-    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("sign_in_completed");
+    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("sign_in_completed_google");
   });
 
   it("still redirects, but does not record completion, when the code exchange fails", async () => {

@@ -5,7 +5,13 @@
 // Deliberately fire-and-forget: never awaited by callers, never throws,
 // never blocks or delays the actual sign-in flow it's measuring.
 export function trackFunnelEvent(
-  event: "sign_in_started" | "sign_in_completed" | "initial_sync_succeeded" | "initial_sync_failed"
+  event:
+    | "sign_in_started_google"
+    | "sign_in_started_email"
+    | "sign_in_completed_google"
+    | "sign_in_completed_email"
+    | "initial_sync_succeeded"
+    | "initial_sync_failed"
 ): void {
   try {
     void fetch("/api/funnel/track", {
