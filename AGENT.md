@@ -7,6 +7,13 @@ page say X"), go straight to `docs/debugging-runbook.md` instead, it has the act
 identifiers (Supabase project ref, Vercel scope, Resend domain) and the exact queries/commands to
 start with. This file is the practical "how to work here" layer on top of those.
 
+**If you fix a bug that needed new understanding to solve** (a race condition, a wrong
+assumption that cost real back-and-forth, a stale reference, a gotcha in how a tool/library
+behaves here), add it to `docs/debugging-runbook.md` before finishing. The bar: would a future
+agent have found this faster if it were written down? If yes, write it down, one paragraph, next
+to the section it fits. If the fix was routine (typo, straightforward logic error with no hidden
+trap), skip it, this file is for gotchas worth reusing, not a changelog.
+
 ## What this is
 
 NewinMeter: a Next.js (App Router) multi-user dashboard that pulls a user's LiveMopay

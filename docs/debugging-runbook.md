@@ -56,6 +56,18 @@ Read the result:
   it shouldn't be): pull the next-level detail below before assuming it's a data availability
   gap upstream, it might be a parser bug (this exact shape, water present/energy zero, was a real
   ledger-label-regex bug once, see `git log --oneline -- src/lib/newinmeter/web.ts`).
+- **User reports a one-time "Application error: a server-side exception has occurred" on first
+  load right after signing up, but reloading fixes it and everything works fine after**: this
+  matches a real fixed bug, a duplicate-key crash in `getOrCreateUserPermissions`
+  (`src/lib/user-roles.ts`). Two concurrent requests for a brand-new user could both pass the
+  select-empty check before either had inserted, then race to insert the same `user_id`, and the
+  loser hit a `user_roles_pkey` unique violation that surfaced as an unhandled 500. Fixed by
+  making the fallback write an upsert instead of a plain insert, but the general shape (a
+  `cache()`-wrapped select-then-insert, where `cache()` only dedupes within a single request, not
+  across two genuinely concurrent ones) could recur anywhere else that pattern gets copied. If you
+  see a one-time crash immediately after account creation that self-resolves on retry, suspect
+  this class of bug before anything else, check `system_events`/Vercel error logs for a
+  `duplicate key` or `_pkey` message around the timestamp to confirm.
 
 ## Is this one user, or everyone like them?
 
