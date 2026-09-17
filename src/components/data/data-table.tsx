@@ -109,7 +109,7 @@ function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
   return (
     <button
       aria-label={`View details for ${chargeTypeLabelMap[row.chargeKind]} at ${row.periodDateTime.replace("T", " ")}`}
-      className="flex w-full flex-col gap-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
+      className="flex w-full appearance-none flex-col gap-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
       onClick={onOpen}
       type="button"
     >
