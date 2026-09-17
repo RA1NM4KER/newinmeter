@@ -62,7 +62,14 @@ Read the result:
   opening the app, not a bug. It self-resolves the moment they open the app again (the visit's
   own `record_user_activity()` call rearms `next_sync_at` immediately), so if someone says "it
   wasn't syncing but now it is" after they just reopened it, that's this working as intended, not
-  something that silently fixed itself.
+  something that silently fixed itself. As of `classifyConnectionHealth`
+  (`src/lib/diagnostics/health.ts`) checking `pausedForInactivity`, `/admin/diagnostics` itself
+  already accounts for this and won't flag a paused connection as Critical, so this manual check
+  is mainly for tracing things diagnostics doesn't cover (a direct SQL question, a different
+  admin surface). For 9 real connections before this was fixed, `next_sync_at` freezing on pause
+  meant the "overdue" age just grew forever, so every one of them sat pinned at Critical
+  indefinitely, a pure false positive next to genuine failures on the same page, until a user
+  actually looked at the 3 flagged that day and asked whether they were actually broken.
 - **Connection looks healthy but `energy_rows`/`water_rows` look wrong** (e.g. one is zero when
   it shouldn't be): pull the next-level detail below before assuming it's a data availability
   gap upstream, it might be a parser bug (this exact shape, water present/energy zero, was a real
