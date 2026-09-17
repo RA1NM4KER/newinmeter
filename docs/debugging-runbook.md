@@ -322,6 +322,17 @@ can possibly be:
   `block` with `space-y-*` for vertical stacking instead of `flex flex-col gap-*`, so each row's
   width comes from plain block flow (unambiguous in every engine) rather than inherited
   flex-stretch, keeping only one flat flex context per row for the actual left/right split.
+- A small, "just a little bit" horizontal scroll on a mobile card list, as opposed to content
+  looking outright broken: check for unbounded user content (an email, a label with no length
+  limit) rendered without `min-w-0` on its flex-item wrapper and `truncate`/`break-all` on the
+  text itself. A flex item won't shrink below its own content's min-content size by default, and a
+  string with no spaces (an email address) can't wrap, so it forces the row wider than the screen
+  by exactly its own overflow. This only becomes visible scrolling (rather than silently clipped)
+  if the scroll container uses `overflow-auto`/`overflow-x-auto` rather than `overflow-y-auto`,
+  which every mobile card list in this codebase currently does. Hit `AdminUserCard`
+  (`src/components/admin/admin-users-table.tsx`) exactly this way: real user emails, no
+  `min-w-0`/`truncate` on the wrapping div. `DataRowCard` never had this problem because its
+  content (dates, formatted currency) is short and fixed-format, not user-supplied and unbounded.
 - If neither theory fits and you don't have a Mac to actually inspect the real device, say so and
   ask for one rather than guessing further CSS properties one at a time. Real Safari Web Inspector
   (device connected to a Mac via cable, Settings → Safari → Advanced → Web Inspector on the phone,
