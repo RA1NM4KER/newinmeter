@@ -67,6 +67,28 @@ Read the result:
   it shouldn't be): pull the next-level detail below before assuming it's a data availability
   gap upstream, it might be a parser bug (this exact shape, water present/energy zero, was a real
   ledger-label-regex bug once, see `git log --oneline -- src/lib/newinmeter/web.ts`).
+- **Data table's Band column shows "Not specified" for a real (non-demo) user, or
+  `tariff_band_approaching` seems unavailable for them**: check
+  `select tariff_profile from public.livemopay_connections where id = '<connection_id>';` before
+  assuming anything about their usage data itself. `tariff_profile` is NOT auto-assigned at
+  connect time (`beginLivemopayConnection` never touches it), it's only ever set by a reviewed,
+  one-time migration matching a specific `company_id` (currently `'43'`, Newinbosch, see
+  `20260824050000_*.sql`'s own extensive comment on why this is deliberately not automatic: the
+  author didn't trust `company_id` as a permanent unsupervised signal, only as something worth a
+  human re-checking before each assignment). This means **every new connection since that
+  migration ran silently has `tariff_profile = null` until someone notices and re-runs the same
+  reviewed backfill**, which is exactly what happened for 3+ weeks and 9 real connections before
+  this was caught. If you find drift like this again, the fix is the same shape: re-run the
+  freshness check the original migration's comment specifies
+  (`select company_id, count(*), count(distinct account_id), count(distinct property_id) from
+  livemopay_connections where is_demo = false group by company_id;`), confirm no new estate has
+  shown up, then write a new migration re-applying the identical predicate (self-limiting, safe
+  to re-run, can't double-apply). Once `tariff_profile` is set, `npm run backfill:tariff-bands`
+  (see its own comment for the `--conditions=react-server` requirement) resolves the actual
+  `tariff_band` values on existing rows, new syncs resolve it automatically going forward
+  (`sync.ts` calls `resolveTariffBand` on every insert). A remaining handful of unresolved rows
+  after running it is expected if the demo connection has any (it's deliberately excluded,
+  `is_demo = true`, and has no profile by design), not a sign the run failed.
 - **User reports a one-time "Application error: a server-side exception has occurred" on first
   load right after signing up, but reloading fixes it and everything works fine after**: this
   matches a real fixed bug, a duplicate-key crash in `getOrCreateUserPermissions`
