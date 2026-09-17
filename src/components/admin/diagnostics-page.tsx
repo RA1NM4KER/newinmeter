@@ -330,6 +330,16 @@ export function DiagnosticsPage({
             }
           />
           <StatusRow
+            label="Tariff profile"
+            value={
+              <span className={`text-xs ${overview.tariffProfileMissingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted"}`}>
+                {overview.tariffProfileMissingCount > 0
+                  ? `${overview.tariffProfileMissingCount} connected Newinbosch account${overview.tariffProfileMissingCount === 1 ? "" : "s"} missing a profile`
+                  : "None missing"}
+              </span>
+            }
+          />
+          <StatusRow
             label="Push"
             value={
               overview.pushStatus ? (

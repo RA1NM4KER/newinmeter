@@ -67,7 +67,8 @@ function snapshot(): DiagnosticsSnapshot {
       hibernatingConnections: 0,
       coldConnections: 0,
       restoringConnections: 0,
-      restoreFailedConnections: 0
+      restoreFailedConnections: 0,
+      tariffProfileMissingCount: 0
     },
     connections: [connection("healthy-user", "healthy"), connection("problem-user", "critical")],
     events: [

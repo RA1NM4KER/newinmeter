@@ -1,7 +1,7 @@
 import "server-only";
 
 import { countPushSubscriptions } from "../push-subscriptions";
-import { adminSupabaseFetch } from "../supabase-rest";
+import { adminSupabaseCount, adminSupabaseFetch } from "../supabase-rest";
 import { listAllAuthUsers } from "../user-roles";
 import {
   classifyCanaryHealth,
@@ -21,6 +21,17 @@ export const DIAGNOSTIC_CONNECTION_SELECT =
   "id,user_id,account_label,status,connected_at,last_synced_at,last_error,auto_sync_enabled,next_sync_at," +
   "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at," +
   "data_state,hibernation_error,cold_at,restore_started_at,restore_error";
+
+// The one estate this app currently serves (see the tariff_profile
+// backfill migrations' own extensive reasoning on why this identifier
+// isn't trusted for automatic, unreviewed assignment). Used only as a
+// server-side filter predicate for the count query below, never selected
+// into the diagnostics DTO itself -- this file has a deliberate, tested
+// boundary against ever exposing upstream account/property/company
+// identifiers through diagnostics (see DIAGNOSTIC_CONNECTION_SELECT's own
+// test), a plain count doesn't cross that line, adding the column to the
+// connection select would.
+const NEWINBOSCH_COMPANY_ID = "43";
 
 type DiagnosticConnectionRow = {
   id: string;
@@ -117,6 +128,13 @@ export type DiagnosticsSnapshot = {
     coldConnections: number;
     restoringConnections: number;
     restoreFailedConnections: number;
+    // Connected, non-demo, Newinbosch (company_id '43') connections with no
+    // tariff_profile assigned -- see the tariff_profile backfill migrations'
+    // reasoning for why this is surfaced as a count to notice, not
+    // auto-fixed. Should read 0 in steady state; a nonzero value means new
+    // signups have drifted since the last reviewed backfill and it's due
+    // for another one (see docs/debugging-runbook.md).
+    tariffProfileMissingCount: number;
   };
   connections: DiagnosticConnection[];
   events: Array<{
@@ -163,22 +181,37 @@ export function diagnosticsSnapshotToJson(snapshot: DiagnosticsSnapshot): string
 }
 
 export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<DiagnosticsSnapshot> {
-  const [connectionRows, captureRows, authUsers, states, events, unresolvedEvents, activePushSubscriptions] =
-    await Promise.all([
-      adminSupabaseFetch<DiagnosticConnectionRow[]>(
-        `/livemopay_connections?select=${DIAGNOSTIC_CONNECTION_SELECT}` +
-          "&is_demo=eq.false&status=in.(connected,error,pending_selection)&order=updated_at.desc"
-      ),
-      adminSupabaseFetch<CaptureRunRow[]>(
-        "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error" +
-          "&order=started_at.desc&limit=500"
-      ),
-      listAllAuthUsers(),
-      getSystemHealthStates(),
-      listRecentSystemEvents(40),
-      listUnresolvedSystemEvents(),
-      countPushSubscriptions()
-    ]);
+  const [
+    connectionRows,
+    captureRows,
+    authUsers,
+    states,
+    events,
+    unresolvedEvents,
+    activePushSubscriptions,
+    tariffProfileMissingCount
+  ] = await Promise.all([
+    adminSupabaseFetch<DiagnosticConnectionRow[]>(
+      `/livemopay_connections?select=${DIAGNOSTIC_CONNECTION_SELECT}` +
+        "&is_demo=eq.false&status=in.(connected,error,pending_selection)&order=updated_at.desc"
+    ),
+    adminSupabaseFetch<CaptureRunRow[]>(
+      "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error" +
+        "&order=started_at.desc&limit=500"
+    ),
+    listAllAuthUsers(),
+    getSystemHealthStates(),
+    listRecentSystemEvents(40),
+    listUnresolvedSystemEvents(),
+    countPushSubscriptions(),
+    // A plain count, company_id/tariff_profile are filter predicates in the
+    // URL here, never part of a select= clause, so they're never returned
+    // to or serialized by anything this function builds.
+    adminSupabaseCount(
+      `/livemopay_connections?select=id&is_demo=eq.false&status=eq.connected` +
+        `&company_id=eq.${NEWINBOSCH_COMPANY_ID}&tariff_profile=is.null`
+    )
+  ]);
 
   // Only the newest current/non-disconnected row per user. This avoids an
   // old historical error row appearing beside a later active reconnect.
@@ -246,6 +279,7 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
       restoreError: row.restore_error ? sanitizeDiagnosticMessage(row.restore_error) : null
     };
   });
+
   connections.sort((a, b) => {
     const rank = { critical: 0, warning: 1, healthy: 2 } as const;
     return rank[a.health] - rank[b.health] || (a.userEmail ?? "").localeCompare(b.userEmail ?? "");
@@ -294,7 +328,8 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
       hibernatingConnections: connections.filter((connection) => connection.dataState === "hibernating").length,
       coldConnections: connections.filter((connection) => connection.dataState === "cold").length,
       restoringConnections: connections.filter((connection) => connection.dataState === "restoring").length,
-      restoreFailedConnections: connections.filter((connection) => connection.dataState === "restore_failed").length
+      restoreFailedConnections: connections.filter((connection) => connection.dataState === "restore_failed").length,
+      tariffProfileMissingCount
     },
     connections,
     events: events.map((event) => ({
