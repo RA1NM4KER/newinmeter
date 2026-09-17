@@ -27,6 +27,21 @@ vi.mock("@/components/layout/app-shell", () => ({
     </div>
   )
 }));
+// RestorationOverlay's own polling/auto-start behavior is a client concern
+// (this is a server component test); only whether the layout renders it at
+// all, and with the connection's real state, matters here.
+vi.mock("@/components/restoration/restoration-overlay", () => ({
+  RestorationOverlay: (props: { initialState: string; reconnectRequired: boolean }) => (
+    <div
+      data-testid="restoration-overlay"
+      data-initial-state={props.initialState}
+      data-reconnect-required={String(props.reconnectRequired)}
+    />
+  )
+}));
+vi.mock("./loading", () => ({
+  default: () => <div data-testid="dashboard-loading" />
+}));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     mocks.redirect(url);
@@ -81,15 +96,31 @@ describe("(app)/layout", () => {
   });
 
   it.each(["hibernating", "cold", "restoring", "restore_failed"])(
-    "redirects %s data to the dedicated restoration route",
+    "renders the blurred dashboard shell and a RestorationOverlay for %s data, without redirecting",
     async (dataState) => {
       mocks.getAuthenticatedSession.mockResolvedValue(session);
       mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState, isDemo: false });
 
-      await expect(AppGroupLayout({ children: <div /> })).rejects.toThrow("NEXT_REDIRECT:/restore");
-      expect(mocks.redirect).toHaveBeenCalledWith("/restore");
+      const ui = await AppGroupLayout({ children: <div data-testid="page-content" /> });
+      render(ui);
+
+      expect(mocks.redirect).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("page-content")).toBeNull();
+      expect(screen.getByTestId("dashboard-loading")).toBeDefined();
+      expect(screen.getByTestId("restoration-overlay").dataset.initialState).toBe(dataState);
     }
   );
+
+  it("still renders the overlay when data isn't warm even if the connection isn't 'connected'", async () => {
+    mocks.getAuthenticatedSession.mockResolvedValue(session);
+    mocks.getConnectionForUser.mockResolvedValue({ status: "error", dataState: "restore_failed", isDemo: false });
+
+    const ui = await AppGroupLayout({ children: <div /> });
+    render(ui);
+
+    expect(mocks.redirect).not.toHaveBeenCalled();
+    expect(screen.getByTestId("restoration-overlay").dataset.reconnectRequired).toBe("true");
+  });
 
   it("renders the app shell with the caller's own resolved identity when authenticated and connected", async () => {
     mocks.getAuthenticatedSession.mockResolvedValue(session);

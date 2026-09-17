@@ -26,6 +26,13 @@ state, not a settled fact**, the same way you'd treat any other note about a cod
 have changed since it was written. Confirm it still matches reality before acting on it, especially
 before telling a user something is "known behavior" because a doc says so.
 
+**Always state the caveats of a feature you just built, unprompted, before calling it done.**
+Performance cost on the common path (measured or reasoned, not assumed), any new burden it puts on
+future changes (a check that isn't self-enforcing, a pattern someone has to remember to repeat), and
+what wasn't actually verified (a live/E2E check skipped, an edge case reasoned about but not tested)
+all count. Say them plainly even if nobody asked, this user wants to know the real tradeoffs of
+what shipped, not just that it shipped.
+
 ## What this is
 
 NewinMeter: a Next.js (App Router) multi-user dashboard that pulls a user's LiveMopay

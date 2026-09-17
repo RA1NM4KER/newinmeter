@@ -15,6 +15,14 @@ export default async function DataPage() {
   if (!connection || connection.status !== "connected") {
     redirect("/connect");
   }
+  // See the (app) layout's own comment: only "/" gets a blurred-skeleton
+  // substitution for non-warm data, every other route still redirects
+  // itself, now to "/" (which shows the restoration overlay) instead of the
+  // old dedicated /restore route. DataPageClient reads raw energy_rows via
+  // /api/energy-rows client-side, one of the tables cold storage purges.
+  if (connection.dataState !== "warm") {
+    redirect("/");
+  }
 
   return <DataPageClient isDemo={connection.isDemo} />;
 }

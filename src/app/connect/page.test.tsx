@@ -58,13 +58,13 @@ describe("/connect page", () => {
   });
 
   it.each(["hibernating", "cold", "restoring", "restore_failed"])(
-    "redirects %s data to the restoration route instead of /",
+    "redirects a connected user with %s data to / too, the overlay there handles it",
     async (dataState) => {
       mocks.getAuthenticatedSession.mockResolvedValue(session);
       mocks.getConnectionForUser.mockResolvedValue({ status: "connected", dataState });
 
-      await expect(ConnectPage()).rejects.toThrow("NEXT_REDIRECT:/restore");
-      expect(mocks.redirect).toHaveBeenCalledWith("/restore");
+      await expect(ConnectPage()).rejects.toThrow("NEXT_REDIRECT:/");
+      expect(mocks.redirect).toHaveBeenCalledWith("/");
     }
   );
 

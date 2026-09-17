@@ -16,7 +16,9 @@ export default async function ConnectPage() {
 
   const connection = await getConnectionForUser(session.userId);
   if (connection?.status === "connected") {
-    redirect(connection.dataState === "warm" ? "/" : "/restore");
+    // "/" itself now shows the restoration overlay when data_state isn't
+    // warm, see the (app) layout, no separate route needed.
+    redirect("/");
   }
 
   const initialPendingAccounts =

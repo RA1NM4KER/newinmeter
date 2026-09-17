@@ -88,7 +88,9 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
 
       setAccountLabel(body.accountLabel ?? null);
       if (body.requiresRestoration) {
-        router.replace("/restore");
+        // "/" itself shows the restoration overlay when data_state isn't
+        // warm, see the (app) layout, no separate route needed.
+        router.replace("/");
         router.refresh();
       } else {
         await runInitialSync();
@@ -119,7 +121,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
 
       setAccountLabel(body.accountLabel ?? null);
       if (body.requiresRestoration) {
-        router.replace("/restore");
+        router.replace("/");
         router.refresh();
       } else {
         await runInitialSync();

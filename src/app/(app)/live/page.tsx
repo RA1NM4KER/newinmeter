@@ -18,7 +18,8 @@ export default async function LivePage() {
   const access = resolveLiveAccess({
     hasSession: Boolean(session),
     liveMeterEnabled,
-    isConnected: connection?.status === "connected"
+    isConnected: connection?.status === "connected",
+    isDataWarm: connection?.dataState === "warm"
   });
 
   // Feature invisibility: an authenticated user without the permission gets a
@@ -26,6 +27,7 @@ export default async function LivePage() {
   if (access === "login") redirect("/login");
   if (access === "notFound") notFound();
   if (access === "connect") redirect("/connect");
+  if (access === "restoring") redirect("/");
 
   return <LivePageClient userId={session?.userId ?? null} />;
 }
