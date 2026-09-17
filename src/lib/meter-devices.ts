@@ -1,6 +1,5 @@
 import "server-only";
 
-import { hasFeatureAccess } from "./features";
 import { deviceKeyHint, generateDeviceKey, hashDeviceKey, parseBearerDeviceKey } from "./meter-device-keys";
 import { adminSupabaseRawResponse, adminSupabaseRequest } from "./supabase-rest";
 
@@ -80,7 +79,17 @@ export async function authenticateDeviceKey(
 // The device's owner has the live-meter feature enabled. Kept out of
 // authenticateDeviceKey so the 401 (bad credentials) and 403 (feature off for
 // this owner) cases stay distinct in the route.
+//
+// Dynamically imported rather than a top-level import: features.ts imports
+// `cache` from "react", and a plain top-level import of this module would
+// pull that in unconditionally for every caller, including
+// scripts/create-meter-device.ts, which runs under tsx's
+// --conditions=react-server flag where importing `cache` throws at load
+// time regardless of whether it's ever called (see that script's own
+// comment and docs/debugging-runbook.md). This function is the only thing
+// in this file that needs it, so it's the only thing that pays for it.
 export async function isLiveMeterEnabledForDevice(device: MeterDevice): Promise<boolean> {
+  const { hasFeatureAccess } = await import("./features");
   return hasFeatureAccess(device.ownerUserId, "live");
 }
 

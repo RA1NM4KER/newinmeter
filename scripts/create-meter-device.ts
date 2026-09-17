@@ -12,15 +12,46 @@
 // Runs with the repo's service-role setup via the npm script, which uses
 // `tsx --conditions=react-server --env-file=.env.local`. The
 // `--conditions=react-server` flag is required: the server-only lib modules
-// this pulls in (meter-devices -> supabase-rest/features) start with
+// this pulls in (meter-devices -> supabase-rest) start with
 // `import "server-only"`, whose default export throws by design. Next.js
 // resolves that marker's `react-server` export condition (an empty no-op
 // module); direct Node/tsx execution does not, so the flag makes the marker
 // resolve the same harmless way here instead of throwing at import.
+//
+// Deliberately does NOT import hasFeatureAccess from @/lib/features: that
+// module imports `cache` from "react" at the top level (for real
+// per-request dedup in the app), and merely importing `cache` under
+// --conditions=react-server throws at load time regardless of whether it's
+// ever called ("This entry point is not yet supported outside of
+// experimental channels", react.shared-subset.development.js), a separate
+// failure from the server-only one this file's own comment above already
+// covers. See docs/debugging-runbook.md. meter-devices.ts's own
+// isLiveMeterEnabledForDevice needed the same fix (a lazy `import()` there
+// instead of a top-level one), since importing it at all pulled features.ts
+// into this script's module graph even though this script never calls that
+// function. A CLI run never benefits from React's cache anyway (one
+// process, one check), so checkLiveFeatureAccess below is the same
+// rollout+override resolution with the caching stripped out.
 
-import { hasFeatureAccess } from "@/lib/features";
+import { adminSupabaseFetch } from "@/lib/supabase-rest";
 import { createMeterDevice, getActiveConnectionForUser } from "@/lib/meter-devices";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin-client";
+
+async function checkLiveFeatureAccess(userId: string): Promise<boolean> {
+  const [rolloutRows, overrideRows] = await Promise.all([
+    adminSupabaseFetch<{ rollout_mode: string }[]>("/feature_rollouts?select=rollout_mode&feature_key=eq.live"),
+    adminSupabaseFetch<{ enabled: boolean }[]>(
+      `/feature_overrides?select=enabled&user_id=eq.${encodeURIComponent(userId)}&feature_key=eq.live&limit=1`
+    )
+  ]);
+
+  const mode = rolloutRows[0]?.rollout_mode ?? "off";
+  const override = overrideRows[0]?.enabled;
+
+  if (mode === "off") return false;
+  if (override !== undefined) return override;
+  return mode === "everyone";
+}
 
 function parseArgs(argv: string[]): Map<string, string> {
   const args = new Map<string, string>();
@@ -98,7 +129,7 @@ async function main() {
 
   // Refuse to register a device for a user who doesn't have the live-meter
   // feature enabled -- the feature is gated by this one permission end to end.
-  const liveMeterEnabled = await hasFeatureAccess(user.id, "live");
+  const liveMeterEnabled = await checkLiveFeatureAccess(user.id);
   if (!liveMeterEnabled) {
     console.error(
       `User ${user.email} does not have the live-meter feature enabled. ` +
