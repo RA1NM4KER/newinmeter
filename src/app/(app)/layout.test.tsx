@@ -39,7 +39,7 @@ vi.mock("@/components/restoration/restoration-overlay", () => ({
     />
   )
 }));
-vi.mock("./loading", () => ({
+vi.mock("./(dashboard)/loading", () => ({
   default: () => <div data-testid="dashboard-loading" />
 }));
 vi.mock("next/navigation", () => ({

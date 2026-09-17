@@ -8,7 +8,7 @@ import { getUnreadNotificationCount } from "@/lib/newinmeter/alerts";
 import { getConnectionForUser } from "@/lib/newinmeter/connection";
 import { getOrCreateUserPermissions } from "@/lib/user-roles";
 import type { ReactNode } from "react";
-import DashboardLoading from "./loading";
+import DashboardLoading from "./(dashboard)/loading";
 
 export default async function AppGroupLayout({ children }: { children: ReactNode }) {
   const session = await getAuthenticatedSession();
