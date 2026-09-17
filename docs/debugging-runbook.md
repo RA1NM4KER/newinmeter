@@ -288,6 +288,40 @@ work around. Ones actually hit while building this runbook:
 If something gets denied, don't assume the action is impossible, ask the operator directly (or
 retry once for the read-only case above), most of these are one confirmation away.
 
+## Real-device-only UI bugs: don't trust Chrome DevTools mobile emulation as proof
+
+A layout bug can be 100% real and 100% invisible in Chrome's device toolbar/responsive mode,
+because that's still the Blink engine at a resized viewport, not real WebKit/Safari. "Looks fine
+in Chrome mobile view" is not evidence a mobile layout bug doesn't exist, only that it isn't a
+viewport-width/breakpoint problem. If a user reports something broken only on their phone, ask
+early whether it also reproduces in real mobile Safari (not just the installed PWA, and not just
+Chrome's phone emulation) before spending time on CSS theories, the answer changes where the bug
+can possibly be:
+
+- Broken in the PWA but fine in a normal Safari tab: service worker serving a stale/mismatched
+  cached asset, not a CSS bug at all (see `public/sw.js`, `cacheFirstStatic` for `_next/static/*`
+  is cache-first with no invalidation beyond content-hashed URLs).
+- Broken in both the PWA and a plain Safari tab, fine in Chrome (any mode): a genuine WebKit-only
+  rendering difference. Worth specifically suspecting nested flex containers: a flex item's width
+  depending on `align-items: stretch` propagating through more than one level of
+  flex-in-flex-in-flex (button → `flex-col` → row div, in this case) is a real, documented category
+  of Safari-only bugs (see the community "flexbugs" list). This exact shape hit
+  `DataRowCard` (`src/components/data/data-table.tsx`): each row's two-item `justify-between` line
+  rendered content packed to the left with dead space on the right, only on a real iPhone (an
+  iPhone X specifically, capped at iOS 16), only for this card (its sibling cards in Activities/
+  Admin use a plain `<div onClick>` instead of a `<button>` and were unaffected). `appearance-none`
+  on the button (resetting Safari's native control chrome) did **not** fix it, ruling that theory
+  out. The actual fix was removing the nested flex dependency entirely: made the outer button
+  `block` with `space-y-*` for vertical stacking instead of `flex flex-col gap-*`, so each row's
+  width comes from plain block flow (unambiguous in every engine) rather than inherited
+  flex-stretch, keeping only one flat flex context per row for the actual left/right split.
+- If neither theory fits and you don't have a Mac to actually inspect the real device, say so and
+  ask for one rather than guessing further CSS properties one at a time. Real Safari Web Inspector
+  (device connected to a Mac via cable, Settings → Safari → Advanced → Web Inspector on the phone,
+  then Safari's Develop menu on the Mac) gives you the actual computed box model on the broken
+  element instead of inferring it from a photo, and is faster than repeated round trips of "try
+  this, does it look right now."
+
 ## General principle
 
 Verify against real data before concluding anything, especially before telling a user "that's
