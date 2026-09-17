@@ -109,11 +109,11 @@ function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
   return (
     <button
       aria-label={`View details for ${chargeTypeLabelMap[row.chargeKind]} at ${row.periodDateTime.replace("T", " ")}`}
-      className="flex w-full appearance-none flex-col gap-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
+      className="block w-full appearance-none space-y-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
       onClick={onOpen}
       type="button"
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex w-full items-center justify-between gap-2">
         <span className="font-medium text-ink">{row.periodDateTime.replace("T", " ")}</span>
         <span className="flex shrink-0 items-center gap-1.5">
           <span className="rounded bg-canvas px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
@@ -130,7 +130,7 @@ function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
         </p>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2 pt-0.5">
+      <div className="flex w-full items-center justify-between gap-2 pt-0.5">
         <span className={amountClassFor(row)}>{amountDisplayFor(row)}</span>
         <span className="text-xs text-muted">
           Balance <span className={balanceClassFor(row.balance)}>{formatCurrency(row.balance)}</span> &middot;{" "}
