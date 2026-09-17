@@ -4,6 +4,15 @@ Cold storage starts after **45 days of genuine foreground inactivity**. The sour
 `user_activity_days.last_seen_at`. Only when a user has no foreground row does eligibility conservatively fall back to
 the later of `auth.users.last_sign_in_at` and the connection's `connected_at`.
 
+There is a separate, earlier intervention for the same underlying problem (an inactive account still growing the
+database): **auto-sync inactivity pause** stops scheduling new background syncs after just **14 days** of the same
+inactivity signal, with the same alerts exemption, but purges nothing and never touches `data_state`. It exists because
+cold storage's 45-day threshold is deliberately conservative (a real purge needs a long runway before acting), which
+otherwise leaves a 31-day gap where an obviously-abandoned account keeps accumulating `energy_rows`/rollup data for no
+one to ever look at. See "Auto-sync inactivity pause" in `MULTI_USER_SETUP.md` (section 21) for the mechanism
+(`auto_sync_is_paused_for_inactivity`, a live-computed predicate, not a stored flag) and how resuming works without a
+restore step, since nothing here is purged.
+
 ## Safety and exclusions
 
 The service-role-only candidate/claim function excludes demo accounts, admins, `engagement_excluded` users, enabled

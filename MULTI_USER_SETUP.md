@@ -286,6 +286,9 @@ See the migration file's own comments for the full design (the scheduler claim v
 `capture_runs_one_running_per_connection`, claim expiry/crash recovery, retryable vs.
 authentication failures, and the deterministic per-connection offset).
 
+`claim_due_auto_sync_connections` also excludes any connection currently paused for inactivity,
+see section 21 below, applied by a later migration.
+
 ## 18. Alert system
 
 Applied by `20260824020000_newinmeter_alert_rules.sql` -- no manual setup required, reuses the
@@ -371,3 +374,27 @@ Operational pushes reuse the existing VAPID setup and go only to users whose `us
 
 See `docs/admin-diagnostics.md` for the exact health thresholds, event deduplication, push
 conditions, and current scheduler-watchdog limitation.
+
+## 21. Auto-sync inactivity pause
+
+Migration `20260917080000_auto_sync_inactivity_pause.sql`, no manual setup required. Distinct from
+cold storage above: this stops *scheduling new* auto-syncs for a connection after 14 days of zero
+foreground activity with no enabled alerts, but purges nothing and never touches `data_state`.
+Cold storage's own 45-day purge is unaffected and unrelated, this just stops accumulating new rows
+for the 31 days before cold storage would otherwise kick in.
+
+The condition is a single live-computed predicate (`auto_sync_is_paused_for_inactivity`), not a
+stored flag, reused by both `claim_due_auto_sync_connections` (the claim gate) and any read path
+that needs to display "is this currently paused" (compute it the same way, don't hardcode a
+different threshold). Preview who's currently paused with the service role:
+
+```sql
+select id, user_id, auto_sync_is_paused_for_inactivity(id) as paused
+from public.livemopay_connections
+where status = 'connected' and data_state = 'warm' and is_demo = false;
+```
+
+Resuming is automatic and requires no restore step (nothing was purged): the next foreground visit
+calls `record_user_activity()`, which also calls the new `rearm_stale_auto_sync()` security-definer
+function in the same round trip, immediately arming `next_sync_at` if it had gone stale, rather than
+waiting for the next 5-minute `pg_cron` tick to notice.

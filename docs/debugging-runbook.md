@@ -52,6 +52,17 @@ Read the result:
   (`src/lib/newinmeter/connection.ts`) is what resolves this, normally triggered by the UI's
   account picker, not something to fix by hand.
 - **`last_error` or `last_auto_sync_error` set**: read it, it's the actual upstream error string.
+- **"Data hasn't synced in a while" but `last_error` is null and `data_state` is still `warm`
+  (not cold-storage)**: check whether the connection is paused for inactivity before assuming
+  anything is broken. `select auto_sync_is_paused_for_inactivity(connection_id);` (default
+  14-day threshold) tells you directly. This isn't a stored flag, it's live-computed from
+  `user_activity_days` plus an alerts exemption, same as cold storage's own 45-day check, just a
+  much earlier and non-destructive version of it (pauses scheduling, purges nothing). If it
+  returns true, the account genuinely stopped syncing on purpose because the person stopped
+  opening the app, not a bug. It self-resolves the moment they open the app again (the visit's
+  own `record_user_activity()` call rearms `next_sync_at` immediately), so if someone says "it
+  wasn't syncing but now it is" after they just reopened it, that's this working as intended, not
+  something that silently fixed itself.
 - **Connection looks healthy but `energy_rows`/`water_rows` look wrong** (e.g. one is zero when
   it shouldn't be): pull the next-level detail below before assuming it's a data availability
   gap upstream, it might be a parser bug (this exact shape, water present/energy zero, was a real
