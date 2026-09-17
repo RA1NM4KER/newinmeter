@@ -1,7 +1,7 @@
 import "server-only";
 
 import { countPushSubscriptions } from "../push-subscriptions";
-import { adminSupabaseCount, adminSupabaseFetch } from "../supabase-rest";
+import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { listAllAuthUsers } from "../user-roles";
 import {
   classifyCanaryHealth,
@@ -189,7 +189,8 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
     events,
     unresolvedEvents,
     activePushSubscriptions,
-    tariffProfileMissingCount
+    tariffProfileMissingCount,
+    pausedConnectionRows
   ] = await Promise.all([
     adminSupabaseFetch<DiagnosticConnectionRow[]>(
       `/livemopay_connections?select=${DIAGNOSTIC_CONNECTION_SELECT}` +
@@ -210,8 +211,14 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
     adminSupabaseCount(
       `/livemopay_connections?select=id&is_demo=eq.false&status=eq.connected` +
         `&company_id=eq.${NEWINBOSCH_COMPANY_ID}&tariff_profile=is.null`
-    )
+    ),
+    // Same predicate claim_due_auto_sync_connections excludes on, evaluated
+    // for the whole set in one call instead of one RPC per connection (see
+    // auto_sync_paused_connection_ids's own migration comment).
+    adminSupabaseRequest<{ connection_id: string }[]>("POST", "/rpc/auto_sync_paused_connection_ids", {})
   ]);
+
+  const pausedConnectionIds = new Set(pausedConnectionRows.map((row) => row.connection_id));
 
   // Only the newest current/non-disconnected row per user. This avoids an
   // old historical error row appearing beside a later active reconnect.
@@ -247,7 +254,8 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
         syncClaimedAt: row.sync_claimed_at,
         consecutiveFailures: failureCount,
         dataState: row.data_state,
-        hibernationError: row.hibernation_error
+        hibernationError: row.hibernation_error,
+        pausedForInactivity: pausedConnectionIds.has(row.id)
       },
       now
     );

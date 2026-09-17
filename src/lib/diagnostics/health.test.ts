@@ -21,6 +21,7 @@ function connection(overrides: Partial<ConnectionHealthInput> = {}): ConnectionH
     consecutiveFailures: 0,
     dataState: "warm",
     hibernationError: null,
+    pausedForInactivity: false,
     ...overrides
   };
 }
@@ -68,6 +69,27 @@ describe("diagnostics health classification", () => {
 
   it("classifies a failed restoration as critical", () => {
     expect(classifyConnectionHealth(connection({ dataState: "restore_failed" }), now).state).toBe("critical");
+  });
+
+  it("treats a connection paused for inactivity as healthy instead of overdue-critical", () => {
+    const result = classifyConnectionHealth(
+      connection({ pausedForInactivity: true, nextSyncAt: "2026-08-01T00:00:00.000Z" }),
+      now
+    );
+    expect(result.state).toBe("healthy");
+    expect(result.reason).toMatch(/paused/i);
+  });
+
+  it("still escalates a stuck claim or repeated failures even while paused for inactivity", () => {
+    expect(
+      classifyConnectionHealth(connection({ pausedForInactivity: true, consecutiveFailures: 3 }), now).state
+    ).toBe("critical");
+    expect(
+      classifyConnectionHealth(
+        connection({ pausedForInactivity: true, syncClaimedAt: "2026-08-26T11:40:00.000Z" }),
+        now
+      ).state
+    ).toBe("critical");
   });
 
   it("uses the five-minute scheduler heartbeat without over-alerting on a short delay", () => {

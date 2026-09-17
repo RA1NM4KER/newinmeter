@@ -31,6 +31,7 @@ export type ConnectionHealthInput = {
   consecutiveFailures: number;
   dataState: "warm" | "hibernating" | "cold" | "restoring" | "restore_failed";
   hibernationError: string | null;
+  pausedForInactivity: boolean;
 };
 
 function ageMs(iso: string, now: Date) {
@@ -117,6 +118,18 @@ export function classifyConnectionHealth(connection: ConnectionHealthInput, now:
       state: "critical",
       reason: `${connection.consecutiveFailures} consecutive sync failures require attention.`
     };
+  }
+
+  // Checked before the overdue/staleness logic below, not instead of the
+  // stuck-claim/repeated-failure checks above: a connection that failed
+  // repeatedly right before going quiet still deserves attention, but
+  // next_sync_at freezes the moment claim_due_auto_sync_connections starts
+  // skipping it, so the age-based checks below would otherwise grow more
+  // "overdue" forever for a connection that's paused on purpose and never
+  // actually failed anything (see auto_sync_is_paused_for_inactivity's own
+  // migration comment).
+  if (connection.pausedForInactivity) {
+    return { state: "healthy", reason: "Auto-sync paused: no activity in 14+ days." };
   }
 
   if (connection.autoSyncEnabled && connection.nextSyncAt) {
