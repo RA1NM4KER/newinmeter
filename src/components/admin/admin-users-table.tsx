@@ -50,8 +50,8 @@ function AdminUserCard({
       onClick={onOpenDrawer}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-ink">{user.email ?? "Unknown"}</p>
+        <div className="min-w-0">
+          <p className="truncate text-ink">{user.email ?? "Unknown"}</p>
           {isSelf ? <p className="text-xs text-muted">This is you</p> : null}
           {rowError ? <p className="text-xs text-red-600">{rowError}</p> : null}
         </div>
