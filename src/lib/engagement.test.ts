@@ -14,7 +14,7 @@ vi.mock("./supabase-rest", () => ({
 }));
 vi.mock("./user-roles", () => ({ listAllAuthUsers: mocks.listAllAuthUsers }));
 
-import { engagementDateRange, getEngagementMetrics, recordAiFeatureUsage } from "./engagement";
+import { engagementDateRange, getAdoptionMetricUsers, getEngagementMetrics, recordAiFeatureUsage } from "./engagement";
 
 describe("engagement metrics", () => {
   beforeEach(() => {
@@ -89,6 +89,20 @@ describe("engagement metrics", () => {
     expect(mocks.adminSupabaseFetchAllPages).toHaveBeenCalledWith(
       "/user_activity_days?select=user_id,activity_date&activity_date=gte.2026-07-28"
     );
+  });
+
+  it("resolves the same real users backing each adoption count, excluding admin/demo/flagged accounts", async () => {
+    await expect(getAdoptionMetricUsers("activities")).resolves.toEqual([{ userId: "real-a", email: null }]);
+    await expect(getAdoptionMetricUsers("alertsEnabled")).resolves.toEqual([{ userId: "real-b", email: null }]);
+    // real-b has a push subscription and so does admin, only real-b should
+    // surface, this is what proves the drill-down can't leak an excluded
+    // account even when that account genuinely has the underlying row.
+    await expect(getAdoptionMetricUsers("push")).resolves.toEqual([{ userId: "real-b", email: null }]);
+    await expect(getAdoptionMetricUsers("ai")).resolves.toEqual([{ userId: "real-a", email: null }]);
+    // conn-demo (is_demo) is the only connected LiveMopay account besides
+    // real-a's; demo must not appear even though its connection is
+    // "connected".
+    await expect(getAdoptionMetricUsers("livemopay")).resolves.toEqual([{ userId: "real-a", email: null }]);
   });
 
   it("records only the aggregate AI feature key through the server-only RPC", async () => {

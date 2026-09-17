@@ -75,6 +75,26 @@ function adoptionMetric(userIds: Set<string>, realUserIds: Set<string>): Adoptio
   };
 }
 
+// Shared with getAdoptionMetricUsers below so "who counts as a real user"
+// can never drift between the summary count and its drill-down list.
+function resolveRealUserIds(
+  authUsers: Array<{ userId: string; email: string | null }>,
+  roles: UserRoleRow[],
+  connections: ConnectionRow[]
+): Set<string> {
+  const roleByUserId = new Map(roles.map((row) => [row.user_id, row]));
+  const demoUserIds = new Set(connections.filter((row) => row.is_demo).map((row) => row.user_id));
+
+  return new Set(
+    authUsers
+      .filter((user) => {
+        const role = roleByUserId.get(user.userId);
+        return role?.role !== "admin" && !role?.engagement_excluded && !demoUserIds.has(user.userId);
+      })
+      .map((user) => user.userId)
+  );
+}
+
 export async function recordAiFeatureUsage(userId: string): Promise<void> {
   await adminSupabaseRequest(
     "POST",
@@ -102,16 +122,7 @@ export async function getEngagementMetrics(now: Date = new Date()): Promise<Enga
       adminSupabaseFetchAllPages<UserOwnedRow>("/user_feature_usage?select=user_id&feature=eq.ai")
     ]);
 
-  const roleByUserId = new Map(roles.map((row) => [row.user_id, row]));
-  const demoUserIds = new Set(connections.filter((row) => row.is_demo).map((row) => row.user_id));
-  const realUserIds = new Set(
-    authUsers
-      .filter((user) => {
-        const role = roleByUserId.get(user.userId);
-        return role?.role !== "admin" && !role?.engagement_excluded && !demoUserIds.has(user.userId);
-      })
-      .map((user) => user.userId)
-  );
+  const realUserIds = resolveRealUserIds(authUsers, roles, connections);
 
   const userIdByConnectionId = new Map(connections.map((row) => [row.id, row.user_id]));
   const ownersOf = (rows: ConnectionOwnedRow[]) => {
@@ -154,4 +165,85 @@ export async function getEngagementMetrics(now: Date = new Date()): Promise<Enga
       livemopay: adoptionMetric(connectedUserIds, realUserIds)
     }
   };
+}
+
+export const ADOPTION_METRIC_KEYS = ["activities", "alertsEnabled", "push", "ai", "livemopay"] as const;
+
+export type AdoptionMetricKey = (typeof ADOPTION_METRIC_KEYS)[number];
+
+export function isAdoptionMetricKey(value: string): value is AdoptionMetricKey {
+  return (ADOPTION_METRIC_KEYS as readonly string[]).includes(value);
+}
+
+export type AdoptionMetricUser = { userId: string; email: string | null };
+
+// Backs the Feature-adoption row's expandable "who has this" list. Fetches
+// only what's needed for the one requested metric rather than the full
+// getEngagementMetrics payload, mirroring listFeatureOverrides's per-feature
+// fetch on the Features tab.
+export async function getAdoptionMetricUsers(key: AdoptionMetricKey): Promise<AdoptionMetricUser[]> {
+  const [authUsers, roles, connections] = await Promise.all([
+    listAllAuthUsers(),
+    adminSupabaseFetch<UserRoleRow[]>("/user_roles?select=user_id,role,engagement_excluded"),
+    adminSupabaseFetch<ConnectionRow[]>(
+      "/livemopay_connections?select=id,user_id,status,is_demo,updated_at&order=updated_at.desc"
+    )
+  ]);
+
+  const realUserIds = resolveRealUserIds(authUsers, roles, connections);
+  const userIdByConnectionId = new Map(connections.map((row) => [row.id, row.user_id]));
+  const ownersOf = (rows: ConnectionOwnedRow[]) => {
+    const userIds = new Set<string>();
+    for (const row of rows) {
+      const userId = userIdByConnectionId.get(row.connection_id);
+      if (userId) userIds.add(userId);
+    }
+    return userIds;
+  };
+
+  let matchingUserIds: Set<string>;
+
+  switch (key) {
+    case "activities": {
+      const activities = await adminSupabaseFetchAllPages<ConnectionOwnedRow>("/usage_activities?select=connection_id");
+      matchingUserIds = ownersOf(activities);
+      break;
+    }
+    case "alertsEnabled": {
+      const enabledAlerts = await adminSupabaseFetchAllPages<ConnectionOwnedRow>(
+        "/alert_rules?select=connection_id&enabled=eq.true"
+      );
+      matchingUserIds = ownersOf(enabledAlerts);
+      break;
+    }
+    case "push": {
+      const subscriptions = await adminSupabaseFetchAllPages<UserOwnedRow>("/push_subscriptions?select=user_id");
+      matchingUserIds = new Set(subscriptions.map((row) => row.user_id));
+      break;
+    }
+    case "ai": {
+      const aiUsage = await adminSupabaseFetchAllPages<UserOwnedRow>("/user_feature_usage?select=user_id&feature=eq.ai");
+      matchingUserIds = new Set(aiUsage.map((row) => row.user_id));
+      break;
+    }
+    case "livemopay": {
+      const latestConnectionByUserId = new Map<string, ConnectionRow>();
+      for (const connection of connections) {
+        if (!latestConnectionByUserId.has(connection.user_id)) latestConnectionByUserId.set(connection.user_id, connection);
+      }
+      matchingUserIds = new Set(
+        Array.from(latestConnectionByUserId.values())
+          .filter((connection) => connection.status === "connected" && !connection.is_demo)
+          .map((connection) => connection.user_id)
+      );
+      break;
+    }
+  }
+
+  const emailByUserId = new Map(authUsers.map((user) => [user.userId, user.email]));
+
+  return Array.from(matchingUserIds)
+    .filter((userId) => realUserIds.has(userId))
+    .map((userId) => ({ userId, email: emailByUserId.get(userId) ?? null }))
+    .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
 }
