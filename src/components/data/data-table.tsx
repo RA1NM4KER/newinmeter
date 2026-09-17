@@ -1,23 +1,26 @@
 "use client";
 
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { DataExportAction } from "@/components/data/data-export-action";
+import { DataDetailDrawer } from "@/components/data/data-detail-drawer";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { DropdownSelect, type DropdownOption } from "@/components/ui/dropdown-select";
+import { MobileSortControls } from "@/components/ui/mobile-sort-controls";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type ChargeTypeFilter } from "@/lib/data-table-query-params";
-import { dataTableColumnAlign, dataTableColumnLabel } from "./columns";
+import { dataTableColumnAlign, dataTableColumnLabel, dataTableColumns } from "./columns";
 import { inferQuickRange } from "@/lib/filters";
 import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 import { formatCurrency } from "@/lib/format";
 import { buildEnergyRowsUrl } from "@/lib/endpoints";
 import type { EnergyRow, SyncMetadata } from "@/lib/types";
-import { amountClassFor, amountDisplayFor, tariffDisplayFor, usageDisplayFor } from "./row-formatting";
+import { amountClassFor, amountDisplayFor, balanceClassFor, tariffDisplayFor, usageDisplayFor } from "./row-formatting";
+import { DataCardSkeletonList } from "./data-card-skeleton-list";
 import type { SortDirection, SortKey } from "./types";
 
 const chargeTypeLabelMap: Record<EnergyRow["chargeKind"], string> = {
@@ -34,6 +37,10 @@ const pageSizeOptions: DropdownOption[] = [
   { label: "50 / page", value: "50" },
   { label: "100 / page", value: "100" }
 ];
+const mobileSortOptions: DropdownOption[] = dataTableColumns.map((column) => ({
+  label: column.label,
+  value: column.id
+}));
 
 type EnergyRowsApiResponse = {
   rows: EnergyRow[];
@@ -86,6 +93,54 @@ function TableSkeletonRows({ columnCount, rowCount }: { columnCount: number; row
   );
 }
 
+// Mobile-only stand-in for the table below <sm>: the same columns squeezed
+// into a horizontally-scrollable table read badly on a phone (this is the
+// widest table in the app, 8 columns), so this reads each row as a small
+// card instead, no horizontal scroll at all. Reads straight from `rows`,
+// not the TanStack column defs, since a card has no header/cell grid to
+// flexRender, just a handful of fields in a fixed layout -- the same
+// formatting helpers the desktop columns use (amountDisplayFor etc.) keep
+// the numbers identical between the two views.
+function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
+  const usage = usageDisplayFor(row);
+  const tariff = tariffDisplayFor(row);
+  const hasUsage = row.usageUnit !== null;
+
+  return (
+    <button
+      aria-label={`View details for ${chargeTypeLabelMap[row.chargeKind]} at ${row.periodDateTime.replace("T", " ")}`}
+      className="flex w-full flex-col gap-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
+      onClick={onOpen}
+      type="button"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-ink">{row.periodDateTime.replace("T", " ")}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded bg-canvas px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+            {chargeTypeLabelMap[row.chargeKind]}
+          </span>
+          <ChevronRight aria-hidden="true" className="h-4 w-4 text-muted/70" />
+        </span>
+      </div>
+
+      {hasUsage ? (
+        <p className="text-sm text-muted">
+          {usage} @ {tariff}
+          {row.tariffBand ? ` · ${row.tariffBand}` : ""}
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <span className={amountClassFor(row)}>{amountDisplayFor(row)}</span>
+        <span className="text-xs text-muted">
+          Balance <span className={balanceClassFor(row.balance)}>{formatCurrency(row.balance)}</span> &middot;{" "}
+          {row.captureDateTime}
+        </span>
+      </div>
+    </button>
+  );
+}
+
 export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
   const {
     from,
@@ -103,13 +158,17 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
     onChargeTypeChange,
     onSearchChange,
     onSortChange,
+    onSortKeyChange,
+    onSortDirectionChange,
     onPageChange,
     onPageSizeChange
   } = useDataTableUrlState();
   const [searchInput, setSearchInput] = useState(searchQuery);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<EnergyRow | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const closeDetailDrawer = useCallback(() => setSelectedRow(null), []);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -229,7 +288,9 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
         id: "balance",
         accessorFn: (row) => row.balance,
         header: dataTableColumnLabel.balance,
-        cell: ({ row }) => <span className="text-muted">{formatCurrency(row.original.balance)}</span>
+        cell: ({ row }) => (
+          <span className={balanceClassFor(row.original.balance)}>{formatCurrency(row.original.balance)}</span>
+        )
       },
       {
         id: "captured",
@@ -389,7 +450,37 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
           the filter bar, restored back to a normal bordered card at lg+. */}
       <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="relative min-h-0 flex-1">
-          <div className="h-full overflow-auto" ref={tableScrollRef}>
+          {/* Below sm: one card per row, no horizontal scroll. At sm+: the
+              full table, unchanged. Two renderings of the same `rows`, not
+              a shared component, this table's columns don't generalize to
+              the other two tables' very different shapes (see the earlier
+              discussion on not merging them). */}
+          <div className="flex h-full min-h-0 flex-col sm:hidden">
+            <MobileSortControls
+              direction={sortDirection}
+              onDirectionChange={onSortDirectionChange}
+              onSortKeyChange={onSortKeyChange}
+              options={mobileSortOptions}
+              sortKey={sortKey}
+            />
+            <div className="min-h-0 flex-1 overflow-auto">
+              {showTableSkeleton ? (
+                <DataCardSkeletonList count={skeletonRowCount} />
+              ) : (
+                <div className="divide-y divide-line">
+                  {rows.map((row, index) => (
+                    <DataRowCard
+                      key={`${row.periodDateTime}-${row.chargeLabel}-${index}`}
+                      onOpen={() => setSelectedRow(row)}
+                      row={row}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="hidden h-full overflow-auto sm:block" ref={tableScrollRef}>
             <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -420,7 +511,19 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
                   <TableSkeletonRows columnCount={columns.length} rowCount={skeletonRowCount} />
                 ) : (
                   table.getRowModel().rows.map((row) => (
-                    <tr className="transition hover:bg-canvas/70" key={row.id}>
+                    <tr
+                      aria-label={`View details for ${chargeTypeLabelMap[row.original.chargeKind]} at ${row.original.periodDateTime.replace("T", " ")}`}
+                      className="cursor-pointer transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-accent/50"
+                      key={row.id}
+                      onClick={() => setSelectedRow(row.original)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedRow(row.original);
+                        }
+                      }}
+                      tabIndex={0}
+                    >
                       {row.getVisibleCells().map((cell) => {
                         const alignClass = dataTableColumnAlign[cell.column.id] ?? "text-left";
 
@@ -436,7 +539,9 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
               </tbody>
             </table>
           </div>
-          <ScrollHint containerRef={tableScrollRef} />
+          <div className="hidden sm:block">
+            <ScrollHint containerRef={tableScrollRef} />
+          </div>
         </div>
 
         {/* Mobile drops the row count and shortens "Page X of Y" to "X/Y" --
@@ -492,6 +597,8 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
 
         {error instanceof Error ? <p className="px-3 py-2 text-sm text-red-500">{error.message}</p> : null}
       </section>
+
+      {selectedRow ? <DataDetailDrawer onClose={closeDetailDrawer} row={selectedRow} /> : null}
     </div>
   );
 }

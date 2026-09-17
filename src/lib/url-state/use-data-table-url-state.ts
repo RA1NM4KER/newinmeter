@@ -31,6 +31,8 @@ export type DataTableUrlState = {
   onChargeTypeChange: (chargeType: ChargeTypeFilter) => void;
   onSearchChange: (query: string) => void;
   onSortChange: (key: SortKey) => void;
+  onSortKeyChange: (key: SortKey) => void;
+  onSortDirectionChange: (direction: SortDirection) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
 };
@@ -46,6 +48,8 @@ function resolveStateFromQuery(
   | "onChargeTypeChange"
   | "onSearchChange"
   | "onSortChange"
+  | "onSortKeyChange"
+  | "onSortDirectionChange"
   | "onPageChange"
   | "onPageSizeChange"
 > {
@@ -147,6 +151,26 @@ export function useDataTableUrlState(): DataTableUrlState {
     );
   };
 
+  const onSortKeyChange = (key: SortKey) => {
+    updateSearchParams(
+      {
+        [dataTableQueryParamKeys.sort]: key === "captured" ? null : key,
+        [dataTableQueryParamKeys.page]: "1"
+      },
+      startMiscTransition
+    );
+  };
+
+  const onSortDirectionChange = (direction: SortDirection) => {
+    updateSearchParams(
+      {
+        [dataTableQueryParamKeys.direction]: direction === "desc" ? null : direction,
+        [dataTableQueryParamKeys.page]: "1"
+      },
+      startMiscTransition
+    );
+  };
+
   const onPageChange = (page: number) => {
     const nextPage = page > 1 ? String(Math.floor(page)) : null;
 
@@ -179,6 +203,8 @@ export function useDataTableUrlState(): DataTableUrlState {
     onChargeTypeChange,
     onSearchChange,
     onSortChange,
+    onSortKeyChange,
+    onSortDirectionChange,
     onPageChange,
     onPageSizeChange
   };

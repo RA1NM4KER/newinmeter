@@ -162,17 +162,21 @@ export function ActivitiesPageClient({
     setActiveTabState(nextTab);
   };
 
-  const onSortChange = (key: ActivityReportSortKey) => {
-    const nextDirection =
-      key === sortKey ? (sortDirection === "asc" ? "desc" : "asc") : ACTIVITY_REPORT_DEFAULT_DIRECTION;
+  const updateSort = (key: ActivityReportSortKey, direction: "asc" | "desc") => {
     const next = new URLSearchParams(searchParams.toString());
     if (key === ACTIVITY_REPORT_DEFAULT_SORT) next.delete("sort");
     else next.set("sort", key);
-    if (nextDirection === ACTIVITY_REPORT_DEFAULT_DIRECTION) next.delete("dir");
-    else next.set("dir", nextDirection);
+    if (direction === ACTIVITY_REPORT_DEFAULT_DIRECTION) next.delete("dir");
+    else next.set("dir", direction);
     if (activeTab === "dashboard") next.delete("tab");
     else next.set("tab", activeTab);
     router.replace(queryHref(pathname, next), { scroll: false });
+  };
+
+  const onSortChange = (key: ActivityReportSortKey) => {
+    const nextDirection =
+      key === sortKey ? (sortDirection === "asc" ? "desc" : "asc") : ACTIVITY_REPORT_DEFAULT_DIRECTION;
+    updateSort(key, nextDirection);
   };
 
   // From a tagged-usage chart hover card: open that day's detail chart as a
@@ -249,6 +253,8 @@ export function ActivitiesPageClient({
             sortKey={sortKey}
             sortDirection={sortDirection}
             onSortChange={onSortChange}
+            onSortKeyChange={(key) => updateSort(key, sortDirection)}
+            onSortDirectionChange={(direction) => updateSort(sortKey, direction)}
           />
         </div>
       )}

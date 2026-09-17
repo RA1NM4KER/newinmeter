@@ -14,7 +14,10 @@ type MetricCardItem = {
   };
 };
 
-function getBalanceTone(balance: number) {
+// Exported so the Data table can colour its own Balance column identically
+// (src/components/data/row-formatting.ts), same thresholds everywhere a
+// balance number appears, never redefined a second time.
+export function getBalanceTone(balance: number) {
   if (balance >= 700) {
     return "good" as const;
   }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AdminUserListItem } from "@/lib/user-roles";
+import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import type { FeatureKey, RolloutMode } from "@/lib/newinmeter/features-shared";
 
 export type AdminUsersApiResponse = {
@@ -44,4 +44,10 @@ export type ManageDrawerProps = {
   onClose: () => void;
   // Resolves true when the save succeeded, so the drawer can animate itself out.
   onSave: (changes: Partial<FeatureDraft>) => Promise<boolean>;
+  // Applied immediately on change, independent of the Save/Cancel footer
+  // below -- matches how role changes have always behaved (no draft/undo),
+  // just moved from an always-visible row control into the drawer.
+  isRoleSaving: boolean;
+  roleError: string;
+  onRoleChange: (role: UserRole) => void;
 };

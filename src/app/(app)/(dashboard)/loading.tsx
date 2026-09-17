@@ -1,12 +1,12 @@
 "use client";
 
+import { useRef } from "react";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { FilterBar } from "@/components/dashboard/filter-bar";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollHint } from "@/components/ui/scroll-hint";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
-import { useRef } from "react";
 
 export default function DashboardLoading() {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({});
@@ -44,14 +44,12 @@ export default function DashboardLoading() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <div className="h-64 rounded-lg border border-line bg-paper p-4">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="mt-5 h-40 w-full" />
-        </div>
-        <div className="h-64 rounded-lg border border-line bg-paper p-4">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="mt-5 h-40 w-full" />
-        </div>
+        {Array.from({ length: 2 }, (_, index) => (
+          <div className="h-64 rounded-lg border border-line bg-paper p-4" key={index}>
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="mt-5 h-40 w-full" />
+          </div>
+        ))}
       </div>
 
       <div className="h-80 rounded-lg border border-line bg-paper p-4">

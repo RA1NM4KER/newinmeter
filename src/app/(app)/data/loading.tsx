@@ -3,9 +3,11 @@
 import { Search } from "lucide-react";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 import { dataTableColumns } from "@/components/data/columns";
+import { DataCardSkeletonList } from "@/components/data/data-card-skeleton-list";
 import { DataExportAction } from "@/components/data/data-export-action";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
+import { MobileSortControlsSkeleton } from "@/components/ui/mobile-sort-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 
@@ -14,7 +16,8 @@ const chargeTypeOptions = [
   { label: "Energy", value: "energy" },
   { label: "Water", value: "water" },
   { label: "Fixed", value: "fixed" },
-  { label: "Top up", value: "topup" }
+  { label: "Top up", value: "topup" },
+  { label: "Refund", value: "refund" }
 ];
 
 export default function DataLoading() {
@@ -71,7 +74,14 @@ export default function DataLoading() {
       />
 
       <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col sm:hidden">
+          <MobileSortControlsSkeleton />
+          <div className="min-h-0 flex-1 overflow-auto">
+            <DataCardSkeletonList count={12} />
+          </div>
+        </div>
+
+        <div className="hidden min-h-0 flex-1 overflow-auto sm:block">
           <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
             <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
               <tr>

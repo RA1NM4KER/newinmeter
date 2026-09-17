@@ -3,6 +3,7 @@
 import { ChevronDown, FileDown, Info, Maximize2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { activityMetricOptions } from "@/components/activities/activity-report-chart";
+import { ActivityCardSkeletonList } from "@/components/activities/activity-card-skeleton-list";
 import { activityReportColumns } from "@/components/activities/activity-report-columns";
 import { ActivityReportSkeletonRows } from "@/components/activities/activity-report-skeleton-rows";
 import { ACTIVITY_TAGS_DISCLAIMER, activityTabs } from "@/components/activities/activity-tabs";
@@ -12,13 +13,18 @@ import { Card } from "@/components/ui/card";
 import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { MetricCardSkeleton } from "@/components/ui/metric-card";
+import { MobileSortControlsSkeleton } from "@/components/ui/mobile-sort-controls";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 
-export default function ActivitiesLoading() {
+export default function ActivitiesLoading({
+  activeTabOverride
+}: {
+  activeTabOverride?: "dashboard" | "table";
+} = {}) {
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({});
   const searchParams = useSearchParams();
-  const activeTab = searchParams.get("tab") === "table" ? "table" : "dashboard";
+  const activeTab = activeTabOverride ?? (searchParams.get("tab") === "table" ? "table" : "dashboard");
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
@@ -128,7 +134,14 @@ export default function ActivitiesLoading() {
       ) : (
         <div className="-mt-3 flex min-h-0 flex-1 flex-col sm:mt-0">
           <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="flex min-h-0 flex-1 flex-col sm:hidden">
+              <MobileSortControlsSkeleton />
+              <div className="min-h-0 flex-1 overflow-auto">
+                <ActivityCardSkeletonList count={6} />
+              </div>
+            </div>
+
+            <div className="hidden min-h-0 flex-1 overflow-auto sm:block">
               <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
                 <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.12em] text-brandTeal dark:text-accent">
                   <tr>

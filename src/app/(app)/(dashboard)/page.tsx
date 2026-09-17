@@ -18,14 +18,6 @@ export default async function Home() {
     redirect("/connect");
   }
 
-  // The (app) layout already substitutes a blurred skeleton for this page's
-  // own output when data isn't warm, but that substitution only changes
-  // what's displayed, not whether this component's own body runs -- Next
-  // still executes this Server Component to produce that discarded output.
-  // energy_hourly_rollups (queried by loadDashboardHourlyRollups) is one of
-  // the tables cold storage's purge actually empties, so skip the real
-  // fetch entirely rather than querying data that's gone (or about to be
-  // restored) and rendering something the layout won't even show.
   if (connection.dataState !== "warm") {
     return null;
   }

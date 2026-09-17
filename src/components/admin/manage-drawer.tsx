@@ -2,12 +2,18 @@
 
 import { Check, Copy, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DropdownSelect } from "@/components/ui/dropdown-select";
 import { Switch } from "@/components/ui/switch";
-import type { AdminUserListItem } from "@/lib/user-roles";
+import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import { FEATURES } from "@/lib/newinmeter/features-shared";
 import { ConnectionStatusBadge } from "./connection-status-badge";
 import { LastSyncCell } from "./last-sync-cell";
 import type { FeatureDraft, ManageDrawerProps } from "./types";
+
+const roleOptions = [
+  { label: "Admin", value: "admin" },
+  { label: "User", value: "user" }
+];
 
 function draftFromUser(user: AdminUserListItem): FeatureDraft {
   return {
@@ -22,7 +28,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   return (
     <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3 last:border-b-0">
       <span className="text-sm text-muted">{label}</span>
-      <span className="text-sm font-medium text-ink">{children}</span>
+      <div className="text-right text-sm font-medium text-ink">{children}</div>
     </div>
   );
 }
@@ -30,13 +36,24 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 // Exit animation duration; keep in sync with the transition classes below.
 const DRAWER_ANIM_MS = 220;
 
-export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: ManageDrawerProps) {
+export function ManageDrawer({
+  user,
+  isSelf,
+  saving,
+  error,
+  onClose,
+  onSave,
+  isRoleSaving,
+  roleError,
+  onRoleChange
+}: ManageDrawerProps) {
   const [draft, setDraft] = useState<FeatureDraft>(() => draftFromUser(user));
   // Drives the slide-in / slide-out. Starts closed, then flips open on the next
   // frame so the browser animates the transform rather than snapping to it.
   const [visible, setVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const busy = saving || isRoleSaving;
 
   async function copyEmail() {
     if (!user.email) {
@@ -64,7 +81,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
     closeButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) {
+      if (event.key === "Escape" && !busy) {
         requestClose();
       }
     };
@@ -75,7 +92,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [requestClose, saving]);
+  }, [busy, requestClose]);
 
   const dirty = FEATURES.some((feature) => draft[feature.key] !== user.features[feature.key].enabled);
 
@@ -102,7 +119,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
       <button
         type="button"
         aria-label="Close"
-        onClick={() => !saving && requestClose()}
+        onClick={() => !busy && requestClose()}
         className={`absolute inset-0 h-full w-full cursor-default bg-ink/10 backdrop-blur-md transition-opacity duration-200 motion-reduce:transition-none ${
           visible ? "opacity-100" : "opacity-0"
         }`}
@@ -133,7 +150,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
             ref={closeButtonRef}
             type="button"
             aria-label="Close"
-            onClick={() => !saving && requestClose()}
+            onClick={() => !busy && requestClose()}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-canvas text-muted transition hover:text-ink"
           >
             <X className="h-4 w-4" />
@@ -145,7 +162,21 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">Account</h3>
             <div className="overflow-hidden rounded-lg border border-line">
               <InfoRow label="Joined">{new Date(user.createdAt).toLocaleDateString()}</InfoRow>
-              <InfoRow label="Role">{user.role === "admin" ? "Admin" : "User"}</InfoRow>
+              <InfoRow label="Role">
+                <DropdownSelect
+                  ariaLabel={`Role for ${user.email ?? user.userId}`}
+                  value={user.role}
+                  options={
+                    isSelf
+                      ? roleOptions.map((option) => (option.value === "user" ? { ...option, disabled: true } : option))
+                      : roleOptions
+                  }
+                  onChange={(value) => onRoleChange(value as UserRole)}
+                  loading={isRoleSaving}
+                  className="w-28"
+                />
+                {roleError ? <p className="mt-1 max-w-48 text-xs font-normal text-red-600">{roleError}</p> : null}
+              </InfoRow>
               <InfoRow label="LiveMopay">
                 <ConnectionStatusBadge status={user.connectionStatus} />
               </InfoRow>
@@ -189,7 +220,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
                     ariaLabel={`${feature.name} for ${user.email ?? "user"}`}
                     checked={draft[feature.key]}
                     onChange={(checked) => setDraft((current) => ({ ...current, [feature.key]: checked }))}
-                    disabled={saving}
+                    disabled={busy}
                   />
                 </div>
               ))}
@@ -203,7 +234,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
           <button
             type="button"
             onClick={requestClose}
-            disabled={saving}
+            disabled={busy}
             className="rounded-md border border-line bg-canvas px-4 py-2 text-sm font-medium text-ink transition hover:bg-paper disabled:opacity-60"
           >
             Cancel
@@ -211,7 +242,7 @@ export function ManageDrawer({ user, isSelf, saving, error, onClose, onSave }: M
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || !dirty}
+            disabled={busy || !dirty}
             className="rounded-md bg-brandTeal px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50 dark:bg-accent dark:text-canvas"
           >
             {saving ? "Saving…" : "Save changes"}

@@ -17,6 +17,8 @@ export type AdminUsersUrlState = {
   sortDirection: "asc" | "desc";
   isPending: boolean;
   onSortChange: (key: AdminUsersSortKey) => void;
+  onSortKeyChange: (key: AdminUsersSortKey) => void;
+  onSortDirectionChange: (direction: "asc" | "desc") => void;
 };
 
 export function useAdminUsersUrlState(): AdminUsersUrlState {
@@ -44,10 +46,23 @@ export function useAdminUsersUrlState(): AdminUsersUrlState {
     });
   };
 
+  const updateSort = (key: AdminUsersSortKey, direction: "asc" | "desc") => {
+    const next = applyQueryUpdates(searchParams, {
+      [adminUsersQueryParamKeys.sort]: key === ADMIN_USERS_DEFAULT_SORT ? null : key,
+      [adminUsersQueryParamKeys.direction]: direction === ADMIN_USERS_DEFAULT_DIRECTION ? null : direction
+    });
+
+    startTransition(() => {
+      router.replace(queryHref(pathname, next), { scroll: false });
+    });
+  };
+
   return {
     sortKey: state.sortKey,
     sortDirection: state.sortDirection,
     isPending,
-    onSortChange
+    onSortChange,
+    onSortKeyChange: (key) => updateSort(key, state.sortDirection),
+    onSortDirectionChange: (direction) => updateSort(state.sortKey, direction)
   };
 }

@@ -4,7 +4,7 @@ import { Pencil, RefreshCw } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { DropdownSelect } from "@/components/ui/dropdown-select";
+import { MobileSortControls } from "@/components/ui/mobile-sort-controls";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { SortHeaderButton } from "@/components/ui/sort-header-button";
 import { apiEndpoints, buildAdminUserPermissionsUrl, buildAdminUserRoleUrl } from "@/lib/endpoints";
@@ -13,20 +13,61 @@ import type { FeatureKey } from "@/lib/newinmeter/features-shared";
 import { useAdminUsersUrlState } from "@/lib/url-state/use-admin-users-url-state";
 import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import { adminUsersColumns } from "./admin-users-columns";
+import { AdminCardSkeletonList } from "./admin-card-skeleton-list";
 import { ConnectionStatusBadge } from "./connection-status-badge";
 import { FeatureChips } from "./feature-chips";
 import { LastSyncCell } from "./last-sync-cell";
 import { ManageDrawer } from "./manage-drawer";
+import { RoleBadge } from "./role-badge";
 import { StatStripSkeleton, StatTile } from "./stat-tile";
 import { TableSkeletonRows } from "./table-skeleton-rows";
 import type { AdminUsersApiResponse, AdminUsersTableProps, FeatureDraft } from "./types";
 
 const RECENT_SYNC_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const adminMobileSortOptions = adminUsersColumns
+  .filter((column) => column.sortable)
+  .map((column) => ({ label: column.label, value: column.id }));
 
-const roleOptions = [
-  { label: "Admin", value: "admin" },
-  { label: "User", value: "user" }
-];
+// Mobile-only stand-in for the table below <sm>: 6 columns squeezed into a
+// horizontally-scrollable table read badly on a phone. The whole card opens
+// the manage drawer, where infrequent role and feature changes live.
+function AdminUserCard({
+  user,
+  isSelf,
+  isActive,
+  rowError,
+  onOpenDrawer
+}: {
+  user: AdminUserListItem;
+  isSelf: boolean;
+  isActive: boolean;
+  rowError?: string;
+  onOpenDrawer: () => void;
+}) {
+  return (
+    <div
+      className={`flex cursor-pointer flex-col gap-2 px-4 py-3 ${isActive ? "bg-accentSoft/50" : ""}`}
+      onClick={onOpenDrawer}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-ink">{user.email ?? "Unknown"}</p>
+          {isSelf ? <p className="text-xs text-muted">This is you</p> : null}
+          {rowError ? <p className="text-xs text-red-600">{rowError}</p> : null}
+        </div>
+        <span className="shrink-0 text-xs text-muted">{new Date(user.createdAt).toLocaleDateString()}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <ConnectionStatusBadge status={user.connectionStatus} />
+        <FeatureChips user={user} />
+        <RoleBadge role={user.role} />
+      </div>
+
+      <LastSyncCell user={user} />
+    </div>
+  );
+}
 
 async function fetchAdminUsers() {
   const response = await fetch(apiEndpoints.adminUsers, { cache: "no-store" });
@@ -40,7 +81,8 @@ async function fetchAdminUsers() {
 }
 
 export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableProps) {
-  const { sortKey, sortDirection, onSortChange } = useAdminUsersUrlState();
+  const { sortKey, sortDirection, onSortChange, onSortKeyChange, onSortDirectionChange } =
+    useAdminUsersUrlState();
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [errorByUserId, setErrorByUserId] = useState<Record<string, string>>({});
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -247,22 +289,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
         case "joined":
           return <span className="text-muted">{new Date(user.createdAt).toLocaleDateString()}</span>;
         case "role": {
-          const isSelf = user.userId === currentUserId;
-          const isUserPending = pendingUserId === user.userId;
-          return (
-            <DropdownSelect
-              ariaLabel={`Role for ${user.email ?? user.userId}`}
-              value={user.role}
-              options={
-                isSelf
-                  ? roleOptions.map((option) => (option.value === "user" ? { ...option, disabled: true } : option))
-                  : roleOptions
-              }
-              onChange={(value) => void handleRoleChange(user.userId, value as UserRole)}
-              loading={isUserPending}
-              className="w-28"
-            />
-          );
+          return <RoleBadge role={user.role} />;
         }
         case "features":
           return (
@@ -341,7 +368,37 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
           below lg; normal floating card on desktop. */}
       <section className="-mx-3 flex h-0 min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-line bg-paper sm:-mx-6 lg:mx-0 lg:rounded-lg lg:border">
         <div className="relative min-h-0 flex-1">
-          <div className="h-full overflow-auto" ref={tableScrollRef}>
+          {/* Below sm: one card per user, no horizontal scroll. At sm+: the
+              full table, unchanged. */}
+          <div className="flex h-full min-h-0 flex-col sm:hidden">
+            <MobileSortControls
+              direction={sortDirection}
+              onDirectionChange={onSortDirectionChange}
+              onSortKeyChange={onSortKeyChange}
+              options={adminMobileSortOptions}
+              sortKey={sortKey}
+            />
+            <div className="min-h-0 flex-1 overflow-auto">
+              {showTableSkeleton ? (
+                <AdminCardSkeletonList count={8} />
+              ) : (
+                <div className="divide-y divide-line">
+                  {users.map((user) => (
+                    <AdminUserCard
+                      isActive={user.userId === selectedUserId}
+                      isSelf={user.userId === currentUserId}
+                      key={user.userId}
+                      onOpenDrawer={() => openDrawer(user.userId)}
+                      rowError={errorByUserId[user.userId]}
+                      user={user}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="hidden h-full overflow-auto sm:block" ref={tableScrollRef}>
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-line bg-accentSoft text-xs uppercase tracking-[0.16em] text-brandTeal dark:text-accent shadow-[0_1px_0_rgb(var(--color-line))]">
                 <tr>
@@ -380,7 +437,6 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
                           <td
                             className="px-4 py-3"
                             key={cell.id}
-                            onClick={cell.column.id === "role" ? (event) => event.stopPropagation() : undefined}
                           >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
@@ -392,7 +448,9 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
               </tbody>
             </table>
           </div>
-          <ScrollHint containerRef={tableScrollRef} />
+          <div className="hidden sm:block">
+            <ScrollHint containerRef={tableScrollRef} />
+          </div>
         </div>
 
         <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-t border-line px-3">
@@ -424,7 +482,10 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
           isSelf={selectedUser.userId === currentUserId}
           saving={drawerSaving}
           error={drawerError}
+          isRoleSaving={pendingUserId === selectedUser.userId}
+          roleError={errorByUserId[selectedUser.userId] ?? ""}
           onClose={closeDrawer}
+          onRoleChange={(role) => void handleRoleChange(selectedUser.userId, role)}
           onSave={(changes) => handleSaveFeatures(selectedUser.userId, changes)}
         />
       ) : null}

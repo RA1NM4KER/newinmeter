@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
@@ -58,7 +59,7 @@ export function DropdownSelect({
   // Fixed positioning (computed from the trigger's real screen position)
   // instead of an absolute/relative menu, so this never gets clipped by an
   // ancestor's overflow-x-auto -- the same fix as SyncButton and DatePicker.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen || !containerRef.current) {
       return;
     }
@@ -72,8 +73,8 @@ export function DropdownSelect({
 
       setPosition(
         menuPlacement === "top"
-          ? { left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top + 8 }
-          : { left: rect.left, width: rect.width, top: rect.bottom + 8 }
+          ? { left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top + 4 }
+          : { left: rect.left, width: rect.width, top: rect.bottom + 4 }
       );
     };
 
@@ -108,7 +109,8 @@ export function DropdownSelect({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!containerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setIsOpen(false);
       }
     };
@@ -122,9 +124,10 @@ export function DropdownSelect({
 
   return (
     <div
-      className="relative"
+      className={`relative ${className}`}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        const nextTarget = event.relatedTarget as Node | null;
+        if (!event.currentTarget.contains(nextTarget) && !menuRef.current?.contains(nextTarget)) {
           setIsOpen(false);
         }
       }}
@@ -139,7 +142,7 @@ export function DropdownSelect({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
-        className={`inline-flex h-9 items-center ${layoutClassName} rounded-md border px-3 text-sm outline-none transition ${triggerToneClass(tone)} ${className}`}
+        className={`inline-flex h-9 w-full items-center ${layoutClassName} rounded-md border px-3 text-sm outline-none transition ${triggerToneClass(tone)}`}
         onClick={() => setIsOpen((current) => !current)}
         type="button"
       >
@@ -156,48 +159,51 @@ export function DropdownSelect({
           />
         )}
       </button>
-      {isOpen ? (
-        <div
-          className="fixed z-[80] max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto rounded-md border border-line bg-paper p-1 shadow-soft"
-          role="listbox"
-          aria-label={ariaLabel}
-          ref={menuRef}
-          style={{ left: position.left, width: position.width, top: position.top, bottom: position.bottom }}
-        >
-          {options.map((option) => {
-            const isActive = option.value === value;
+      {isOpen
+        ? createPortal(
+            <div
+              className="fixed z-[80] max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto rounded-md border border-line bg-paper p-1 shadow-soft"
+              role="listbox"
+              aria-label={ariaLabel}
+              ref={menuRef}
+              style={{ left: position.left, width: position.width, top: position.top, bottom: position.bottom }}
+            >
+              {options.map((option) => {
+                const isActive = option.value === value;
 
-            return (
-              <button
-                aria-selected={isActive}
-                className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition ${
-                  option.disabled
-                    ? "cursor-not-allowed text-muted/60"
-                    : isActive
-                      ? "bg-canvas text-ink"
-                      : "text-muted hover:bg-canvas hover:text-ink"
-                } ${hideLabelOnMobile ? "justify-center gap-0 sm:justify-start sm:gap-2" : ""}`}
-                disabled={option.disabled}
-                key={option.value}
-                onClick={() => {
-                  if (option.disabled) {
-                    return;
-                  }
+                return (
+                  <button
+                    aria-selected={isActive}
+                    className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition ${
+                      option.disabled
+                        ? "cursor-not-allowed text-muted/60"
+                        : isActive
+                          ? "bg-canvas text-ink"
+                          : "text-muted hover:bg-canvas hover:text-ink"
+                    } ${hideLabelOnMobile ? "justify-center gap-0 sm:justify-start sm:gap-2" : ""}`}
+                    disabled={option.disabled}
+                    key={option.value}
+                    onClick={() => {
+                      if (option.disabled) {
+                        return;
+                      }
 
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                role="option"
-                ref={isActive ? activeOptionRef : undefined}
-                type="button"
-              >
-                {option.icon ? <span className="shrink-0">{option.icon}</span> : null}
-                <span className={triggerLabelClassName}>{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+                      onChange(option.value);
+                      setIsOpen(false);
+                    }}
+                    role="option"
+                    ref={isActive ? activeOptionRef : undefined}
+                    type="button"
+                  >
+                    {option.icon ? <span className="shrink-0">{option.icon}</span> : null}
+                    <span className={triggerLabelClassName}>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

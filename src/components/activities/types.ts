@@ -22,4 +22,6 @@ export type ActivityReportTableProps = {
   sortKey: ActivityReportSortKey;
   sortDirection: "asc" | "desc";
   onSortChange: (key: ActivityReportSortKey) => void;
+  onSortKeyChange: (key: ActivityReportSortKey) => void;
+  onSortDirectionChange: (direction: "asc" | "desc") => void;
 };
