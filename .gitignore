@@ -21,6 +21,3 @@ supabase/.temp
 coverage/
 .vercel
 *.tsbuildinfo
-
-# Local-only dev preview pages, never meant to be committed/pushed.
-src/app/qa-ui/
