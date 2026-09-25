@@ -21,3 +21,4 @@ supabase/.temp
 coverage/
 .vercel
 *.tsbuildinfo
+hardware/pcb/.history/
