@@ -175,6 +175,14 @@ export function isAdoptionMetricKey(value: string): value is AdoptionMetricKey {
   return (ADOPTION_METRIC_KEYS as readonly string[]).includes(value);
 }
 
+export const ACTIVITY_WINDOW_KEYS = ["today", "last7Days", "last30Days"] as const;
+
+export type ActivityWindowKey = (typeof ACTIVITY_WINDOW_KEYS)[number];
+
+export function isActivityWindowKey(value: string): value is ActivityWindowKey {
+  return (ACTIVITY_WINDOW_KEYS as readonly string[]).includes(value);
+}
+
 export type AdoptionMetricUser = { userId: string; email: string | null };
 
 // Backs the Feature-adoption row's expandable "who has this" list. Fetches
@@ -244,6 +252,43 @@ export async function getAdoptionMetricUsers(key: AdoptionMetricKey): Promise<Ad
 
   return Array.from(matchingUserIds)
     .filter((userId) => realUserIds.has(userId))
+    .map((userId) => ({ userId, email: emailByUserId.get(userId) ?? null }))
+    .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
+}
+
+// Backs the Human-activity tiles' expandable "who was active" list, mirroring
+// getAdoptionMetricUsers above -- same realUserIds resolution, scoped to just
+// the one requested window instead of getEngagementMetrics's full 30-day
+// fetch reused across all three counts.
+export async function getActivityWindowUsers(
+  key: ActivityWindowKey,
+  now: Date = new Date()
+): Promise<AdoptionMetricUser[]> {
+  const dates = engagementDateRange(now);
+  const startDate =
+    key === "today" ? dates.today : key === "last7Days" ? dates.last7DaysStart : dates.last30DaysStart;
+
+  const [authUsers, roles, connections, activityDays] = await Promise.all([
+    listAllAuthUsers(),
+    adminSupabaseFetch<UserRoleRow[]>("/user_roles?select=user_id,role,engagement_excluded"),
+    adminSupabaseFetch<ConnectionRow[]>(
+      "/livemopay_connections?select=id,user_id,status,is_demo,updated_at&order=updated_at.desc"
+    ),
+    adminSupabaseFetchAllPages<ActivityDayRow>(
+      `/user_activity_days?select=user_id,activity_date&activity_date=gte.${startDate}`
+    )
+  ]);
+
+  const realUserIds = resolveRealUserIds(authUsers, roles, connections);
+  const matchingUserIds = new Set(
+    activityDays
+      .filter((row) => row.activity_date >= startDate && realUserIds.has(row.user_id))
+      .map((row) => row.user_id)
+  );
+
+  const emailByUserId = new Map(authUsers.map((user) => [user.userId, user.email]));
+
+  return Array.from(matchingUserIds)
     .map((userId) => ({ userId, email: emailByUserId.get(userId) ?? null }))
     .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
 }

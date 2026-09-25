@@ -3,15 +3,22 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
+import { healthDotClass, type HealthState } from "@/lib/diagnostics/health";
 
 export type AdminSectionTabId = "users" | "features" | "engagement" | "diagnostics";
 
-const tabs: Array<{ id: AdminSectionTabId; label: string }> = [
-  { id: "users", label: "Users" },
-  { id: "features", label: "Features" },
-  { id: "engagement", label: "Engagement" },
-  { id: "diagnostics", label: "Diagnostics" }
-];
+function tabs(diagnosticsHealth?: HealthState): Array<{ id: AdminSectionTabId; label: string; indicatorClassName?: string }> {
+  return [
+    { id: "users", label: "Users" },
+    { id: "features", label: "Features" },
+    { id: "engagement", label: "Engagement" },
+    {
+      id: "diagnostics",
+      label: "Diagnostics",
+      indicatorClassName: diagnosticsHealth ? healthDotClass[diagnosticsHealth] : undefined
+    }
+  ];
+}
 
 const tabHref: Record<AdminSectionTabId, string> = {
   users: "/admin",
@@ -27,7 +34,7 @@ function tabFromPathname(pathname: string): AdminSectionTabId {
   return "users";
 }
 
-export function AdminSectionTabs() {
+export function AdminSectionTabs({ diagnosticsHealth }: { diagnosticsHealth?: HealthState }) {
   const router = useRouter();
   const pathname = usePathname();
   const routeTab = tabFromPathname(pathname);
@@ -47,5 +54,7 @@ export function AdminSectionTabs() {
     if (id !== routeTab) router.push(tabHref[id], { scroll: false });
   }
 
-  return <UnderlineTabs tabs={tabs} activeId={activeId} onChange={(id) => change(id as AdminSectionTabId)} />;
+  return (
+    <UnderlineTabs tabs={tabs(diagnosticsHealth)} activeId={activeId} onChange={(id) => change(id as AdminSectionTabId)} />
+  );
 }

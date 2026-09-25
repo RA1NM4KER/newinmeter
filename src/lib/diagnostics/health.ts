@@ -1,6 +1,12 @@
 export const HEALTH_STATES = ["healthy", "warning", "critical"] as const;
 export type HealthState = (typeof HEALTH_STATES)[number];
 
+export const healthDotClass: Record<HealthState, string> = {
+  healthy: "bg-accent",
+  warning: "bg-amber-500",
+  critical: "bg-red-500"
+};
+
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 

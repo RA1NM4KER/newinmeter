@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EngagementPanel } from "./engagement-panel";
 import type { EngagementMetrics } from "@/lib/engagement";
 
@@ -30,7 +30,10 @@ function renderPanel(metrics: EngagementMetrics = sampleMetrics) {
 }
 
 describe("EngagementPanel", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("shows compact human-activity and clearly labelled domain adoption metrics", () => {
     renderPanel();
@@ -52,5 +55,47 @@ describe("EngagementPanel", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Alerts enabled/, expanded: false }));
     expect(screen.getByRole("button", { name: /Alerts enabled/, expanded: true })).toBeDefined();
+  });
+
+  it("does not fetch or show the per-user email list until an activity tile is expanded", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel();
+    expect(screen.getByRole("button", { name: /Today/, expanded: false })).toBeDefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not show a chevron or click target when an activity count is zero", () => {
+    renderPanel({ ...sampleMetrics, activeToday: 0 });
+
+    expect(screen.queryByRole("button", { name: /Today/ })).toBeNull();
+  });
+
+  it("expands the Today activity tile and loads only that window's users", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ users: [{ userId: "real-a", email: "a@example.com" }] })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Today/, expanded: false }));
+    expect(screen.getByRole("button", { name: /Today/, expanded: true })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Last 7 days/, expanded: false })).toBeDefined();
+    await waitFor(() => expect(screen.getByText("a@example.com")).toBeDefined());
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/engagement/today/users", { cache: "no-store" });
+  });
+
+  it("stays open while its user list is scrolled", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ users: [{ userId: "real-a", email: "a@example.com" }] }) })
+    );
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Today/, expanded: false }));
+
+    const popover = await screen.findByRole("dialog", { name: "Today active users" });
+    fireEvent.scroll(popover);
+
+    expect(screen.getByRole("dialog", { name: "Today active users" })).toBeDefined();
   });
 });

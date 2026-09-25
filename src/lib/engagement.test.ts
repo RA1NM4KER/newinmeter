@@ -14,7 +14,13 @@ vi.mock("./supabase-rest", () => ({
 }));
 vi.mock("./user-roles", () => ({ listAllAuthUsers: mocks.listAllAuthUsers }));
 
-import { engagementDateRange, getAdoptionMetricUsers, getEngagementMetrics, recordAiFeatureUsage } from "./engagement";
+import {
+  engagementDateRange,
+  getActivityWindowUsers,
+  getAdoptionMetricUsers,
+  getEngagementMetrics,
+  recordAiFeatureUsage
+} from "./engagement";
 
 describe("engagement metrics", () => {
   beforeEach(() => {
@@ -103,6 +109,24 @@ describe("engagement metrics", () => {
     // real-a's; demo must not appear even though its connection is
     // "connected".
     await expect(getAdoptionMetricUsers("livemopay")).resolves.toEqual([{ userId: "real-a", email: null }]);
+  });
+
+  it("resolves the same real users backing each activity window", async () => {
+    const now = new Date("2026-08-26T12:00:00.000Z");
+
+    await expect(getActivityWindowUsers("today", now)).resolves.toEqual([{ userId: "real-a", email: null }]);
+    await expect(getActivityWindowUsers("last7Days", now)).resolves.toEqual([
+      { userId: "real-a", email: null },
+      { userId: "real-b", email: null }
+    ]);
+    await expect(getActivityWindowUsers("last30Days", now)).resolves.toEqual([
+      { userId: "real-a", email: null },
+      { userId: "real-b", email: null }
+    ]);
+
+    expect(mocks.adminSupabaseFetchAllPages).toHaveBeenCalledWith(
+      "/user_activity_days?select=user_id,activity_date&activity_date=gte.2026-08-26"
+    );
   });
 
   it("records only the aggregate AI feature key through the server-only RPC", async () => {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { countPushSubscriptions } from "../push-subscriptions";
 import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { listAllAuthUsers } from "../user-roles";
@@ -177,7 +178,13 @@ export function diagnosticsSnapshotToJson(snapshot: DiagnosticsSnapshot): string
   return JSON.stringify(snapshot);
 }
 
-export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<DiagnosticsSnapshot> {
+// Cached per request: the admin layout reads just overview.overall to color
+// the Diagnostics tab's status dot on every admin page, and the diagnostics
+// page itself reads the full snapshot -- cache() dedupes those into one
+// fetch instead of querying connections/capture_runs/auth users twice.
+export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapshot(
+  now: Date = new Date()
+): Promise<DiagnosticsSnapshot> {
   const [
     connectionRows,
     captureRows,
@@ -348,4 +355,4 @@ export async function getDiagnosticsSnapshot(now: Date = new Date()): Promise<Di
       resolvedAt: event.resolvedAt
     }))
   };
-}
+});

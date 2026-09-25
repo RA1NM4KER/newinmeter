@@ -1,11 +1,18 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { buildAdminEngagementUsersUrl } from "@/lib/endpoints";
-import type { AdoptionMetric, AdoptionMetricKey, AdoptionMetricUser, EngagementMetrics } from "@/lib/engagement";
+import type {
+  ActivityWindowKey,
+  AdoptionMetric,
+  AdoptionMetricKey,
+  AdoptionMetricUser,
+  EngagementMetrics
+} from "@/lib/engagement";
 import { StatTile } from "./stat-tile";
 
 const adoptionLabels: Array<{ key: AdoptionMetricKey; label: string; detail: string }> = [
@@ -16,10 +23,14 @@ const adoptionLabels: Array<{ key: AdoptionMetricKey; label: string; detail: str
   { key: "livemopay", label: "LiveMopay", detail: "Has a current connected account" }
 ];
 
+type PopoverRect = { top: number; left: number; width: number };
+
 // Fetched only once a row is expanded, mirroring the Features tab's
 // per-feature OverrideList, rather than bloating the page's initial metrics
-// payload with every user's email up front.
-function AdoptionUserList({ metricKey }: { metricKey: AdoptionMetricKey }) {
+// payload with every user's email up front. Shared by the adoption rows and
+// the activity tiles below -- the API route dispatches on the same string
+// key to either getAdoptionMetricUsers or getActivityWindowUsers.
+function EngagementUserList({ metricKey }: { metricKey: AdoptionMetricKey | ActivityWindowKey }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-engagement-users", metricKey],
     queryFn: async () => {
@@ -97,10 +108,127 @@ function AdoptionRow({
 
       {expanded ? (
         <div className="border-t border-line bg-canvas/40 px-4 py-3">
-          <AdoptionUserList metricKey={metricKey} />
+          <EngagementUserList metricKey={metricKey} />
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ExpandableStatTile({
+  label,
+  value,
+  metricKey
+}: {
+  label: string;
+  value: number;
+  metricKey: ActivityWindowKey;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [popoverRect, setPopoverRect] = useState<PopoverRect | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const popoverId = useId();
+  const canExpand = value > 0;
+
+  // This is a portal rather than an extension of the card: the dashboard
+  // grid keeps its compact shape while the user list can float above the
+  // content beneath it without being clipped by the scroll container.
+  useLayoutEffect(() => {
+    if (!expanded || !canExpand) {
+      setPopoverRect(null);
+      return;
+    }
+
+    const updateRect = () => {
+      const rect = cardRef.current?.getBoundingClientRect();
+      if (rect) setPopoverRect({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+    };
+
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    return () => window.removeEventListener("resize", updateRect);
+  }, [canExpand, expanded]);
+
+  useEffect(() => {
+    if (!expanded || !canExpand) return;
+
+    const closeWhenOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!cardRef.current?.contains(target) && !popoverRef.current?.contains(target)) setExpanded(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    const closeOnScroll = (event: Event) => {
+      // The list itself can scroll when there are many users. Only dismiss
+      // when an ancestor/page scroll would leave the anchored popover stale.
+      if (!popoverRef.current?.contains(event.target as Node)) setExpanded(false);
+    };
+
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("scroll", closeOnScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("scroll", closeOnScroll, true);
+    };
+  }, [canExpand, expanded]);
+
+  const card = (
+    <div className="flex-1" ref={cardRef}>
+      <Card className={canExpand ? "" : "px-2 py-2 sm:px-4 sm:py-3"}>
+        {canExpand ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            aria-expanded={expanded}
+            aria-controls={expanded ? popoverId : undefined}
+            className="block w-full px-2 py-2 text-left sm:px-4 sm:py-3"
+          >
+            <span className="flex items-center gap-1">
+              <span className="min-w-0 flex-1 truncate text-[0.6rem] uppercase tracking-[0.1em] text-muted sm:text-xs sm:tracking-[0.12em]">
+                {label}
+              </span>
+              <ChevronDown
+                className={`h-3 w-3 shrink-0 text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
+            </span>
+            <span className="mt-1 block text-lg font-semibold tabular-nums text-ink sm:text-2xl">{value}</span>
+          </button>
+        ) : (
+          <>
+            <p className="min-w-0 truncate text-[0.6rem] uppercase tracking-[0.1em] text-muted sm:text-xs sm:tracking-[0.12em]">
+              {label}
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-ink sm:text-2xl">{value}</p>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+
+  return (
+    <>
+      {card}
+      {canExpand && expanded && popoverRect
+        ? createPortal(
+            <div
+              aria-label={`${label} active users`}
+              className="fixed z-[999] max-h-64 overflow-y-auto rounded-lg border border-line bg-paper p-3 shadow-soft"
+              id={popoverId}
+              ref={popoverRef}
+              role="dialog"
+              style={{ top: popoverRect.top, left: popoverRect.left, width: popoverRect.width }}
+            >
+              <p className="mb-2 text-xs font-medium text-ink">Active {label.toLowerCase()}</p>
+              <EngagementUserList metricKey={metricKey} />
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
@@ -115,11 +243,11 @@ export function EngagementPanel({ metrics }: { metrics: EngagementMetrics }) {
             </h2>
             <p className="mt-1 text-xs text-muted">Foreground app use only · SAST calendar days</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-4 sm:gap-3">
             <StatTile label="Real users" value={metrics.totalRealUsers} />
-            <StatTile label="Today" value={metrics.activeToday} />
-            <StatTile label="Last 7 days" value={metrics.activeLast7Days} />
-            <StatTile label="Last 30 days" value={metrics.activeLast30Days} />
+            <ExpandableStatTile label="Today" metricKey="today" value={metrics.activeToday} />
+            <ExpandableStatTile label="Last 7 days" metricKey="last7Days" value={metrics.activeLast7Days} />
+            <ExpandableStatTile label="Last 30 days" metricKey="last30Days" value={metrics.activeLast30Days} />
           </div>
         </section>
 

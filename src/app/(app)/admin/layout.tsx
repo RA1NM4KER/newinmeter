@@ -2,10 +2,13 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import { requireAdminSession } from "@/lib/auth/session";
+import { getDiagnosticsSnapshot } from "@/lib/diagnostics/data";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const auth = await requireAdminSession();
   if (!auth.ok) notFound();
+
+  const snapshot = await getDiagnosticsSnapshot();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
@@ -15,7 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <AdminSectionTabs />
+        <AdminSectionTabs diagnosticsHealth={snapshot.overview.overall} />
         {children}
       </div>
     </div>

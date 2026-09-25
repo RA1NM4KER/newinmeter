@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { DiagnosticsRefreshButton } from "./diagnostics-refresh-button";
 import { Card } from "@/components/ui/card";
 import type { DiagnosticConnection, DiagnosticsSnapshot, DiagnosticSyncRun } from "@/lib/diagnostics/data";
-import { worstHealthState, type HealthState } from "@/lib/diagnostics/health";
+import { healthDotClass, worstHealthState, type HealthState } from "@/lib/diagnostics/health";
 
 const localDateTime = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "Africa/Johannesburg",
@@ -16,12 +16,6 @@ const localTime = new Intl.DateTimeFormat("en-ZA", {
   hour: "2-digit",
   minute: "2-digit"
 });
-
-const healthDotClass: Record<HealthState, string> = {
-  healthy: "bg-accent",
-  warning: "bg-amber-500",
-  critical: "bg-red-500"
-};
 
 const healthTextClass: Record<HealthState, string> = {
   healthy: "text-ink",

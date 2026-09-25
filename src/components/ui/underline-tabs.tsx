@@ -26,6 +26,9 @@ export function UnderlineTabs({ tabs, activeId, onChange, endSlot }: UnderlineTa
               type="button"
             >
               {tab.label}
+              {tab.indicatorClassName ? (
+                <span className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${tab.indicatorClassName}`} aria-hidden="true" />
+              ) : null}
             </button>
           );
         })}

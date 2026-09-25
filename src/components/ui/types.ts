@@ -23,7 +23,7 @@ export type MetricCardProps = {
 };
 
 export type UnderlineTabsProps = {
-  tabs: Array<{ id: string; label: string }>;
+  tabs: Array<{ id: string; label: string; indicatorClassName?: string }>;
   activeId: string;
   onChange: (id: string) => void;
   endSlot?: ReactNode;

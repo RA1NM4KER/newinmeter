@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireAdminSession: vi.fn(),
-  notFound: vi.fn()
+  notFound: vi.fn(),
+  getDiagnosticsSnapshot: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ requireAdminSession: mocks.requireAdminSession }));
+vi.mock("@/lib/diagnostics/data", () => ({ getDiagnosticsSnapshot: mocks.getDiagnosticsSnapshot }));
 vi.mock("@/components/admin/admin-section-tabs", () => ({
   AdminSectionTabs: () => <div data-testid="admin-tabs" />
 }));
@@ -49,6 +51,7 @@ describe("(app)/admin/layout", () => {
       ok: true,
       session: { userId: "admin-1", email: "admin@example.com", accessToken: "t", permissions: { role: "admin" } }
     });
+    mocks.getDiagnosticsSnapshot.mockResolvedValue({ overview: { overall: "healthy" } });
 
     const ui = await AdminLayout({ children: <div data-testid="admin-page-content" /> });
     render(ui);
