@@ -1,12 +1,8 @@
-// Small versioned registry of known tariff structures -- not a rules
-// engine. A connection optionally carries a `tariff_profile` key (see
-// 20260824050000); this module is the only place that key's actual bands
-// live. tariff_changed works for every connection regardless of profile
-// (it's purely observational -- see evaluateTariffChanged in alerts.ts);
-// only tariff_band_approaching needs a known profile, and simply isn't
-// offered when one isn't set (never a fallback default -- a future
-// non-Newinbosch signup gets tariff_profile = null and stays that way
-// until something explicit assigns it a real profile).
+// Small versioned registry of known tariff structures and the explicit
+// LiveMopay-company mappings that select them. This is not a fallback rules
+// engine: an unknown company still gets tariff_profile = null. Keeping the
+// mapping beside the profiles makes adding another estate a deliberate code
+// change rather than an accidental default.
 //
 // No server-only import here: alert-types.ts-style pure data/logic, safe
 // for a client component (AlertsTab) to import directly to decide whether
@@ -132,6 +128,12 @@ export const NEWINBOSCH_2026_27: TariffProfile = {
   ]
 };
 
+export const NEWINBOSCH_COMPANY_ID = "43";
+
+const TARIFF_PROFILE_BY_COMPANY_ID: Record<string, string> = {
+  [NEWINBOSCH_COMPANY_ID]: NEWINBOSCH_2026_27.key
+};
+
 const TARIFF_PROFILES: Record<string, TariffProfile> = {
   [NEWINBOSCH_2026_27.key]: NEWINBOSCH_2026_27
 };
@@ -139,6 +141,11 @@ const TARIFF_PROFILES: Record<string, TariffProfile> = {
 export function getTariffProfile(key: string | null | undefined): TariffProfile | null {
   if (!key) return null;
   return TARIFF_PROFILES[key] ?? null;
+}
+
+export function getTariffProfileKeyForCompany(companyId: string | null | undefined): string | null {
+  if (!companyId) return null;
+  return TARIFF_PROFILE_BY_COMPANY_ID[companyId] ?? null;
 }
 
 export function findTariffLedgerRateSchedule(

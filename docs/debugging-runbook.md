@@ -77,20 +77,12 @@ Read the result:
 - **Data table's Band column shows "Not specified" for a real (non-demo) user, or
   `tariff_band_approaching` seems unavailable for them**: check
   `select tariff_profile from public.livemopay_connections where id = '<connection_id>';` before
-  assuming anything about their usage data itself. `tariff_profile` is NOT auto-assigned at
-  connect time (`beginLivemopayConnection` never touches it), it's only ever set by a reviewed,
-  one-time migration matching a specific `company_id` (currently `'43'`, Newinbosch, see
-  `20260824050000_*.sql`'s own extensive comment on why this is deliberately not automatic: the
-  author didn't trust `company_id` as a permanent unsupervised signal, only as something worth a
-  human re-checking before each assignment). This means **every new connection since that
-  migration ran silently has `tariff_profile = null` until someone notices and re-runs the same
-  reviewed backfill**, which is exactly what happened for 3+ weeks and 9 real connections before
-  this was caught. If you find drift like this again, the fix is the same shape: re-run the
-  freshness check the original migration's comment specifies
-  (`select company_id, count(*), count(distinct account_id), count(distinct property_id) from
-  livemopay_connections where is_demo = false group by company_id;`), confirm no new estate has
-  shown up, then write a new migration re-applying the identical predicate (self-limiting, safe
-  to re-run, can't double-apply). Once `tariff_profile` is set, `npm run backfill:tariff-bands`
+  assuming anything about their usage data itself. `tariff_profile` is assigned at connection or
+  account-selection time from the explicit company mapping in `tariff-profiles.ts`: company `'43'`
+  maps to Newinbosch, while unknown companies remain null. A nonzero diagnostics count now means
+  the connection predates this behavior, a write path failed to use the mapping, or production is
+  running an older build. Repair the assignment, then identify which path created it so future
+  signups do not drift. Once `tariff_profile` is set, `npm run backfill:tariff-bands`
   (see its own comment for the `--conditions=react-server` requirement) resolves the actual
   `tariff_band` values on existing rows, new syncs resolve it automatically going forward
   (`sync.ts` calls `resolveTariffBand` on every insert). A remaining handful of unresolved rows

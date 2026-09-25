@@ -3,6 +3,7 @@ import "server-only";
 import { countPushSubscriptions } from "../push-subscriptions";
 import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { listAllAuthUsers } from "../user-roles";
+import { NEWINBOSCH_COMPANY_ID } from "../newinmeter/tariff-profiles";
 import {
   classifyCanaryHealth,
   classifyConnectionHealth,
@@ -22,17 +23,13 @@ export const DIAGNOSTIC_CONNECTION_SELECT =
   "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at," +
   "data_state,hibernation_error,cold_at,restore_started_at,restore_error";
 
-// The one estate this app currently serves (see the tariff_profile
-// backfill migrations' own extensive reasoning on why this identifier
-// isn't trusted for automatic, unreviewed assignment). Used only as a
-// server-side filter predicate for the count query below, never selected
+// The one estate this app currently serves. Used only as a server-side
+// filter predicate for the count query below, never selected
 // into the diagnostics DTO itself -- this file has a deliberate, tested
 // boundary against ever exposing upstream account/property/company
 // identifiers through diagnostics (see DIAGNOSTIC_CONNECTION_SELECT's own
 // test), a plain count doesn't cross that line, adding the column to the
 // connection select would.
-const NEWINBOSCH_COMPANY_ID = "43";
-
 type DiagnosticConnectionRow = {
   id: string;
   user_id: string;

@@ -141,6 +141,51 @@ describe("newinmeter-connection demo protections", () => {
     expect(result.status).toBe("connected");
   });
 
+  it("assigns the Newinbosch tariff profile when a single account connects", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([]);
+    mocks.adminSupabaseRequest.mockResolvedValue([{ ...realRow, status: "connected" }]);
+
+    await beginLivemopayConnection({
+      userId: "user-real",
+      livemopayEmail: "real@example.com",
+      refreshToken: "real-refresh-token",
+      candidates: [{ accountId: "a", companyId: "43", propertyId: "c", label: "Newinbosch home" }]
+    });
+
+    const [, , rows] = mocks.adminSupabaseRequest.mock.calls[0];
+    expect(rows[0]).toMatchObject({ company_id: "43", tariff_profile: "newinbosch_2026_27" });
+  });
+
+  it("leaves an unknown company's tariff profile unassigned", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([]);
+    mocks.adminSupabaseRequest.mockResolvedValue([{ ...realRow, status: "connected" }]);
+
+    await beginLivemopayConnection({
+      userId: "user-real",
+      livemopayEmail: "real@example.com",
+      refreshToken: "real-refresh-token",
+      candidates: [{ accountId: "a", companyId: "unknown", propertyId: "c", label: "Other home" }]
+    });
+
+    const [, , rows] = mocks.adminSupabaseRequest.mock.calls[0];
+    expect(rows[0]).toMatchObject({ company_id: "unknown", tariff_profile: null });
+  });
+
+  it("assigns the Newinbosch tariff profile after multi-account selection", async () => {
+    const candidate = { accountId: "a", companyId: "43", propertyId: "c", label: "Newinbosch home" };
+    mocks.adminSupabaseFetch.mockResolvedValue([
+      { ...realRow, status: "pending_selection", pending_accounts: [candidate] }
+    ]);
+    mocks.adminSupabaseRequest.mockResolvedValue([
+      { ...realRow, status: "connected", company_id: "43", tariff_profile: "newinbosch_2026_27" }
+    ]);
+
+    await finalizeLivemopayAccountSelection("user-real", 0);
+
+    const [, , payload] = mocks.adminSupabaseRequest.mock.calls[0];
+    expect(payload).toMatchObject({ company_id: "43", tariff_profile: "newinbosch_2026_27" });
+  });
+
   it("excludes demo connections from the stale-check query", async () => {
     mocks.adminSupabaseFetch.mockResolvedValue([]);
     await listConnectionsForStaleCheck();

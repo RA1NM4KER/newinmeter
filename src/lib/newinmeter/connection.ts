@@ -6,6 +6,7 @@ import { adminSupabaseFetch, adminSupabaseRequest, authenticatedSupabaseFetch } 
 import { createSupabaseAdminClient } from "../supabase/admin-client";
 import { decryptRefreshToken, encryptRefreshToken } from "../token-encryption";
 import { computeAutoSyncRetryAt, computeNextAutoSyncAt } from "./schedule";
+import { getTariffProfileKeyForCompany } from "./tariff-profiles";
 import type { LiveMopayAccountCandidate } from "./web";
 
 export type ConnectionStatus = "connected" | "pending_selection" | "disconnected" | "error";
@@ -50,9 +51,9 @@ type ConnectionRow = {
   sync_claimed_at: string | null;
   alerts_enabled: boolean;
   // Nullable versioned tariff-profile key (see tariff-profiles.ts) -- null
-  // for any connection with no known tariff structure. Display-only from
-  // here: never user-writable, and there is no authenticated RLS write path
-  // to it (see 20260824050000's own comment on this column).
+  // for any connection whose LiveMopay company has no explicit mapping.
+  // Display-only from here: never user-writable, and there is no
+  // authenticated RLS write path to it.
   tariff_profile: string | null;
   data_state: ConnectionDataState;
   cold_at: string | null;
@@ -204,6 +205,7 @@ export async function beginLivemopayConnection(params: BeginConnectionParams): P
     company_id: single?.companyId ?? null,
     property_id: single?.propertyId ?? null,
     account_label: single?.label ?? null,
+    tariff_profile: getTariffProfileKeyForCompany(single?.companyId),
     refresh_token_ciphertext: encrypted.ciphertext,
     refresh_token_iv: encrypted.iv,
     refresh_token_auth_tag: encrypted.authTag,
@@ -268,6 +270,7 @@ export async function finalizeLivemopayAccountSelection(userId: string, index: n
       company_id: candidate.companyId,
       property_id: candidate.propertyId,
       account_label: candidate.label,
+      tariff_profile: getTariffProfileKeyForCompany(candidate.companyId),
       status: "connected",
       pending_accounts: null,
       next_sync_at: nextSyncAt,

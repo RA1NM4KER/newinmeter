@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   NEWINBOSCH_2026_27,
   getTariffProfile,
+  getTariffProfileKeyForCompany,
   isApproachingNextBand,
   resolveMonthlyBand,
   resolveTariffBand
@@ -16,6 +17,18 @@ describe("getTariffProfile", () => {
     expect(getTariffProfile("some_future_estate")).toBeNull();
     expect(getTariffProfile(null)).toBeNull();
     expect(getTariffProfile(undefined)).toBeNull();
+  });
+});
+
+describe("getTariffProfileKeyForCompany", () => {
+  it("maps the verified Newinbosch company id", () => {
+    expect(getTariffProfileKeyForCompany("43")).toBe("newinbosch_2026_27");
+  });
+
+  it("does not guess for unknown or missing companies", () => {
+    expect(getTariffProfileKeyForCompany("some-future-company")).toBeNull();
+    expect(getTariffProfileKeyForCompany(null)).toBeNull();
+    expect(getTariffProfileKeyForCompany(undefined)).toBeNull();
   });
 });
 
