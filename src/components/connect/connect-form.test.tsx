@@ -19,12 +19,12 @@ const PORTAL_URL = "https://app.livewalletportal.co.za";
 
 function renderForm() {
   return render(
-    <ConnectForm defaultEmail="resident@example.com" initialPendingAccounts={null} livemopayPortalUrl={PORTAL_URL} />
+    <ConnectForm initialPendingAccounts={null} livemopayPortalUrl={PORTAL_URL} />
   );
 }
 
 function fillCredentials(email: string, password: string) {
-  fireEvent.change(screen.getByPlaceholderText("LiveMopay email"), { target: { value: email } });
+  fireEvent.change(screen.getByPlaceholderText("Email you use on LiveMopay"), { target: { value: email } });
   fireEvent.change(screen.getByPlaceholderText("LiveMopay password"), { target: { value: password } });
 }
 
@@ -43,7 +43,7 @@ describe("ConnectForm", () => {
     expect(screen.getByText(/same email and password you already use for LiveMopay/i)).toBeDefined();
   });
 
-  it("shows a forgot-password link to the real LiveMopay portal only after an invalid-credentials error", async () => {
+  it("shows a forgot-password link to the real LiveMopay portal, before and after an invalid-credentials error", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -52,7 +52,7 @@ describe("ConnectForm", () => {
       })
     );
     renderForm();
-    expect(screen.queryByText(/forgot your livemopay password/i)).toBeNull();
+    expect(screen.getByText(/forgot your livemopay password/i).closest("a")?.getAttribute("href")).toBe(PORTAL_URL);
 
     fillCredentials("resident@example.com", "wrong-password");
     fireEvent.click(screen.getByText("Connect"));
@@ -61,7 +61,7 @@ describe("ConnectForm", () => {
     expect(link?.getAttribute("href")).toBe(PORTAL_URL);
   });
 
-  it("does not show the forgot-password link for a generic/server failure", async () => {
+  it("shows only one forgot-password link for a generic/server failure", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -75,7 +75,25 @@ describe("ConnectForm", () => {
     fireEvent.click(screen.getByText("Connect"));
 
     expect(await screen.findByText("Could not connect your LiveMopay account.")).toBeDefined();
-    expect(screen.queryByText(/forgot your livemopay password/i)).toBeNull();
+    expect(screen.getAllByText(/forgot your livemopay password/i)).toHaveLength(1);
+  });
+
+  it("toggles password visibility", () => {
+    renderForm();
+    const input = screen.getByPlaceholderText("LiveMopay password") as HTMLInputElement;
+    expect(input.type).toBe("password");
+    fireEvent.click(screen.getByLabelText("Show password"));
+    expect(input.type).toBe("text");
+    fireEvent.click(screen.getByLabelText("Hide password"));
+    expect(input.type).toBe("password");
+  });
+
+  it("counts the connect screen view once per browser session", () => {
+    window.sessionStorage.clear();
+    renderForm();
+    renderForm();
+    const views = mocks.trackFunnelEvent.mock.calls.filter(([event]) => event === "connect_screen_viewed");
+    expect(views).toHaveLength(1);
   });
 
   it("tracks initial_sync_succeeded and navigates home after a successful connect + sync", async () => {

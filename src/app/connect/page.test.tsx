@@ -6,19 +6,17 @@ import type { ReactNode } from "react";
 const mocks = vi.hoisted(() => ({
   getAuthenticatedSession: vi.fn(),
   getConnectionForUser: vi.fn(),
-  recordFunnelEvent: vi.fn(),
   redirect: vi.fn()
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthenticatedSession: mocks.getAuthenticatedSession }));
 vi.mock("@/lib/newinmeter/connection", () => ({ getConnectionForUser: mocks.getConnectionForUser }));
-vi.mock("@/lib/funnel", () => ({ recordFunnelEvent: mocks.recordFunnelEvent }));
 vi.mock("@/components/auth/auth-shell", () => ({
   AuthShell: ({ children }: { children: ReactNode }) => <div data-testid="auth-shell">{children}</div>
 }));
 vi.mock("@/components/connect/connect-form", () => ({
-  ConnectForm: (props: { defaultEmail: string }) => (
-    <div data-testid="connect-form" data-default-email={props.defaultEmail} />
+  ConnectForm: () => (
+    <div data-testid="connect-form" />
   )
 }));
 vi.mock("next/navigation", () => ({
@@ -76,8 +74,7 @@ describe("/connect page", () => {
     render(ui);
 
     expect(mocks.redirect).not.toHaveBeenCalled();
-    expect(mocks.recordFunnelEvent).toHaveBeenCalledWith("connect_screen_viewed");
-    expect(screen.getByTestId("connect-form").dataset.defaultEmail).toBe("resident@example.com");
+    expect(screen.getByTestId("connect-form")).toBeDefined();
   });
 
   it("also renders the connect form (picker) for a pending_selection connection, not a redirect", async () => {

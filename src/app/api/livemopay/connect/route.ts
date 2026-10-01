@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       await recordFunnelEvent("connect_invalid_credentials");
       return NextResponse.json(
         {
-          message: "That LiveMopay email or password isn't right. Double-check them, or reset your LiveMopay password.",
+          message: "That LiveMopay email or password isn't right. Make sure you're using your LiveMopay login, which is often a different email from the one you signed in to NewinMeter with.",
           invalidCredentials: true
         },
         { status: 422, headers: rateHeaders }

@@ -18,6 +18,7 @@ const CLIENT_TRACKABLE_EVENTS = new Set([
   "sign_in_started_email",
   "sign_in_completed_google",
   "sign_in_completed_email",
+  "connect_screen_viewed",
   "initial_sync_succeeded",
   "initial_sync_failed"
 ]);

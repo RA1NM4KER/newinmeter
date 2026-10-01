@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ChevronRight, HelpCircle, Loader2, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
+import { AlertCircle, ChevronRight, Eye, EyeOff, HelpCircle, Loader2, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
 import { trackFunnelEvent } from "@/lib/funnel-client";
 
 type AccountOption = { index: number; label: string };
 type Step = "form" | "picker" | "syncing" | "sync-error";
 
 type ConnectFormProps = {
-  defaultEmail: string;
   initialPendingAccounts: AccountOption[] | null;
   livemopayPortalUrl: string;
 };
 
-export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPortalUrl }: ConnectFormProps) {
+export function ConnectForm({ initialPendingAccounts, livemopayPortalUrl }: ConnectFormProps) {
   const router = useRouter();
-  const [email, setEmail] = useState(defaultEmail);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accounts, setAccounts] = useState<AccountOption[] | null>(initialPendingAccounts);
   const [accountLabel, setAccountLabel] = useState<string | null>(null);
@@ -24,6 +23,20 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [invalidCredentials, setInvalidCredentials] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Counted once per browser session so refreshes and revisits don't inflate
+  // the funnel's "viewed" number.
+  useEffect(() => {
+    if (initialPendingAccounts) return;
+    try {
+      if (window.sessionStorage.getItem("nm_connect_viewed")) return;
+      window.sessionStorage.setItem("nm_connect_viewed", "1");
+    } catch {
+      // Storage blocked: fall through and count it.
+    }
+    trackFunnelEvent("connect_screen_viewed");
+  }, [initialPendingAccounts]);
 
   // The whole point of connecting is to see a populated dashboard, not an
   // empty one, so the first sync runs to completion, with the person
@@ -231,7 +244,7 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="LiveMopay email"
+            placeholder="Email you use on LiveMopay"
             className={`h-12 w-full rounded-full border bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal ${invalidCredentials ? "border-red-300" : "border-line"}`}
           />
         </div>
@@ -241,14 +254,33 @@ export function ConnectForm({ defaultEmail, initialPendingAccounts, livemopayPor
             className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
           />
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="LiveMopay password"
-            className={`h-12 w-full rounded-full border bg-canvas pl-11 pr-4 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal ${invalidCredentials ? "border-red-300" : "border-line"}`}
+            className={`h-12 w-full rounded-full border bg-canvas pl-11 pr-12 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-brandTeal ${invalidCredentials ? "border-red-300" : "border-line"}`}
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-muted transition hover:text-ink"
+          >
+            {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
+          </button>
         </div>
+
+        {!invalidCredentials ? (
+          <a
+            href={livemopayPortalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="-mt-1 self-end text-xs font-medium text-muted underline underline-offset-2 hover:text-ink"
+          >
+            Forgot your LiveMopay password?
+          </a>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">
