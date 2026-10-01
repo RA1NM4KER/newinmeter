@@ -77,6 +77,9 @@ import { formatCurrency, formatTariff } from "../format";
 import { currentLocalDateString } from "./schedule";
 
 const TODAY = currentLocalDateString(new Date());
+// Month-to-date alerts need prior days inside the same month, which is not
+// true on the 1st, so those suites pin the clock to the 20th instead.
+const MID_MONTH_TODAY = `${TODAY.slice(0, 8)}20`;
 
 function shiftDate(dateString: string, days: number): string {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -786,9 +789,9 @@ function routeFetchV2(opts: {
   });
 }
 
-function recentCompleteDayRows(dailySpends: number[]): Array<Record<string, unknown>> {
+function recentCompleteDayRows(dailySpends: number[], today = TODAY): Array<Record<string, unknown>> {
   return dailySpends.map((spend, index) => ({
-    period_date: shiftDate(TODAY, -(index + 1)),
+    period_date: shiftDate(today, -(index + 1)),
     total_spend: spend,
     energy_kwh: 0,
     is_complete: true
@@ -927,8 +930,14 @@ describe("evaluateAlertsAfterSync -- balance_runway (predictive, hysteresis)", (
 describe("correlation suppression -- monthly_budget / daily_spend pair", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(`${MID_MONTH_TODAY}T20:00:00Z`));
     mocks.sendPushToUser.mockResolvedValue(1);
     mocks.adminSupabaseRequest.mockResolvedValue([{ id: "event-1" }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("monthly_budget's push wins over daily_spend's when both cross in the same cycle, and daily_spend's row is written suppressed", async () => {
@@ -939,8 +948,8 @@ describe("correlation suppression -- monthly_budget / daily_spend pair", () => {
       ],
       balance: 1000,
       rollupRows: [
-        ...recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130]),
-        { period_date: TODAY, total_spend: 80, energy_kwh: 0, is_complete: false }
+        ...recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130], MID_MONTH_TODAY),
+        { period_date: MID_MONTH_TODAY, total_spend: 80, energy_kwh: 0, is_complete: false }
       ]
     });
     await evaluateAlertsAfterSync("conn-1", "user-1");
@@ -972,8 +981,8 @@ describe("correlation suppression -- monthly_budget / daily_spend pair", () => {
       ],
       balance: 1000,
       rollupRows: [
-        ...recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130]),
-        { period_date: TODAY, total_spend: 80, energy_kwh: 0, is_complete: false }
+        ...recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130], MID_MONTH_TODAY),
+        { period_date: MID_MONTH_TODAY, total_spend: 80, energy_kwh: 0, is_complete: false }
       ]
     });
     mocks.adminSupabaseRequest.mockRejectedValue(
@@ -1043,15 +1052,21 @@ describe("Notification Centre visibility -- suppressed events never appear", () 
 describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-scoped dedup)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(`${MID_MONTH_TODAY}T20:00:00Z`));
     mocks.sendPushToUser.mockResolvedValue(1);
     mocks.adminSupabaseRequest.mockResolvedValue([{ id: "event-budget-1" }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("projects month-end spend from month-to-date + recent daily rate, and notifies once when over budget", async () => {
     routeFetchV2({
       rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 500 })],
       balance: 1000,
-      rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130])
+      rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130], MID_MONTH_TODAY)
     });
     await evaluateAlertsAfterSync("conn-1", "user-1");
 
@@ -1060,7 +1075,7 @@ describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-sc
       "/alert_events",
       expect.objectContaining({
         alert_rule_id: "rule-budget",
-        dedup_key: TODAY.slice(0, 7)
+        dedup_key: MID_MONTH_TODAY.slice(0, 7)
       }),
       "return=representation"
     );
@@ -1074,7 +1089,7 @@ describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-sc
     routeFetchV2({
       rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 500 })],
       balance: 1000,
-      rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130])
+      rollupRows: recentCompleteDayRows([130, 130, 130, 130, 130, 130, 130], MID_MONTH_TODAY)
     });
     mocks.adminSupabaseRequest.mockRejectedValue(
       new Error('duplicate key value violates unique constraint "alert_events_one_per_rule_per_dedup_key_idx" (23505)')
@@ -1087,7 +1102,7 @@ describe("evaluateAlertsAfterSync -- monthly_budget (predictive pacing, month-sc
     routeFetchV2({
       rules: [ruleRow({ id: "rule-budget", type: "monthly_budget", threshold: 5000 })],
       balance: 1000,
-      rollupRows: recentCompleteDayRows([10, 10, 10, 10, 10, 10, 10])
+      rollupRows: recentCompleteDayRows([10, 10, 10, 10, 10, 10, 10], MID_MONTH_TODAY)
     });
     await evaluateAlertsAfterSync("conn-1", "user-1");
     expect(mocks.adminSupabaseRequest).not.toHaveBeenCalled();
