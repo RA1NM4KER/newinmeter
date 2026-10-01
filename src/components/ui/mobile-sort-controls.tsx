@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { DropdownSelect, type DropdownOption } from "./dropdown-select";
 
 const directionOptions: DropdownOption[] = [
@@ -12,13 +13,15 @@ export function MobileSortControls<TSortKey extends string>({
   sortKey,
   direction,
   onSortKeyChange,
-  onDirectionChange
+  onDirectionChange,
+  trailing
 }: {
   options: DropdownOption[];
   sortKey: TSortKey;
   direction: "asc" | "desc";
   onSortKeyChange: (key: TSortKey) => void;
   onDirectionChange: (direction: "asc" | "desc") => void;
+  trailing?: ReactNode;
 }) {
   return (
     <div className="flex shrink-0 items-end gap-2 border-b border-line bg-accentSoft px-4 py-3 sm:hidden">
@@ -46,6 +49,7 @@ export function MobileSortControls<TSortKey extends string>({
           value={direction}
         />
       </label>
+      {trailing}
     </div>
   );
 }

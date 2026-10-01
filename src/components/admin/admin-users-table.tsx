@@ -377,6 +377,20 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
               onSortKeyChange={onSortKeyChange}
               options={adminMobileSortOptions}
               sortKey={sortKey}
+              trailing={
+                <button
+                  aria-label="Refresh users"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted transition enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isManualRefreshing}
+                  onClick={() => {
+                    void handleRefresh();
+                  }}
+                  type="button"
+                  title="Refresh users"
+                >
+                  <RefreshCw aria-hidden="true" className={`h-4 w-4 ${isManualRefreshing ? "animate-spin" : ""}`} />
+                </button>
+              }
             />
             <div className="min-h-0 flex-1 overflow-auto">
               {showTableSkeleton ? (
@@ -453,7 +467,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
           </div>
         </div>
 
-        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-t border-line px-3">
+        <div className="hidden h-11 shrink-0 items-center justify-between gap-3 border-t border-line px-3 sm:flex">
           <p className="text-sm text-muted">
             {!isLoading ? `${total} users` : "Loading users..."}
             {isFetching && !isLoading ? " · updating..." : ""}
