@@ -34,7 +34,7 @@ export default function AdminLoading() {
             </tbody>
           </table>
         </div>
-        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-t border-line px-3">
+        <div className="hidden h-11 shrink-0 items-center justify-between gap-3 border-t border-line px-3 sm:flex">
           <Skeleton className="h-4 w-16" />
           <Skeleton className="h-9 w-9 rounded-md" />
         </div>
