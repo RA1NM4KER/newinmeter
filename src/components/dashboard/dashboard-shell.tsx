@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { DataSyncAction } from "@/components/data/data-sync-action";
@@ -11,6 +12,8 @@ import { DailySpendChart } from "@/components/charts/daily-spend-chart";
 import { HourlyChart } from "@/components/charts/hourly-chart";
 import { TariffChart } from "@/components/charts/tariff-chart";
 import { InstallPromoCard } from "./install-promo-card";
+import { DashboardPromptCard, WelcomeBackCard } from "./feature-prompt-cards";
+import { promptDayKey } from "@/lib/dashboard-prompts";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { createAnalytics } from "@/lib/analytics";
@@ -27,6 +30,10 @@ export function DashboardShell({
   dailyRows,
   hourlyRows,
   summary,
+  alertRules = [],
+  featureAdoption = null,
+  featureRates = {},
+  promptDay,
   isAiAssistantEnabled = true,
   isActivitiesEnabled = false,
   isAlertsEnabled = false,
@@ -105,6 +112,21 @@ export function DashboardShell({
         sticky
       />
 
+      <WelcomeBackCard dailyRows={dailyRows} isDemo={isDemo} />
+      <DashboardPromptCard
+        rules={alertRules}
+        latestBalance={summary.latestBalance}
+        dailyRows={dailyRows}
+        adoption={featureAdoption}
+        rates={featureRates}
+        dayKey={promptDay ?? promptDayKey()}
+        alertsAvailable={isAlertsEnabled}
+        aiAvailable={isAiAssistantEnabled}
+        activitiesAvailable={isActivitiesEnabled}
+        from={from}
+        to={to}
+        isDemo={isDemo}
+      />
       <InstallPromoCard alertsEnabled={isAlertsEnabled} isDemo={isDemo} />
 
       <div className="relative">

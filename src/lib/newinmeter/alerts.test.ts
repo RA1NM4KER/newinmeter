@@ -1454,6 +1454,9 @@ describe("evaluateAlertsAfterSync -- tariff_band_approaching (profile-gated)", (
   });
 });
 
+// Mirrors ANOMALY_LOOKBACK_DAYS in alerts.ts (not exported). Keep in step with it.
+const LOOKBACK_FIXTURE_DAYS = 28;
+
 describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no ML)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1470,10 +1473,23 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
   // the reference date's own class depends on which day of the week the
   // suite runs -- see the dedicated weekday/weekend describe block below
   // for why that distinction matters).
+  // Fills the learning gate with distinct days of any weekday class, so a positive
+  // test does not depend on which weekday the suite runs on.
+  function distinctLearningDays(referenceDate: string) {
+    return Array.from({ length: LOOKBACK_FIXTURE_DAYS }, (_, index) => ({
+      period_date: shiftDate(referenceDate, -(index + 1)),
+      hour: 3,
+      kwh: 0.3,
+      intervals: 2
+    }));
+  }
+
   function sameClassHistoricalHours(referenceDate: string, days: number, hour: number, kwh: number) {
     const wantWeekend = isWeekendTestDate(referenceDate);
     const rows: Array<{ period_date: string; hour: number; kwh: number; intervals: number }> = [];
-    for (let offset = 1; rows.length < days; offset += 1) {
+    // Capped at the detector's own lookback: rows older than that never reach
+    // the evaluator, so a fixture reaching further back would be unrealistic.
+    for (let offset = 1; rows.length < days && offset <= LOOKBACK_FIXTURE_DAYS; offset += 1) {
       const date = shiftDate(referenceDate, -offset);
       if (isWeekendTestDate(date) === wantWeekend) {
         rows.push({ period_date: date, hour, kwh, intervals: 2 });
@@ -1499,7 +1515,9 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
       rules: [ruleRow({ id: "rule-anomaly", type: "usage_anomaly", threshold: null })],
       hourlyRows: [
         ...sameClassHistoricalHours(TODAY, 14, 18, 0.3),
+        ...distinctLearningDays(TODAY),
         ...sameClassHistoricalHours(TODAY, 14, 19, 0.3),
+        ...distinctLearningDays(TODAY),
         { period_date: TODAY, hour: 18, kwh: 3, intervals: 2 },
         { period_date: TODAY, hour: 19, kwh: 3, intervals: 2 }
       ],
@@ -1534,6 +1552,7 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
       rules: [ruleRow({ id: "rule-anomaly", type: "usage_anomaly", threshold: null })],
       hourlyRows: [
         ...sameClassHistoricalHours(TODAY, 14, 18, 1),
+        ...distinctLearningDays(TODAY),
         { period_date: TODAY, hour: 18, kwh: 1.2, intervals: 2 } // +20%, below the 80% relative floor
       ]
     });
@@ -1546,6 +1565,7 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
       rules: [ruleRow({ id: "rule-anomaly", type: "usage_anomaly", threshold: null })],
       hourlyRows: [
         ...sameClassHistoricalHours(TODAY, 14, 18, 0.3),
+        ...distinctLearningDays(TODAY),
         { period_date: TODAY, hour: 18, kwh: 3, intervals: 2 }
       ],
       activities: [{ starts_at: `${TODAY}T17:45:00`, ends_at: `${TODAY}T19:15:00` }]
@@ -1559,6 +1579,7 @@ describe("evaluateAlertsAfterSync -- usage_anomaly (deterministic baseline, no M
       rules: [ruleRow({ id: "rule-anomaly", type: "usage_anomaly", threshold: null })],
       hourlyRows: [
         ...sameClassHistoricalHours(TODAY, 14, 18, 0.3),
+        ...distinctLearningDays(TODAY),
         { period_date: TODAY, hour: 18, kwh: 3, intervals: 2 }
       ],
       // Only 5 of the window's 60 minutes overlap -- far below the 50%
