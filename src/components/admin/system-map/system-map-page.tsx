@@ -373,14 +373,20 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
         </Card>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {(["healthy", "degraded", "failed", "affected", "unknown", "unmonitored"] as const).map((status) => (
-              <div key={status} className="rounded-lg border border-line bg-paper px-3 py-3">
-                <span className="mb-1 block text-xl font-semibold tabular-nums text-ink">{counts?.[status]}</span>
-                <Status status={status === "unmonitored" ? "unknown" : status} unmonitored={status === "unmonitored"} />
-              </div>
-            ))}
-          </div>
+          <ul aria-label="Component health summary" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            {/* Problems lead; zero counts are omitted so the line only draws attention when needed. */}
+            {(["failed", "degraded", "affected", "healthy", "unknown", "unmonitored"] as const)
+              .filter((status) => counts?.[status])
+              .map((status) => (
+                <li key={status} className="inline-flex items-center gap-1.5">
+                  <span className="text-sm font-semibold tabular-nums text-ink">{counts?.[status]}</span>
+                  <Status
+                    status={status === "unmonitored" ? "unknown" : status}
+                    unmonitored={status === "unmonitored"}
+                  />
+                </li>
+              ))}
+          </ul>
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
               <div>

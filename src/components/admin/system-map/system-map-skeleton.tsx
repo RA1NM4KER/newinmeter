@@ -7,14 +7,12 @@ export function SystemMapSkeleton() {
     <div role="status" aria-busy="true" aria-label="Loading system map" className="min-h-0 flex-1 overflow-y-auto pb-6">
       <span className="sr-only">Loading components and the latest health evidence.</span>
       <div aria-hidden="true">
-        <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="rounded-lg border border-line bg-paper px-3 py-3">
-              <Skeleton className="mb-2 h-6 w-7" />
-              <div className="flex h-4 items-center gap-1.5">
-                <Skeleton className="h-1.5 w-1.5 rounded-full" />
-                <Skeleton className="h-3 w-14" />
-              </div>
+        <div className="mb-4 flex items-center gap-4">
+          {["w-14", "w-16", "w-20"].map((width) => (
+            <div key={width} className="flex items-center gap-1.5">
+              <Skeleton className="h-4 w-3" />
+              <Skeleton className="h-1.5 w-1.5 rounded-full" />
+              <Skeleton className={`h-3 ${width}`} />
             </div>
           ))}
         </div>
