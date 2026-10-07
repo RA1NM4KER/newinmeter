@@ -373,7 +373,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
         </Card>
       ) : (
         <>
-          <ul aria-label="Component health summary" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <ul aria-label="Component health summary" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 md:hidden">
             {/* Problems lead; zero counts are omitted so the line only draws attention when needed. */}
             {(["failed", "degraded", "affected", "healthy", "unknown", "unmonitored"] as const)
               .filter((status) => counts?.[status])

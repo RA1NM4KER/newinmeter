@@ -7,7 +7,7 @@ export function SystemMapSkeleton() {
     <div role="status" aria-busy="true" aria-label="Loading system map" className="min-h-0 flex-1 overflow-y-auto pb-6">
       <span className="sr-only">Loading components and the latest health evidence.</span>
       <div aria-hidden="true">
-        <div className="mb-4 flex items-center gap-4">
+        <div className="mb-4 flex items-center gap-4 md:hidden">
           {["w-14", "w-16", "w-20"].map((width) => (
             <div key={width} className="flex items-center gap-1.5">
               <Skeleton className="h-4 w-3" />
