@@ -17,6 +17,7 @@ livemopay_capture.log
 supabase/.temp
 *.png
 !public/dashboard-preview.png
+!public/livemopay-logo.png
 .playwright-mcp/
 coverage/
 .vercel
