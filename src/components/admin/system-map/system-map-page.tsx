@@ -5,15 +5,12 @@ import Link from "next/link";
 import {
   Activity,
   ArrowRight,
-  Database,
-  Globe,
   KeyRound,
   Layers,
   Bell,
   Send,
   Monitor,
   Clock3,
-  Sparkles,
   RefreshCw,
   Network,
   List,
@@ -23,21 +20,22 @@ import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { SYSTEM_NODES, SYSTEM_EDGES, MAP_WIDTH, MAP_HEIGHT, NODE_WIDTH, NODE_HEIGHT } from "@/lib/system-map/topology";
 import type { MapHealth, Observation, SystemMapSnapshot } from "@/lib/system-map/model";
+import { LiveMopayIcon, OpenAIIcon, SupabaseIcon } from "./brand-icons";
 import { useSystemMap } from "./use-system-map";
 import { SystemMapSkeleton } from "./system-map-skeleton";
 
 const icons = {
-  livemopay: Globe,
+  livemopay: LiveMopayIcon,
   session: KeyRound,
   scheduler: Clock3,
   sync: RefreshCw,
-  database: Database,
+  database: SupabaseIcon,
   rollups: Layers,
   alerts: Bell,
   push: Send,
   client: Monitor,
   auth: KeyRound,
-  ai: Sparkles,
+  ai: OpenAIIcon,
   cron: Clock3
 };
 const labels: Record<MapHealth, string> = {
@@ -72,14 +70,22 @@ function when(value: string | null) {
 function nodeName(id: string) {
   return SYSTEM_NODES.find((node) => node.id === id)?.label ?? id;
 }
-function Status({ status }: { status: MapHealth }) {
+// Nodes with no telemetry source are never going to report, so they read "Not
+// monitored" instead of a pending-looking "Unknown".
+function isUnmonitored(id: string) {
+  return SYSTEM_NODES.find((node) => node.id === id)?.source === "unknown";
+}
+function Status({ status, unmonitored = false }: { status: MapHealth | "unmonitored"; unmonitored?: boolean }) {
+  const display = unmonitored ? "unmonitored" : status;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${colors[status]}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-medium ${display === "unmonitored" ? "text-muted" : colors[display]}`}
+    >
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 ${status === "unknown" ? "border border-current" : "bg-current"} ${status === "affected" ? "rotate-45 rounded-sm" : "rounded-full"}`}
+        className={`h-1.5 w-1.5 ${display === "unknown" ? "border border-current" : display === "unmonitored" ? "border border-dashed border-current" : "bg-current"} ${display === "affected" ? "rotate-45 rounded-sm" : "rounded-full"}`}
       />
-      {labels[status]}
+      {display === "unmonitored" ? "Not monitored" : labels[display]}
     </span>
   );
 }
@@ -112,7 +118,10 @@ function Inspector({
       {definition && observation ? (
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-3">
-            <Status status={stale ? "unknown" : observation.status} />
+            <Status
+              status={stale ? "unknown" : observation.status}
+              unmonitored={selection?.kind === "node" && isUnmonitored(definition.id)}
+            />
             <span className="text-xs text-muted">{stale ? "Snapshot stale" : "Latest available evidence"}</span>
           </div>
           <p className="text-sm leading-relaxed text-ink">{definition.description}</p>
@@ -286,7 +295,7 @@ function MapDiagram({
               key={node.id}
               type="button"
               onClick={() => select({ kind: "node", id: node.id })}
-              aria-label={`${node.label}, ${labels[status]}${observation.affectedBy.length ? ", possible upstream impact" : ""}`}
+              aria-label={`${node.label}, ${isUnmonitored(node.id) ? "Not monitored" : labels[status]}${observation.affectedBy.length ? ", possible upstream impact" : ""}`}
               className="absolute flex flex-col justify-center rounded-lg border border-line bg-paper px-3 text-left shadow-sm transition hover:border-muted hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               style={{
                 left: `${(node.x / MAP_WIDTH) * 100}%`,
@@ -300,7 +309,7 @@ function MapDiagram({
                 {node.label}
               </span>
               <span className="mb-2 block text-[10px] text-muted">{node.subtitle}</span>
-              <Status status={status} />
+              <Status status={status} unmonitored={isUnmonitored(node.id)} />
             </button>
           );
         })}
@@ -316,34 +325,32 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
   const close = useCallback(() => setSelection(null), []);
   const statusOf = (observation: Observation): MapHealth => (stale ? "unknown" : observation.status);
   const counts = snapshot
-    ? Object.values(snapshot.nodes).reduce(
-        (result, observation) => {
-          result[statusOf(observation)] += 1;
+    ? Object.entries(snapshot.nodes).reduce(
+        (result, [id, observation]) => {
+          result[isUnmonitored(id) ? "unmonitored" : statusOf(observation)] += 1;
           return result;
         },
-        { healthy: 0, degraded: 0, failed: 0, affected: 0, unknown: 0 }
+        { healthy: 0, degraded: 0, failed: 0, affected: 0, unknown: 0, unmonitored: 0 }
       )
     : null;
 
   if (!snapshot && !error) return <SystemMapSkeleton />;
 
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={() => void refresh()}
+      disabled={refreshing}
+      aria-label={refreshing ? "Refreshing" : "Refresh"}
+      title="Refresh"
+      className="rounded p-1.5 text-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
+    >
+      <RefreshCw className={`h-4 w-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" />
+    </button>
+  );
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight text-ink">System map</h2>
-          <p className="mt-1 text-sm text-muted">Follow the data. Find the break. Inspect the evidence.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 rounded-md border border-line bg-paper px-3 py-2 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" />
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
-      </div>
       <div aria-live="polite" className="mb-4">
         {error || stale ? (
           <p role="status" className="rounded-lg border border-amber-200 bg-amberSoft px-4 py-3 text-sm text-ink">
@@ -356,6 +363,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
         <Card className="p-8 text-center">
           <Activity className="mx-auto mb-3 h-7 w-7 text-muted" />
           <h3 className="font-medium text-ink">Health data is unavailable</h3>
+          <div className="mt-2 flex justify-center">{refreshButton}</div>
           <p className="mt-2 text-sm text-muted">
             {refreshing
               ? "Checking the diagnostics service…"
@@ -364,11 +372,11 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
         </Card>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {(["healthy", "degraded", "failed", "affected", "unknown"] as const).map((status) => (
+          <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {(["healthy", "degraded", "failed", "affected", "unknown", "unmonitored"] as const).map((status) => (
               <div key={status} className="rounded-lg border border-line bg-paper px-3 py-3">
                 <span className="mb-1 block text-xl font-semibold tabular-nums text-ink">{counts?.[status]}</span>
-                <Status status={status} />
+                <Status status={status === "unmonitored" ? "unknown" : status} unmonitored={status === "unmonitored"} />
               </div>
             ))}
           </div>
@@ -378,19 +386,22 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
                 <h3 className="text-sm font-semibold text-ink">Operational architecture</h3>
                 <p className="mt-0.5 text-xs text-muted">Select a component or connection to inspect it.</p>
               </div>
-              <div className="hidden gap-1 rounded-md bg-canvas p-1 md:flex" aria-label="Map display">
-                {(["map", "list"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={view === mode}
-                    onClick={() => setView(mode)}
-                    className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs ${view === mode ? "bg-paper font-medium text-ink shadow-sm" : "text-muted"}`}
-                  >
-                    {mode === "map" ? <Network className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
-                    {mode === "map" ? "Map" : "List"}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {refreshButton}
+                <div className="hidden gap-1 rounded-md bg-canvas p-1 md:flex" aria-label="Map display">
+                  {(["map", "list"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={view === mode}
+                      onClick={() => setView(mode)}
+                      className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs ${view === mode ? "bg-paper font-medium text-ink shadow-sm" : "text-muted"}`}
+                    >
+                      {mode === "map" ? <Network className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
+                      {mode === "map" ? "Map" : "List"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             {view === "map" ? (
@@ -415,7 +426,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-ink">{node.label}</span>
                       <span className="mb-2 mt-0.5 block text-xs text-muted">{node.subtitle}</span>
-                      <Status status={statusOf(snapshot.nodes[node.id])} />
+                      <Status status={statusOf(snapshot.nodes[node.id])} unmonitored={isUnmonitored(node.id)} />
                     </span>
                   </button>
                 );
