@@ -1,3 +1,4 @@
+import { recordPassiveOutcome } from "@/lib/diagnostics/passive-health";
 import type {
   AssistantConversationMessage,
   AssistantProgressStage,
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
   // response (auth/feature-gate/rate-limit/validation) -- streaming only
   // starts once the request is fully accepted, so the client's existing
   // non-2xx handling for those cases needs no changes.
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -143,6 +145,8 @@ export async function POST(request: Request) {
         }
       }
 
+      const startedAt = Date.now();
+      let outcome: "success" | "failure" | null = null;
       send({ type: "started" });
 
       try {
@@ -161,6 +165,7 @@ export async function POST(request: Request) {
           request.signal,
           (telemetry: AssistantRequestTelemetry) => console.info("assistant_response_completed", telemetry)
         );
+        outcome = "success";
         // Adoption is recorded only after a valid AI response exists. This
         // stores no prompt/response content and must never make a successful
         // answer fail if the lightweight counter is temporarily unavailable.
@@ -172,11 +177,17 @@ export async function POST(request: Request) {
         if (request.signal.aborted) {
           console.warn("assistant_request_aborted", { userId: auth.session.userId });
         } else {
+          outcome = "failure";
           const message = error instanceof Error ? error.message : "Failed to answer assistant question.";
           console.error("newinmeter_assistant_failed", message);
           send({ type: "error", message: "Failed to answer assistant question." });
         }
       } finally {
+        // The response/error event is already sent. Await the bounded write
+        // before closing the stream so serverless teardown cannot drop it.
+        // Client cancellation and rejected requests are not provider failures.
+        if (outcome && !request.signal.aborted && !cancelled)
+          await recordPassiveOutcome("ai:requests", outcome, startedAt);
         closed = true;
         try {
           controller.close();
@@ -187,6 +198,7 @@ export async function POST(request: Request) {
       }
     },
     cancel() {
+      cancelled = true;
       // Client disconnected (dialog closed/unmounted) -- request.signal is
       // already tied to the underlying request and will have fired,
       // propagating into the in-flight OpenAI call above.

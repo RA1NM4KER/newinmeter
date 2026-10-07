@@ -5,6 +5,11 @@ import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 
 export const RATE_LIMIT_POLICIES = {
+  // A visible system map refreshes every 45 seconds, up to 1,920/day.
+  systemMap: {
+    minuteLimit: 10,
+    dayLimit: 5000
+  },
   default: {
     minuteLimit: 60,
     dayLimit: 1000

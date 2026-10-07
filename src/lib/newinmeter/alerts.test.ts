@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  recordPassiveOutcome: vi.fn(),
   adminSupabaseFetch: vi.fn(),
   adminSupabaseRequest: vi.fn(),
   adminSupabaseCount: vi.fn(),
@@ -11,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   getFeatureAccessForUsers: vi.fn(),
   reportAlertEvaluationOutcome: vi.fn()
 }));
+
+vi.mock("@/lib/diagnostics/passive-health", () => ({ recordPassiveOutcome: mocks.recordPassiveOutcome }));
 
 vi.mock("../supabase-rest", () => ({
   adminSupabaseFetch: mocks.adminSupabaseFetch,
@@ -1898,5 +1901,40 @@ describe("getAlertEventDetail", () => {
     });
     expect(result?.body).toContain(formatCurrency(150));
     expect(result?.body).toContain(formatCurrency(200));
+  });
+});
+
+describe("passive alert evaluation telemetry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.hasFeatureAccess.mockResolvedValue(true);
+    mocks.adminSupabaseRequest.mockResolvedValue([]);
+  });
+
+  it("records enabled rules evaluated successfully even when no alert fires", async () => {
+    routeFetch({ rules: [ruleRow({ threshold: 200 })], balance: 500 });
+    await evaluateAlertsAfterSync("conn-1", "user-1");
+    expect(mocks.sendPushToUser).not.toHaveBeenCalled();
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("alerts:fresh", "success", expect.any(Number), 1);
+  });
+
+  it("does not call an empty ruleset or disabled feature a successful evaluation", async () => {
+    routeFetch({ rules: [] });
+    await evaluateAlertsAfterSync("conn-1", "user-1");
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
+    mocks.hasFeatureAccess.mockResolvedValue(false);
+    await evaluateAlertsAfterSync("conn-1", "user-1");
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
+  });
+
+  it("records partial evaluation failure without changing the sync hook's nonthrowing behavior", async () => {
+    mocks.adminSupabaseFetch.mockRejectedValue(new Error("unavailable"));
+    await expect(evaluateAlertsAfterSync("conn-1", "user-1")).resolves.toBeUndefined();
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("alerts:fresh", "failure", expect.any(Number), 0);
+  });
+
+  it("does not write a success heartbeat for an empty delayed-data batch", async () => {
+    expect(await evaluateDataDelayedAlerts([])).toEqual({ checked: 0, notified: 0 });
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
   });
 });

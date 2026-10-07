@@ -59,4 +59,12 @@ describe("AdminSectionTabs", () => {
     expect(screen.getByRole("tab", { name: "Users" }).getAttribute("aria-selected")).toBe("true");
     expect(mocks.push).toHaveBeenCalledWith("/admin", { scroll: false });
   });
+  it("opens System in the shared admin shell", () => {
+    mocks.pathname = "/admin/system";
+    render(<AdminSectionTabs />);
+    expect(screen.getByRole("tab", { name: "System" }).getAttribute("aria-selected")).toBe("true");
+    expect(mocks.prefetch).toHaveBeenCalledWith("/admin/system");
+    fireEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    expect(mocks.push).toHaveBeenCalledWith("/admin/diagnostics", { scroll: false });
+  });
 });

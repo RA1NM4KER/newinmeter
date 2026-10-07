@@ -8,7 +8,7 @@ vi.mock("./env", () => ({
   getSupabaseUrl: () => "https://example.supabase.co"
 }));
 
-import { adminSupabaseFetchAllPages } from "./supabase-rest";
+import { adminSupabaseFetchAllPages, adminSupabaseRequest } from "./supabase-rest";
 
 describe("adminSupabaseFetchAllPages", () => {
   const fetchMock = vi.fn();
@@ -31,5 +31,11 @@ describe("adminSupabaseFetchAllPages", () => {
     expect(fetchMock.mock.calls[0][1].headers.Range).toBe("0-999");
     expect(fetchMock.mock.calls[1][1].headers.Range).toBe("1000-1999");
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer service-role-key");
+  });
+  it("forwards the telemetry deadline to the underlying fetch", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const controller = new AbortController();
+    await adminSupabaseRequest("POST", "/system_health_state", {}, "return=minimal", controller.signal);
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
   });
 });

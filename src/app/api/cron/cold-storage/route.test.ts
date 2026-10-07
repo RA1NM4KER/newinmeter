@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  recordPassiveOutcome: vi.fn(),
   getCronSecret: vi.fn(),
   claim: vi.fn(),
   purge: vi.fn(),
@@ -15,6 +16,8 @@ vi.mock("@/lib/newinmeter/connection", () => ({
   completeConnectionHibernation: mocks.complete,
   markConnectionHibernationError: mocks.markError
 }));
+
+vi.mock("@/lib/diagnostics/passive-health", () => ({ recordPassiveOutcome: mocks.recordPassiveOutcome }));
 
 import { GET } from "./route";
 
@@ -32,6 +35,7 @@ describe("cold-storage scheduled worker", () => {
   it("rejects requests before claiming", async () => {
     expect((await GET(request("wrong"))).status).toBe(401);
     expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
   });
 
   it("continues bounded batches and marks cold only after the purge is empty", async () => {
@@ -57,6 +61,7 @@ describe("cold-storage scheduled worker", () => {
     expect(mocks.purge).toHaveBeenCalledTimes(2);
     expect(mocks.purge).toHaveBeenCalledWith("conn-a", 2000);
     expect(mocks.complete).toHaveBeenCalledWith("conn-a");
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:cold-storage", "success", expect.any(Number));
     await expect(response.json()).resolves.toMatchObject({
       claimed: 1,
       results: [{ state: "cold", deleted: { energyRows: 2050, intervalRollups: 2020 } }]
@@ -72,8 +77,14 @@ describe("cold-storage scheduled worker", () => {
     expect(response.status).toBe(200);
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.markError).toHaveBeenCalledWith("conn-a", "statement timeout");
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:cold-storage", "failure", expect.any(Number));
     await expect(response.json()).resolves.toMatchObject({
       results: [{ state: "hibernating", error: "statement timeout" }]
     });
+  });
+  it("records an invocation failure when claiming cannot complete", async () => {
+    mocks.claim.mockRejectedValueOnce(new Error("unavailable"));
+    await expect(GET(request())).rejects.toThrow("unavailable");
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:cold-storage", "failure", expect.any(Number));
   });
 });

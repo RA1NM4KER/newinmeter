@@ -68,6 +68,12 @@ afterEach(() => {
 });
 
 describe("WelcomeBackCard", () => {
+  beforeEach(() => {
+    // Keep the last visit before the fixed September rows as real time moves on.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-04T12:00:00.000Z"));
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   it("shows the summary after a visit 8 days ago, even under StrictMode's double effect run", async () => {
     window.localStorage.setItem(LAST_VISIT_KEY, String(Date.now() - 8 * DAY_MS));
 

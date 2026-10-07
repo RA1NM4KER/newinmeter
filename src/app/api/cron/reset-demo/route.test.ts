@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  recordPassiveOutcome: vi.fn(),
   getCronSecret: vi.fn(),
   getNewinmeterDemoEmail: vi.fn(),
   resetDemoAccount: vi.fn()
@@ -11,6 +12,8 @@ vi.mock("@/lib/env", () => ({
   getNewinmeterDemoEmail: mocks.getNewinmeterDemoEmail
 }));
 vi.mock("@/lib/demo/reset", () => ({ resetDemoAccount: mocks.resetDemoAccount }));
+
+vi.mock("@/lib/diagnostics/passive-health", () => ({ recordPassiveOutcome: mocks.recordPassiveOutcome }));
 
 import { GET } from "./route";
 
@@ -49,6 +52,7 @@ describe("GET /api/cron/reset-demo", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.resetDemoAccount).toHaveBeenCalledWith("demo@newinmeter.app");
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:reset-demo", "success", expect.any(Number));
     await expect(response.json()).resolves.toMatchObject({ ok: true, energyRows: 3360 });
   });
 
@@ -60,6 +64,7 @@ describe("GET /api/cron/reset-demo", () => {
     expect(response.status).toBe(200);
     expect(mocks.resetDemoAccount).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({ ok: true });
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:reset-demo", "skipped", expect.any(Number));
   });
 
   it("returns 500 without leaking the underlying error when the reset fails", async () => {
@@ -68,6 +73,7 @@ describe("GET /api/cron/reset-demo", () => {
     const response = await GET(request());
 
     expect(response.status).toBe(500);
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:reset-demo", "failure", expect.any(Number));
     const body = await response.json();
     expect(body.message).not.toContain("supabase internal detail");
   });

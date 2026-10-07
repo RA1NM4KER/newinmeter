@@ -60,4 +60,11 @@ describe("(app)/admin/layout", () => {
     expect(screen.getByTestId("admin-tabs")).toBeDefined();
     expect(screen.getByTestId("admin-page-content")).toBeDefined();
   });
+  it("keeps the shell usable when diagnostics are temporarily unavailable", async () => {
+    mocks.requireAdminSession.mockResolvedValue({ ok: true });
+    mocks.getDiagnosticsSnapshot.mockRejectedValue(new Error("unavailable"));
+    render(await AdminLayout({ children: <div>System map retry</div> }));
+    expect(screen.getByText("System map retry")).toBeDefined();
+    expect(screen.getByTestId("admin-tabs")).toBeDefined();
+  });
 });

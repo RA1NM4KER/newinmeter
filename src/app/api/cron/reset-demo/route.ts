@@ -1,3 +1,4 @@
+import { recordPassiveOutcome } from "@/lib/diagnostics/passive-health";
 import { NextResponse } from "next/server";
 import { getCronSecret, getNewinmeterDemoEmail } from "@/lib/env";
 import { resetDemoAccount } from "@/lib/demo/reset";
@@ -24,15 +25,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
+  const startedAt = Date.now();
   const demoEmail = getNewinmeterDemoEmail();
   if (!demoEmail) {
+    await recordPassiveOutcome("cron:reset-demo", "skipped", startedAt);
     return NextResponse.json({ ok: true, skipped: "NEWINMETER_DEMO_EMAIL not configured" });
   }
 
   try {
     const summary = await resetDemoAccount(demoEmail);
+    await recordPassiveOutcome("cron:reset-demo", "success", startedAt);
     return NextResponse.json({ ok: true, ...summary });
   } catch (error) {
+    await recordPassiveOutcome("cron:reset-demo", "failure", startedAt);
     console.error("demo_reset_failed", error instanceof Error ? error.message : "unknown_error");
     return NextResponse.json({ ok: false, message: "Could not reset the demo account." }, { status: 500 });
   }

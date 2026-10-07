@@ -1,5 +1,7 @@
 import "server-only";
 
+import { recordPassiveOutcome } from "../diagnostics/passive-health";
+
 import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { formatCurrency, formatKwh, formatTariff } from "../format";
 import { getFeatureAccessForUsers, hasFeatureAccess } from "../features";
@@ -1133,6 +1135,8 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     return;
   }
 
+  const startedAt = Date.now();
+  let evaluationFailed = false;
   const now = new Date();
   const today = currentLocalDateString(now);
 
@@ -1144,6 +1148,7 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     ruleByType = new Map(rules.map((rule) => [rule.type, rule]));
     await recordAlertDiagnostics(connectionId, "rules");
   } catch (error) {
+    evaluationFailed = true;
     console.error(
       "newinmeter_alert_rules_fetch_failed",
       connectionId,
@@ -1156,6 +1161,7 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     await evaluateBalanceAndSpendFamily(ruleByType, connectionId, userId, today, now);
     await recordAlertDiagnostics(connectionId, "balance-and-spend");
   } catch (error) {
+    evaluationFailed = true;
     console.error(
       "newinmeter_alert_balance_spend_family_failed",
       connectionId,
@@ -1168,6 +1174,7 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     await evaluateTariffFamily(ruleByType, connectionId, userId, today, now);
     await recordAlertDiagnostics(connectionId, "tariff");
   } catch (error) {
+    evaluationFailed = true;
     console.error(
       "newinmeter_alert_tariff_family_failed",
       connectionId,
@@ -1180,6 +1187,7 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     await evaluateUsageAnomalyFamily(ruleByType.get("usage_anomaly"), connectionId, userId, today);
     await recordAlertDiagnostics(connectionId, "usage-anomaly");
   } catch (error) {
+    evaluationFailed = true;
     console.error(
       "newinmeter_alert_usage_anomaly_failed",
       connectionId,
@@ -1192,12 +1200,17 @@ export async function evaluateAlertsAfterSync(connectionId: string, userId: stri
     await resolveDataDelayedIfActive(connectionId);
     await recordAlertDiagnostics(connectionId, "data-delayed");
   } catch (error) {
+    evaluationFailed = true;
     console.error(
       "newinmeter_alert_data_delayed_resolve_failed",
       connectionId,
       error instanceof Error ? error.message : String(error)
     );
     await recordAlertDiagnostics(connectionId, "data-delayed", error);
+  }
+  // An empty/disabled rule set is not proof that rules were evaluated.
+  if (evaluationFailed || ruleByType.size > 0) {
+    await recordPassiveOutcome("alerts:fresh", evaluationFailed ? "failure" : "success", startedAt, ruleByType.size);
   }
 }
 
@@ -1440,6 +1453,20 @@ export async function evaluateDataDelayedAlerts(connections: StaleConnectionForA
   checked: number;
   notified: number;
 }> {
+  const startedAt = Date.now();
+  try {
+    const result = await evaluateDataDelayedBatch(connections);
+    if (result.checked > 0) await recordPassiveOutcome("alerts:delayed", "success", startedAt, result.checked);
+    return result;
+  } catch (error) {
+    await recordPassiveOutcome("alerts:delayed", "failure", startedAt);
+    throw error;
+  }
+}
+
+async function evaluateDataDelayedBatch(
+  connections: StaleConnectionForAlerts[]
+): Promise<{ checked: number; notified: number }> {
   if (connections.length === 0) {
     return { checked: 0, notified: 0 };
   }

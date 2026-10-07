@@ -83,12 +83,14 @@ export async function adminSupabaseRawResponse(
   path: string,
   body?: unknown,
   prefer?: string,
-  range?: string
+  range?: string,
+  signal?: AbortSignal
 ): Promise<Response> {
   const key = getSupabaseServiceRoleKey();
 
   return fetch(`${restUrl()}${path}`, {
     method,
+    signal,
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
@@ -105,9 +107,10 @@ export async function adminSupabaseRequest<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
-  prefer?: string
+  prefer?: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  const response = await adminSupabaseRawResponse(method, path, body, prefer);
+  const response = await adminSupabaseRawResponse(method, path, body, prefer, undefined, signal);
   return readJsonOrThrow<T>(response, `${method} ${path}`);
 }
 

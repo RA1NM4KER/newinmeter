@@ -1,3 +1,4 @@
+import { recordPassiveOutcome } from "@/lib/diagnostics/passive-health";
 import { NextResponse } from "next/server";
 import { getCronSecret } from "@/lib/env";
 import {
@@ -20,6 +21,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
+  const startedAt = Date.now();
+  try {
+    const result = await runColdStorage();
+    await recordPassiveOutcome(
+      "cron:cold-storage",
+      result.results.some((entry) => entry.error) ? "failure" : "success",
+      startedAt
+    );
+    return NextResponse.json(result);
+  } catch (error) {
+    await recordPassiveOutcome("cron:cold-storage", "failure", startedAt);
+    throw error;
+  }
+}
+
+async function runColdStorage() {
   const deadline = Date.now() + WORK_BUDGET_MS;
   const claimed = await claimColdStorageCandidates(CLAIM_LIMIT);
   const results: Array<Record<string, unknown>> = [];
@@ -50,7 +67,7 @@ export async function GET(request: Request) {
   }
 
   console.info("newinmeter_cold_storage_run", { claimed: claimed.length, results });
-  return NextResponse.json({ ok: true, claimed: claimed.length, results });
+  return { ok: true, claimed: claimed.length, results };
 }
 
 // Also accepts POST for local/operator invocation with the same bearer guard.

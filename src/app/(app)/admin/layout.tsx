@@ -8,7 +8,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const auth = await requireAdminSession();
   if (!auth.ok) notFound();
 
-  const snapshot = await getDiagnosticsSnapshot();
+  // Keep admin navigation available during a diagnostics outage. The System
+  // page can show its retry state without the parent layout failing first.
+  const snapshot = await getDiagnosticsSnapshot().catch(() => null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
@@ -18,7 +20,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <AdminSectionTabs diagnosticsHealth={snapshot.overview.overall} />
+        <AdminSectionTabs diagnosticsHealth={snapshot?.overview.overall} />
         {children}
       </div>
     </div>

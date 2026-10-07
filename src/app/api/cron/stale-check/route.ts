@@ -1,3 +1,4 @@
+import { recordPassiveOutcome } from "@/lib/diagnostics/passive-health";
 import { NextResponse } from "next/server";
 import { getCronSecret } from "@/lib/env";
 import { evaluateDataDelayedAlerts } from "@/lib/newinmeter/alerts";
@@ -22,6 +23,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
+  const startedAt = Date.now();
+  try {
+    const response = await runStaleCheck();
+    await recordPassiveOutcome("cron:stale-check", "success", startedAt);
+    return response;
+  } catch (error) {
+    await recordPassiveOutcome("cron:stale-check", "failure", startedAt);
+    throw error;
+  }
+}
+
+async function runStaleCheck() {
   const connections = await listConnectionsForStaleCheck();
 
   let notified = 0;

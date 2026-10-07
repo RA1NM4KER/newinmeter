@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  recordPassiveOutcome: vi.fn(),
   requireConnectedSession: vi.fn(),
   hasFeatureAccess: vi.fn(),
   enforceRateLimit: vi.fn(),
@@ -17,6 +18,8 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/assistant/openai", () => ({ answerAssistantQuestion: mocks.answerAssistantQuestion }));
 vi.mock("@/lib/engagement", () => ({ recordAiFeatureUsage: mocks.recordAiFeatureUsage }));
+
+vi.mock("@/lib/diagnostics/passive-health", () => ({ recordPassiveOutcome: mocks.recordPassiveOutcome }));
 
 import { POST } from "./route";
 
@@ -64,6 +67,7 @@ describe("POST /api/assistant", () => {
     mocks.requireConnectedSession.mockResolvedValue({ ok: false, status: 401 });
     const response = await POST(request({ question: "Q" }));
     expect(response.status).toBe(401);
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
     expect(mocks.answerAssistantQuestion).not.toHaveBeenCalled();
   });
 
@@ -77,6 +81,7 @@ describe("POST /api/assistant", () => {
   it("rejects an empty question with 400 before ever reaching the model", async () => {
     const response = await POST(request({ question: "" }));
     expect(response.status).toBe(400);
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
     expect(mocks.answerAssistantQuestion).not.toHaveBeenCalled();
   });
 
@@ -84,6 +89,7 @@ describe("POST /api/assistant", () => {
     mocks.enforceRateLimit.mockResolvedValue({ allowed: false, minute: {}, day: {} });
     const response = await POST(request({ question: "Q" }));
     expect(response.status).toBe(429);
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
     expect(mocks.answerAssistantQuestion).not.toHaveBeenCalled();
   });
 
@@ -240,6 +246,7 @@ describe("POST /api/assistant", () => {
     const errorEvent = events.find((event) => event.type === "error");
     expect(errorEvent).toBeDefined();
     expect(JSON.stringify(errorEvent)).not.toContain("sk-secret-key-in-error");
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("ai:requests", "failure", expect.any(Number));
     expect(events.some((event) => event.type === "response")).toBe(false);
   });
 
@@ -278,5 +285,28 @@ describe("POST /api/assistant", () => {
       const body = await response.json();
       expect(body.message).toBe("Rate limit exceeded. Please try again later.");
     });
+  });
+  it("records a completed real request without storing its question or response", async () => {
+    const response = await POST(request({ question: "private prompt" }));
+    await readSseEvents(response);
+    expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("ai:requests", "success", expect.any(Number));
+    expect(JSON.stringify(mocks.recordPassiveOutcome.mock.calls)).not.toContain("private prompt");
+  });
+
+  it("does not count client cancellation as an AI failure", async () => {
+    const controller = new AbortController();
+    mocks.answerAssistantQuestion.mockImplementationOnce(async () => {
+      controller.abort();
+      throw new Error("aborted");
+    });
+    const response = await POST(
+      new Request("http://localhost/api/assistant", {
+        method: "POST",
+        body: JSON.stringify({ question: "Q" }),
+        signal: controller.signal
+      })
+    );
+    await readSseEvents(response);
+    expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
   });
 });

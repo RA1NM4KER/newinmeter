@@ -19,7 +19,7 @@ export function Dialog({ isOpen, onClose, title, eyebrow, description, children,
   const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | SVGElement | null>(null);
   const titleId = useId();
 
   useEffect(() => setMounted(true), []);
@@ -33,7 +33,10 @@ export function Dialog({ isOpen, onClose, title, eyebrow, description, children,
   useEffect(() => {
     if (!isOpen) return;
 
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement || document.activeElement instanceof SVGElement
+        ? document.activeElement
+        : null;
 
     const focusInitialElement = () => {
       // Deliberately scoped to the content area, not the whole dialog --

@@ -5,13 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { healthDotClass, type HealthState } from "@/lib/diagnostics/health";
 
-export type AdminSectionTabId = "users" | "features" | "engagement" | "diagnostics";
+export type AdminSectionTabId = "users" | "features" | "engagement" | "system" | "diagnostics";
 
-function tabs(diagnosticsHealth?: HealthState): Array<{ id: AdminSectionTabId; label: string; indicatorClassName?: string }> {
+function tabs(
+  diagnosticsHealth?: HealthState
+): Array<{ id: AdminSectionTabId; label: string; indicatorClassName?: string }> {
   return [
     { id: "users", label: "Users" },
     { id: "features", label: "Features" },
     { id: "engagement", label: "Engagement" },
+    { id: "system", label: "System" },
     {
       id: "diagnostics",
       label: "Diagnostics",
@@ -24,10 +27,12 @@ const tabHref: Record<AdminSectionTabId, string> = {
   users: "/admin",
   features: "/admin/features",
   engagement: "/admin/engagement",
+  system: "/admin/system",
   diagnostics: "/admin/diagnostics"
 };
 
 function tabFromPathname(pathname: string): AdminSectionTabId {
+  if (pathname.startsWith("/admin/system")) return "system";
   if (pathname.startsWith("/admin/diagnostics")) return "diagnostics";
   if (pathname.startsWith("/admin/engagement")) return "engagement";
   if (pathname.startsWith("/admin/features")) return "features";
@@ -55,6 +60,10 @@ export function AdminSectionTabs({ diagnosticsHealth }: { diagnosticsHealth?: He
   }
 
   return (
-    <UnderlineTabs tabs={tabs(diagnosticsHealth)} activeId={activeId} onChange={(id) => change(id as AdminSectionTabId)} />
+    <UnderlineTabs
+      tabs={tabs(diagnosticsHealth)}
+      activeId={activeId}
+      onChange={(id) => change(id as AdminSectionTabId)}
+    />
   );
 }

@@ -108,3 +108,11 @@ The canary account should be dedicated, minimally privileged where LiveMopay per
 enough to produce at least one parseable ledger entry inside the seven-day window. No canary
 credential belongs in Supabase Vault, source control, logs, events, API responses, or browser
 configuration.
+
+## System Map
+
+**Admin → System** (`/admin/system`) renders the operational topology using this
+telemetry. Nodes and connections expose their evidence and link back to Diagnostics.
+Missing measurements remain Unknown and upstream impact is distinguished from an
+independently measured failure. See [Admin System Map](admin-system-map.md) for
+health rules, source references, polling behavior and limitations.

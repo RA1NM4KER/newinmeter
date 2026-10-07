@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  recordPassiveOutcome: vi.fn(),
   getCronSecret: vi.fn(),
   listConnectionsForStaleCheck: vi.fn(),
   markConnectionStaleNotified: vi.fn(),
@@ -15,6 +16,8 @@ vi.mock("@/lib/newinmeter/connection", () => ({
 }));
 vi.mock("@/lib/push-notify", () => ({ sendPushToUser: mocks.sendPushToUser }));
 vi.mock("@/lib/newinmeter/alerts", () => ({ evaluateDataDelayedAlerts: mocks.evaluateDataDelayedAlerts }));
+
+vi.mock("@/lib/diagnostics/passive-health", () => ({ recordPassiveOutcome: mocks.recordPassiveOutcome }));
 
 import { GET } from "./route";
 
