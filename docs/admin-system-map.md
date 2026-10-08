@@ -166,3 +166,11 @@ state details. New evidence populates naturally after deployment and real activi
 The System loading state mirrors its status cards, component positions and
 connections, with a corresponding mobile list. It appears during both route
 loading and the initial client retry. Skeleton shimmer respects reduced motion.
+
+## Motion and activity labels
+
+The map shows no simulated traffic. Connections with a measured success carry a small
+"last success" age (for example `14m ago`), computed against the snapshot's own clock.
+A connection pulses once when a refresh shows a newer success than the previous
+snapshot; nothing animates on first load. Failed or affected connections march their
+dashes back toward the source. All animation is disabled under `prefers-reduced-motion`.

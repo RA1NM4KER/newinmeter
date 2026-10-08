@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -209,6 +209,17 @@ function Inspector({
   );
 }
 
+// Ages are measured against the snapshot's own clock so server and client agree.
+function shortAge(from: string | null, generatedAt: string) {
+  if (!from) return null;
+  const minutes = Math.floor((Date.parse(generatedAt) - Date.parse(from)) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)}h ago`;
+  return `${Math.floor(minutes / 1440)}d ago`;
+}
+
 function MapDiagram({
   snapshot,
   stale,
@@ -219,6 +230,25 @@ function MapDiagram({
   select: (selection: Selection) => void;
 }) {
   const markerId = useId().replaceAll(":", "");
+  // One-shot pulse when a refresh shows a newer success on a connection. The first
+  // snapshot only seeds the baseline, so nothing animates on page load.
+  const seen = useRef<Record<string, string | null> | null>(null);
+  const [pulsing, setPulsing] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const current = Object.fromEntries(SYSTEM_EDGES.map((edge) => [edge.id, snapshot.edges[edge.id].lastSuccessAt]));
+    const previous = seen.current;
+    seen.current = current;
+    if (!previous || stale) return;
+    const changed = SYSTEM_EDGES.filter(
+      (edge) => current[edge.id] && previous[edge.id] && current[edge.id] !== previous[edge.id]
+    );
+    if (changed.length) {
+      setPulsing((existing) => ({
+        ...existing,
+        ...Object.fromEntries(changed.map((edge) => [edge.id, (existing[edge.id] ?? 0) + 1]))
+      }));
+    }
+  }, [snapshot, stale]);
   return (
     <div className="overflow-x-auto" role="region" aria-label="System architecture map" tabIndex={0}>
       <div className="relative min-w-[1000px]" style={{ aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}` }}>
@@ -272,7 +302,8 @@ function MapDiagram({
                 <title>{edge.label}</title>
                 <path d={edge.path} fill="none" stroke="transparent" strokeWidth="18" />
                 <path
-                  className="edge-line"
+                  key={pulsing[edge.id] ?? 0}
+                  className={`edge-line ${pulsing[edge.id] ? "edge-pulse" : ""} ${status === "failed" || status === "affected" ? "edge-march" : ""}`}
                   d={edge.path}
                   fill="none"
                   stroke="currentColor"
@@ -286,6 +317,23 @@ function MapDiagram({
           <text x="840" y="116" textAnchor="middle" className="fill-muted text-[11px]">
             Read through app APIs
           </text>
+          {stale
+            ? null
+            : SYSTEM_EDGES.map((edge) => {
+                const age = edge.labelAt ? shortAge(snapshot.edges[edge.id].lastSuccessAt, snapshot.generatedAt) : null;
+                return edge.labelAt && age ? (
+                  <text
+                    key={`${edge.id}-age`}
+                    x={edge.labelAt.x}
+                    y={edge.labelAt.y}
+                    textAnchor={edge.labelAt.anchor ?? "middle"}
+                    className="pointer-events-none fill-muted text-[10px]"
+                    aria-hidden="true"
+                  >
+                    {age}
+                  </text>
+                ) : null;
+              })}
         </svg>
         {SYSTEM_NODES.map((node) => {
           const observation = snapshot.nodes[node.id];
@@ -373,7 +421,10 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
         </Card>
       ) : (
         <>
-          <ul aria-label="Component health summary" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 md:hidden">
+          <ul
+            aria-label="Component health summary"
+            className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 md:hidden"
+          >
             {/* Problems lead; zero counts are omitted so the line only draws attention when needed. */}
             {(["failed", "degraded", "affected", "healthy", "unknown", "unmonitored"] as const)
               .filter((status) => counts?.[status])
@@ -417,7 +468,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
               </div>
             ) : null}
             <div
-              className={`${view === "map" ? "md:hidden" : ""} grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-3`}
+              className={`${view === "map" ? "md:hidden" : ""} grid grid-cols-2 gap-px bg-line lg:grid-cols-3`}
               aria-label="System components"
             >
               {SYSTEM_NODES.map((node) => {
@@ -427,12 +478,16 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
                     key={node.id}
                     type="button"
                     onClick={() => setSelection({ kind: "node", id: node.id })}
-                    className="flex items-start gap-3 bg-paper p-4 text-left hover:bg-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    className="flex flex-col gap-1 bg-paper p-3 text-left hover:bg-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                   >
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-ink">{node.label}</span>
-                      <span className="mb-2 mt-0.5 block text-xs text-muted">{node.subtitle}</span>
+                    <span className="flex items-start gap-2">
+                      <span className="flex h-5 shrink-0 items-center">
+                        <Icon className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 text-sm font-medium leading-5 text-ink">{node.label}</span>
+                    </span>
+                    <span className="block text-xs text-muted">{node.subtitle}</span>
+                    <span className="mt-1">
                       <Status status={statusOf(snapshot.nodes[node.id])} unmonitored={isUnmonitored(node.id)} />
                     </span>
                   </button>
@@ -441,7 +496,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3 text-[11px] text-muted">
               <span>Solid arrows: data flow · Dashed arrows: control or scheduling</span>
-              <span>Static paths; no simulated activity</span>
+              <span>No simulated activity</span>
             </div>
           </Card>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">

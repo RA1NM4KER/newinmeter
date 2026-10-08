@@ -77,17 +77,17 @@ export function SystemMapSkeleton() {
               ))}
             </div>
           </div>
-          <div className="grid gap-px bg-line sm:grid-cols-2 md:hidden">
+          <div className="grid grid-cols-2 gap-px bg-line md:hidden">
             {SYSTEM_NODES.map((node, index) => (
-              <div key={node.id} className="flex gap-3 bg-paper p-4">
-                <Skeleton className="mt-0.5 h-4 w-4 shrink-0 rounded" />
-                <div className="flex-1">
-                  <Skeleton className={`h-4 ${index % 2 ? "w-36" : "w-28"}`} />
-                  <Skeleton className="mb-3 mt-2 h-3 w-32" />
-                  <div className="flex h-4 items-center gap-1.5">
-                    <Skeleton className="h-1.5 w-1.5 rounded-full" />
-                    <Skeleton className="h-3 w-14" />
-                  </div>
+              <div key={node.id} className="flex flex-col gap-1 bg-paper p-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4 shrink-0 rounded" />
+                  <Skeleton className={`h-4 ${index % 2 ? "w-20" : "w-16"}`} />
+                </div>
+                <Skeleton className="h-3 w-full max-w-[7rem]" />
+                <div className="mt-1 flex h-4 items-center gap-1.5">
+                  <Skeleton className="h-1.5 w-1.5 rounded-full" />
+                  <Skeleton className="h-3 w-14" />
                 </div>
               </div>
             ))}

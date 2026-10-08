@@ -172,6 +172,8 @@ type SystemEdge = {
   // because ingestion has stopped, or that an old client cannot read old data.
   propagatesImpact?: boolean;
   path: string;
+  // Where the "last success" age is drawn. Edges without room or evidence omit it.
+  labelAt?: { x: number; y: number; anchor?: "middle" | "start" | "end" };
 };
 
 export const SYSTEM_EDGES: readonly SystemEdge[] = [
@@ -185,18 +187,19 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     propagatesImpact: true,
     description:
       "Capture runs measure the whole sync pipeline. Their duration and row counts are not isolated LiveMopay network metrics.",
-    path: "M210 130 H270"
+    path: "M210 130 H270",
+    labelAt: { x: 240, y: 121 }
   },
   {
     id: "session-sync",
     from: "session",
     to: "sync",
     label: "Refresh session",
-    source: "unknown",
+    source: "session",
     kind: "control",
     propagatesImpact: true,
     description:
-      "The sync worker refreshes a provider session before fetching ledger data. No independent per-edge telemetry is recorded.",
+      "The sync worker refreshes a provider session before fetching ledger data. Its health is inferred from successful syncs and the daily contract check, the same evidence as the Provider session node.",
     path: "M120 280 V230 H300 V180"
   },
   {
@@ -209,7 +212,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     propagatesImpact: true,
     description:
       "A heartbeat proves worker invocation. It does not mean a connection was due, claimed or successfully synced.",
-    path: "M390 280 V180"
+    path: "M390 280 V180",
+    labelAt: { x: 380, y: 235, anchor: "end" }
   },
   {
     id: "sync-database",
@@ -220,7 +224,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     kind: "data",
     description:
       "A successful capture includes persistence and finalization. Upstream failures can affect ingestion without making Postgres unavailable.",
-    path: "M450 130 H510"
+    path: "M450 130 H510",
+    labelAt: { x: 480, y: 121 }
   },
   {
     id: "database-rollups",
@@ -232,7 +237,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     propagatesImpact: true,
     description:
       "Capture finalization runs the rollup trigger synchronously. The capture duration covers the whole pipeline, not just rollup computation.",
-    path: "M600 180 V280"
+    path: "M600 180 V280",
+    labelAt: { x: 608, y: 234, anchor: "start" }
   },
   {
     id: "rollups-alerts",
@@ -244,7 +250,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     propagatesImpact: true,
     description:
       "After a successful sync, the alert evaluator uses derived usage and balances. Failures are recorded by alert family.",
-    path: "M690 330 H750"
+    path: "M690 330 H750",
+    labelAt: { x: 720, y: 321 }
   },
   {
     id: "alerts-push",
@@ -289,7 +296,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     kind: "control",
     propagatesImpact: true,
     description: "The Vercel stale-check route evaluates delayed-data alerts independently of successful syncs.",
-    path: "M600 480 V430 H840 V380"
+    path: "M600 480 V430 H840 V380",
+    labelAt: { x: 720, y: 422 }
   },
   {
     id: "auth-client",
@@ -317,9 +325,10 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     from: "database",
     to: "ai",
     label: "Scoped tool reads",
-    source: "unknown",
+    source: "ai",
     kind: "data",
-    description: "Assistant read tools resolve the signed-in user's connection and read only authorized app data.",
+    description:
+      "Assistant read tools resolve the signed-in user's connection and read only authorized app data. Health follows sampled real assistant requests, which include tool work; it is not a separate read probe.",
     path: "M660 180 V220 H960 V530 H990"
   }
 ];

@@ -31,6 +31,15 @@ describe("SystemMapPage inspection", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("labels connections with the age of their last success and animates nothing on first load", () => {
+    const { container } = render(
+      <SystemMapPage initialSnapshot={buildSystemMap(mapEvidence(), new Date(MAP_TEST_TIME))} />
+    );
+    const labels = Array.from(container.querySelectorAll("svg text")).map((node) => node.textContent);
+    expect(labels.some((text) => /^(now|\d+[mhd] ago)$/.test(text ?? ""))).toBe(true);
+    expect(container.querySelector(".edge-pulse")).toBeNull();
+  });
+
   it("makes graph connections keyboard inspectable with pipeline-scoped metrics", () => {
     render(<SystemMapPage initialSnapshot={buildSystemMap(mapEvidence(), new Date(MAP_TEST_TIME))} />);
     const edge = screen.getByRole("button", { name: "Ledger records: LiveMopay to Sync worker, Healthy" });

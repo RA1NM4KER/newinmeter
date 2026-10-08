@@ -192,3 +192,39 @@ select {
     animation: none;
   }
 }
+
+/* System map: a connection pulses once when a refresh shows a newer success, and
+   paths that are failed or affected march their dashes back toward the source. */
+@keyframes edge-pulse {
+  0% {
+    stroke-width: 1.5;
+  }
+  35% {
+    stroke-width: 4.5;
+  }
+  100% {
+    stroke-width: 1.5;
+  }
+}
+
+@keyframes edge-march {
+  to {
+    stroke-dashoffset: 12;
+  }
+}
+
+.edge-pulse {
+  animation: edge-pulse 1.1s ease-out 1;
+}
+
+.edge-march {
+  stroke-dasharray: 6 6;
+  animation: edge-march 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-pulse,
+  .edge-march {
+    animation: none;
+  }
+}

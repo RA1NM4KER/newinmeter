@@ -24,6 +24,7 @@ describe("system map health evidence", () => {
     const healthy = buildSystemMap(mapEvidence(), now);
     expect(healthy.nodes.session.status).toBe("healthy");
     expect(healthy.nodes.session.reason).toContain("Inferred from");
+    expect(healthy.edges["session-sync"].status).toBe("healthy");
 
     const evidence = mapEvidence();
     evidence.diagnostics.overview.livemopay = "critical";
