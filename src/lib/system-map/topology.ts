@@ -329,7 +329,8 @@ export const SYSTEM_EDGES: readonly SystemEdge[] = [
     kind: "data",
     description:
       "Assistant read tools resolve the signed-in user's connection and read only authorized app data. Health follows sampled real assistant requests, which include tool work; it is not a separate read probe.",
-    path: "M660 180 V220 H960 V530 H990"
+    path: "M660 180 V220 H960 V530 H990",
+    labelAt: { x: 810, y: 212 }
   }
 ];
 
