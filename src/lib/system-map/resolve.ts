@@ -120,6 +120,24 @@ export function buildSystemMap(evidence: MapEvidence, now = new Date()): SystemM
         "scheduler"
       );
     },
+    session: () => {
+      const syncOk = recent(lastSyncSuccess, time, 8 * HOUR);
+      const canaryOk = overview.livemopay === "healthy" && recent(overview.lastApiContractSuccessAt, time, 48 * HOUR);
+      const evidence = [syncOk ? "a successful sync" : null, canaryOk ? "a passing daily contract check" : null].filter(
+        (item): item is string => !!item
+      );
+      return {
+        ...unknown(
+          evidence.length
+            ? `Inferred from ${evidence.join(" and ")}. Both require a working provider token refresh. This is not an independent session probe.`
+            : "No recent successful sync or passing contract check. A failure there cannot be attributed to the session alone, so its health is unknown."
+        ),
+        status: evidence.length ? "healthy" : "unknown",
+        observedAt: newest([syncOk ? lastSyncSuccess : null, canaryOk ? overview.lastApiContractSuccessAt : null]),
+        lastSuccessAt: newest([syncOk ? lastSyncSuccess : null, canaryOk ? overview.lastApiContractSuccessAt : null]),
+        metrics: [{ label: "Evidence", value: evidence.length ? evidence.join("; ") : "None recent" }]
+      };
+    },
     canary: () => {
       const canary = state("livemopay:canary");
       const checked = overview.lastApiContractCheckAt;
@@ -194,7 +212,9 @@ export function buildSystemMap(evidence: MapEvidence, now = new Date()): SystemM
             ? `Unknown, not failed: ${jobs
                 .filter(({ observation }) => observation.status === "unknown")
                 .map(({ label }) => label)
-                .join(", ")} ha${jobs.filter(({ observation }) => observation.status === "unknown").length === 1 ? "s" : "ve"} not recorded a completion heartbeat yet. A job that has never reported cannot be told apart from one that never ran, so it is not marked healthy or failed until its first heartbeat arrives (next scheduled run). Inspect each job below.`
+                .join(
+                  ", "
+                )} ha${jobs.filter(({ observation }) => observation.status === "unknown").length === 1 ? "s" : "ve"} not recorded a completion heartbeat yet. A job that has never reported cannot be told apart from one that never ran, so it is not marked healthy or failed until its first heartbeat arrives (next scheduled run). Inspect each job below.`
             : "Daily maintenance outcomes. Inspect each job below; missing heartbeats do not identify the underlying cause."
         ),
         status: statuses.includes("failed")

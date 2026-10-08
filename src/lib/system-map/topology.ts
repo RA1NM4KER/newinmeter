@@ -22,6 +22,7 @@ export type TelemetrySource =
   | "ai"
   | "maintenance"
   | "staleCheck"
+  | "session"
   | "unknown";
 
 type SystemNode = {
@@ -51,11 +52,11 @@ export const SYSTEM_NODES: readonly SystemNode[] = [
     id: "session",
     label: "Provider session",
     subtitle: "Firebase token refresh",
-    source: "unknown",
+    source: "session",
     x: 30,
     y: 280,
     description:
-      "Each sync refreshes the LiveMopay Firebase session using an encrypted refresh token. The contract canary covers this path, but does not provide an independent session health signal."
+      "Each sync refreshes the LiveMopay Firebase session using an encrypted refresh token. Health is inferred from those successes: a recent successful sync or a passing daily contract canary both require a working token refresh. A failure cannot be attributed to the session alone, so this node reports Healthy or Unknown, never Failed."
   },
   {
     id: "scheduler",

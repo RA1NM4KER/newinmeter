@@ -51,8 +51,7 @@ remain; push is event-driven and silence is not itself failure.
 Sync health summarizes current connection health; it does not claim that every
 connection failure is a worker outage. Recent successful captures, within eight
 hours, provide indirect evidence of rollup completion. A successful diagnostics
-read proves only that database read path. App auth, provider sessions and browser clients currently lack independent probes
-and remain Unknown. Maintenance, alerts and AI use the passive observations described below.
+read proves only that database read path. App auth and browser clients lack probes and display as Not monitored. The provider session has no probe of its own: it is inferred Healthy from a successful sync (within eight hours) or a passing daily canary (within 48 hours), both of which require a working token refresh, and is otherwise Unknown. It is never marked Failed because a failure cannot be attributed to the session alone. Maintenance, alerts and AI use the passive observations described below.
 
 When LiveMopay or the scheduler fails, sync and ingestion can be Affected without
 marking the database itself down. Independent measured failures retain their own

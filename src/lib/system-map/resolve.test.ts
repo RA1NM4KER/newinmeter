@@ -8,9 +8,8 @@ const now = new Date(MAP_TEST_TIME);
 describe("system map health evidence", () => {
   it("keeps unmeasured services unknown and limits healthy claims to actual evidence", () => {
     const map = buildSystemMap(mapEvidence(), now);
-    for (const id of ["session", "auth", "ai", "cron", "client", "alerts"])
-      expect(map.nodes[id].status).toBe("unknown");
-    for (const id of ["livemopay", "scheduler", "sync", "database", "rollups", "push"])
+    for (const id of ["auth", "ai", "cron", "client", "alerts"]) expect(map.nodes[id].status).toBe("unknown");
+    for (const id of ["livemopay", "session", "scheduler", "sync", "database", "rollups", "push"])
       expect(map.nodes[id].status).toBe("healthy");
     expect(map.edges["push-client"].status).toBe("unknown");
     expect(map.edges["alerts-push"].status).toBe("unknown");
@@ -19,6 +18,18 @@ describe("system map health evidence", () => {
       label: "Latest run duration (whole pipeline)",
       value: "10.0 s"
     });
+  });
+
+  it("infers the provider session from sync and canary successes and never marks it failed", () => {
+    const healthy = buildSystemMap(mapEvidence(), now);
+    expect(healthy.nodes.session.status).toBe("healthy");
+    expect(healthy.nodes.session.reason).toContain("Inferred from");
+
+    const evidence = mapEvidence();
+    evidence.diagnostics.overview.livemopay = "critical";
+    evidence.diagnostics.connections.forEach((connection) => (connection.lastSuccessfulSyncAt = null));
+    const failing = buildSystemMap(evidence, now);
+    expect(failing.nodes.session.status).toBe("unknown");
   });
 
   it("separates a failed provider from potential sync and ingestion impact", () => {
