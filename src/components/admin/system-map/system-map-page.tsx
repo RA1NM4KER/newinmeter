@@ -494,7 +494,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
               })}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3 text-[11px] text-muted">
-              <span>Solid arrows: data flow · Dashed arrows: control or scheduling</span>
+              <span className="hidden md:inline">Solid arrows: data flow · Dashed arrows: control or scheduling</span>
               <span>No simulated activity</span>
             </div>
           </Card>
