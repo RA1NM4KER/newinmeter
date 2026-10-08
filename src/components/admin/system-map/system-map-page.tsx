@@ -112,7 +112,6 @@ function Inspector({
     <Dialog
       isOpen={!!definition && !!observation}
       onClose={close}
-      dismissOnBackdrop
       title={definition?.label ?? "System details"}
       eyebrow={selection?.kind === "edge" ? "Connection details" : "Component details"}
     >

@@ -13,20 +13,9 @@ type DialogProps = {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  // Opt-in: forms keep it off so a stray click outside can't discard input.
-  dismissOnBackdrop?: boolean;
 };
 
-export function Dialog({
-  isOpen,
-  onClose,
-  title,
-  eyebrow,
-  description,
-  children,
-  footer,
-  dismissOnBackdrop = false
-}: DialogProps) {
+export function Dialog({ isOpen, onClose, title, eyebrow, description, children, footer }: DialogProps) {
   const pressedBackdropRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -143,7 +132,7 @@ export function Dialog({
         // Both press and release must land on the backdrop, so dragging a text
         // selection out of the content doesn't close the dialog.
         onMouseDown={(event) => {
-          pressedBackdropRef.current = dismissOnBackdrop && event.target === event.currentTarget;
+          pressedBackdropRef.current = event.target === event.currentTarget;
         }}
         onClick={(event) => {
           if (pressedBackdropRef.current && event.target === event.currentTarget) onClose();
