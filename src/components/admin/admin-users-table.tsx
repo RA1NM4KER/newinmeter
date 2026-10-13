@@ -59,7 +59,7 @@ function AdminUserCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <ConnectionStatusBadge status={user.connectionStatus} lifecycle={user.connectionLifecycle} />
+        <ConnectionStatusBadge status={user.connectionStatus} />
         <FeatureChips user={user} />
         <RoleBadge role={user.role} />
       </div>
@@ -308,7 +308,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
             </div>
           );
         case "livemopay":
-          return <ConnectionStatusBadge status={user.connectionStatus} lifecycle={user.connectionLifecycle} />;
+          return <ConnectionStatusBadge status={user.connectionStatus} />;
         case "lastSync":
           return <LastSyncCell user={user} />;
       }

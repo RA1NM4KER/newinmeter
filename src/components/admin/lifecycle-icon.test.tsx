@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AdminUserListItem } from "@/lib/user-roles";
 import { ConnectionStatusBadge } from "./connection-status-badge";
+import { LifecycleIcon } from "./lifecycle-icon";
 import { LastSyncCell } from "./last-sync-cell";
 
 describe("admin lifecycle indicators", () => {
@@ -11,14 +12,13 @@ describe("admin lifecycle indicators", () => {
     ["active", "Active"],
     ["paused", "Paused"],
     ["cold", "Cold / purged"]
-  ] as const)("shows %s without changing connection status", (lifecycle, label) => {
-    render(<ConnectionStatusBadge status="connected" lifecycle={lifecycle} />);
+  ] as const)("shows %s in the lifecycle indicator", (lifecycle, label) => {
+    render(<LifecycleIcon lifecycle={lifecycle} />);
     expect(screen.getByRole("img", { name: label })).toBeTruthy();
-    expect(screen.getByText("Connected")).toBeTruthy();
   });
-  it("preserves connection errors even if lifecycle is cold", () => {
-    render(<ConnectionStatusBadge status="error" lifecycle="cold" />);
-    expect(screen.getByText("Error")).toBeTruthy();
+  it("preserves the original LiveMopay status dot", () => {
+    render(<ConnectionStatusBadge status="connected" />);
+    expect(screen.getByText("Connected")).toBeTruthy();
     expect(screen.queryByRole("img")).toBeNull();
   });
   it("shows historical sync with a snowflake and no extra purge text", () => {

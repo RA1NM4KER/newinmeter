@@ -1,5 +1,3 @@
-import type { ConnectionLifecycle } from "@/lib/connection-lifecycle";
-import { LifecycleIcon } from "./lifecycle-icon";
 import type { LivemopayConnectionStatus } from "@/lib/user-roles";
 
 const connectionStatusLabel: Record<LivemopayConnectionStatus, string> = {
@@ -16,13 +14,7 @@ const connectionStatusDotClass: Record<LivemopayConnectionStatus, string> = {
   error: "bg-red-500"
 };
 
-export function ConnectionStatusBadge({
-  status,
-  lifecycle
-}: {
-  status: LivemopayConnectionStatus | null;
-  lifecycle?: ConnectionLifecycle | null;
-}) {
+export function ConnectionStatusBadge({ status }: { status: LivemopayConnectionStatus | null }) {
   if (!status) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
@@ -34,11 +26,7 @@ export function ConnectionStatusBadge({
 
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink">
-      {status === "connected" && lifecycle ? (
-        <LifecycleIcon lifecycle={lifecycle} />
-      ) : (
-        <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass[status]}`} aria-hidden="true" />
-      )}
+      <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass[status]}`} aria-hidden="true" />
       {connectionStatusLabel[status]}
     </span>
   );
