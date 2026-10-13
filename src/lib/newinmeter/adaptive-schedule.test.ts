@@ -30,10 +30,27 @@ describe("publication scheduling", () => {
   it("does not upgrade from one or two matching gaps", () => {
     expect(observeReporting({}, batches(106, 3), "a", now).energy.cadenceMinutes).toBeNull();
   });
-  it("learns electricity and water independently and chooses the earlier fetch", () => {
+  it("uses electricity for scheduling even when water predicts an earlier batch", () => {
     const model = observeReporting({}, [...batches(106), ...batches(71, 6, "Water:", 30)], "a", now);
     expect(model.water.cadenceMinutes).toBe(71);
-    expect(model.predictedAt).toBe("2026-10-13T11:00:00.000Z");
+    expect(model.predictedAt).toBe("2026-10-13T11:56:00.000Z");
+    expect(model.reason).toBe("Electricity publication prediction: 106 min");
+  });
+  it("does not schedule fast polls from water-only cadence", () => {
+    const model = observeReporting({}, batches(71, 6, "Water:"), "a", now);
+    expect(model.water.cadenceMinutes).toBe(71);
+    expect(model.energy.cadenceMinutes).toBeNull();
+    expect(model.reason).toContain("fallback");
+    expect(model.predictedAt).toBe(observeReporting({}, [], "a", now).predictedAt);
+  });
+  it("ignores overdue water predictions after collecting an electricity batch", () => {
+    const rows = [...batches(106), ...batches(106, 6, "Water:", 130)];
+    const model = observeReporting({}, rows, "a", now);
+    expect(model.water.cadenceMinutes).toBe(106);
+    expect(model.predictedAt).toBe("2026-10-13T11:56:00.000Z");
+  });
+  it("learns a 71-minute electricity cadence with the same safety floor", () => {
+    expect(observeReporting({}, batches(71), "a", now).predictedAt).toBe("2026-10-13T11:21:00.000Z");
   });
   it("combines observations across small incremental responses without duplicating batches", () => {
     let model = observeReporting({}, batches(106, 2, "Energy Charge:", 212), "a", now);
