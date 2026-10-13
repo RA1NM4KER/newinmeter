@@ -1,6 +1,18 @@
 import { LifecycleIcon } from "./lifecycle-icon";
 import type { AdminUserListItem, CaptureRunStatus } from "@/lib/user-roles";
 
+const syncTime = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Johannesburg",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23"
+});
+const syncDateTime = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Johannesburg",
+  dateStyle: "medium",
+  timeStyle: "short"
+});
+
 function formatRelativeTime(isoDate: string): string {
   const diffMs = Date.now() - new Date(isoDate).getTime();
   const diffMinutes = Math.round(diffMs / 60_000);
@@ -38,14 +50,15 @@ export function LastSyncCell({ user }: { user: AdminUserListItem }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs text-ink"
-      title={user.lastRunStatus === "failed" ? (user.lastRunError ?? "Sync failed") : undefined}
+      title={`${syncDateTime.format(new Date(user.lastRunAt))} SAST${user.lastRunStatus === "failed" ? ` · ${user.lastRunError ?? "Sync failed"}` : ""}`}
     >
       {user.lastRunStatus === "success" && user.connectionLifecycle ? (
         <LifecycleIcon lifecycle={user.connectionLifecycle} />
       ) : (
         <span className={`h-1.5 w-1.5 rounded-full ${lastRunDotClass[user.lastRunStatus]}`} aria-hidden="true" />
       )}
-      {lastRunLabel[user.lastRunStatus]} · {formatRelativeTime(user.lastRunAt)}
+      {lastRunLabel[user.lastRunStatus]} · {formatRelativeTime(user.lastRunAt)} ·{" "}
+      {syncTime.format(new Date(user.lastRunAt))}
     </span>
   );
 }

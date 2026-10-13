@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdminUserListItem } from "@/lib/user-roles";
 import { ConnectionStatusBadge } from "./connection-status-badge";
 import { LifecycleIcon } from "./lifecycle-icon";
 import { LastSyncCell } from "./last-sync-cell";
 
 describe("admin lifecycle indicators", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
   it.each([
     ["active", "Active"],
     ["paused", "Paused"],
@@ -37,6 +40,21 @@ describe("admin lifecycle indicators", () => {
     expect(screen.getByRole("img", { name: "Cold / purged" })).toBeTruthy();
     expect(screen.queryByText(/data purged/)).toBeNull();
     expect(screen.queryByText("No sync yet")).toBeNull();
+  });
+  it("shows exact SAST time alongside elapsed time with the full date discoverable", () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-13T19:00:00Z"));
+    render(
+      <LastSyncCell
+        user={
+          {
+            lastRunStatus: "success",
+            lastRunAt: "2026-10-13T18:19:00Z",
+            connectionLifecycle: "active"
+          } as AdminUserListItem
+        }
+      />
+    );
+    expect(screen.getByText("Synced · 41m ago · 20:19").getAttribute("title")).toBe("13 Oct 2026, 20:19 SAST");
   });
   it("retains the never-synced label without a known timestamp", () => {
     render(
