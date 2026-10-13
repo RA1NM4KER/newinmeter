@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEnergyRowsUpsertBatch,
+  ledgerCorrectionCandidates,
   buildRefundTopupDeletePath,
   recentRestoreStartDate,
   refundTopupMatchers
@@ -161,5 +162,26 @@ describe("buildEnergyRowsUpsertBatch", () => {
       "2026-08-26T12:00:00Z"
     );
     expect(record.tariff_band).toBe("12 - 20");
+  });
+});
+
+describe("ledger correction identity", () => {
+  it("marks a unique authoritative event independently of balance", () => {
+    const r = row({ charge_label: "Energy Charge:", cost: "0.25" });
+    const [record] = buildEnergyRowsUpsertBatch("conn", [r], "run", null, "now", ledgerCorrectionCandidates([r]));
+    expect(record.reconcile_key).toBe(true);
+  });
+  it("does not reconcile an event with conflicting incoming balances", () => {
+    const first = row({ charge_label: "Energy Charge:", cost: "0.25" });
+    const second = { ...first, balance: "100.01" };
+    const candidates = ledgerCorrectionCandidates([first, second]);
+    expect(candidates.size).toBe(0);
+  });
+  it("does not infer event identity from legacy rows without source timestamps", () => {
+    expect(ledgerCorrectionCandidates([row({ source_ts: "" })]).size).toBe(0);
+  });
+  it("deduplicates repeated authoritative keys before deciding uniqueness", () => {
+    const r = row({});
+    expect(ledgerCorrectionCandidates([r, r]).size).toBe(1);
   });
 });

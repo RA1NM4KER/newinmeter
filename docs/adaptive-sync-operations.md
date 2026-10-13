@@ -8,7 +8,7 @@ Supabase pg_cron still ticks every five minutes. On alternate ticks the database
 
 Each successful fetch learns electricity and water publication timing independently from actual source timestamps, including zero consumption. A compact versioned model retains at most twelve publication clusters per stream from the last seven days. Three agreeing recent gaps are required before selecting approximately 71-minute or 106-minute reporting. Six-hour batches and insufficient evidence use the existing four daily windows. The model is deterministic and uses no AI calls.
 
-Predictions include a ten-minute publication buffer and a one-hour minimum between ordinary adaptive fetches to combine nearby electricity/water arrivals. A missed prediction backs off per stream. Repeated worker failures back off from thirty minutes to a maximum six hours. The database enforces a rolling twenty-four-hour automatic-fetch budget, default 24 and configurable between 4 and 24, including failed attempts. Manual refresh is outside that budget. A saturated account is deferred until its oldest counted attempt expires.
+Predictions include a ten-minute publication buffer and a one-hour minimum between ordinary adaptive fetches to combine nearby electricity/water arrivals. A missed prediction backs off per stream. Repeated worker failures back off from thirty minutes to a maximum six hours. The database enforces a rolling twenty-four-hour automatic-fetch budget, default 24 and configurable between 4 and 24, including failed attempts. Manual refresh is outside that budget. A successful manual fetch also updates the next adaptive prediction when automatic sync is enabled, avoiding a redundant scheduled fetch shortly after manual refresh. A saturated account is deferred until its oldest counted attempt expires.
 
 `sync_schedule_mode = 'shadow'` is the default. Predictions and metrics are recorded, but actual scheduling remains the four fixed windows. Only an explicit operator change to `adaptive` applies predictions. Existing lifecycle exclusions still apply in either mode. Active use and enabled alerts already determine inactivity eligibility; there is no new paid scheduler or separate account tier.
 
@@ -18,13 +18,13 @@ Adaptive accounts re-read ninety days once daily. Other incremental fetches reta
 
 `upsert_changed_energy_rows` compares content in Postgres and only writes new/changed records. Unchanged rows retain their previous run and last-seen timestamps; last-seen now means last content write, not last successful fetch. Capture-run completion skips rollup refresh when no content or refund cleanup changed. A separate lightweight trigger still updates the dashboard successful-check timestamp and run metadata. Existing legacy ingestion with NULL `rows_changed` keeps its refresh behaviour.
 
-Retries after lost HTTP responses count writes already owned by the current run. Records owned by an interrupted or failed run are picked up again so their affected dates receive a successful rollup refresh. Refund cleanup forces associated fetched records into the current run to preserve affected-date refreshes. Existing ledger-key semantics for corrections are unchanged.
+Retries after lost HTTP responses count writes already owned by the current run. Records owned by an interrupted or failed run are picked up again so their affected dates receive a successful rollup refresh. Refund cleanup forces associated fetched records into the current run to preserve affected-date refreshes. Confidently identified balance/cost corrections replace superseded ledger keys rather than duplicating usage. The entire incoming response must contain only one variant of the event. Exact source timestamp, label, and period identify ordinary events; source-less legacy matches additionally require identical capture time and usage/tariff, with cost and balance differing by at most one cent. Conflicting incoming variants are retained rather than guessed away. Superseded rows are preserved in a service-only, RLS-protected `ledger_reconciliation_audit` table; it cascades on account deletion. Audit storage and legacy identity matching are additional maintenance considerations.
 
 Capture runs record `rows_fetched`, `rows_changed`, `upstream_latest_at`, `predicted_next_at`, and existing timestamps for duration. `rows_synced` now counts rows written rather than every row submitted. Admin diagnostics show shadow/adaptive mode, prediction reason, confidence, latest upstream publication, next predicted fetch, and fetched/changed counts separately from the last successful check.
 
 ## Release and rollback
 
-Apply `20261013083319_adaptive_meter_sync.sql` and the successful-empty-summary migration before deploying the new worker and diagnostics select. The migration is additive and defaults all accounts to shadow mode. The old worker remains compatible during the transition.
+Apply `20261013083319_adaptive_meter_sync.sql`, `20261013083651_successful_empty_sync_summary.sql`, and `20261013085305_reconcile_corrected_ledger_keys.sql` before deploying the new worker and diagnostics select. The migration is additive and defaults all accounts to shadow mode. The old worker remains compatible during the transition.
 
 Enable a pilot using a confirmed connection ID, not an account label that might be shared by multiple users:
 
@@ -53,7 +53,9 @@ psql -h <socket directory> -p <port> -d postgres -v ON_ERROR_STOP=1 \
   -f test/sql/adaptive-sync-fixture.sql \
   -f supabase/migrations/20261013083319_adaptive_meter_sync.sql \
   -f supabase/migrations/20261013083651_successful_empty_sync_summary.sql \
-  -f test/sql/adaptive-sync-assertions.sql
+  -f test/sql/adaptive-sync-assertions.sql \
+  -f supabase/migrations/20261013085305_reconcile_corrected_ledger_keys.sql \
+  -f test/sql/ledger-reconciliation-assertions.sql
 ```
 
 Offline replay consumes a private JSON audit file shaped as an array of `{ account, label, rows }`, where rows are normalized LiveMopay CSV records:
@@ -86,3 +88,7 @@ Vercel usage inspection returned `Costs not found (404)`. No claim of measured b
 ## Live ingestion verification
 
 Before application release, the new pipeline fetched 48 records for the pilot account and wrote 18 changed records. The immediate repeat fetched the same 48 and wrote zero. The changed run's database duration was approximately 2.78 seconds; the unchanged repeat was approximately 1.95 seconds. These small samples establish correct no-op behaviour, not a billing forecast. Electricity and water daily totals matched raw records. After the empty-summary migration, another zero-change fetch updated the dashboard successful-check timestamp to the latest successful capture run while leaving the consumption rollups intact.
+
+The first natural automatic pilot ran at 10:45 SAST, fetched 8,884 records for daily reconciliation, and completed in 17.65 seconds. It also revealed old one-cent ledger-key variations that would have duplicated usage under the prior balance-based key. The correction migration was verified against the live account: 75 superseded entries were archived privately and replaced, and no duplicate identified events remained in the reconciliation window. Ordinary incremental checks and full daily reconciliation have materially different payloads and durations; use separate cohorts when measuring resource changes.
+
+A repeated live reconciliation fetched the same 8,884 records and wrote zero, completing in 12.56 seconds end to end. This establishes idempotency after the historical correction repair, and demonstrates why daily reconciliation should be measured separately from ordinary incremental checks. The audit table retained 75 superseded entries.
