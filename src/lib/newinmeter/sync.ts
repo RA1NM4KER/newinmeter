@@ -284,7 +284,8 @@ export function buildEnergyRowsUpsertBatch(
   rows: NewinmeterCsvRow[],
   runId: string,
   tariffProfile: string | null,
-  syncedAt: string
+  syncedAt: string,
+  correctionCandidates: ReadonlySet<string> = new Set()
 ) {
   const batchSeen = new Set<string>();
   return dedupeNewinmeterRows(rows).flatMap((row) => {
@@ -312,10 +313,34 @@ export function buildEnergyRowsUpsertBatch(
         balance: row.balance,
         source_ts: sourceTs || null,
         sync_run_id: runId,
-        last_seen_at: syncedAt
+        last_seen_at: syncedAt,
+        reconcile_key: correctionCandidates.has(ledgerEventKey(row))
       }
     ];
   });
+}
+
+function ledgerEventKey(row: NewinmeterCsvRow) {
+  return JSON.stringify([row.source_ts.trim(), row.charge_label.trim(), row.period_dt.trim()]);
+}
+
+export function ledgerCorrectionCandidates(rows: NewinmeterCsvRow[]): ReadonlySet<string> {
+  const events = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.source_ts.trim() || !Number.isFinite(Date.parse(row.source_ts))) continue;
+    const event = ledgerEventKey(row);
+    const keys = events.get(event) ?? new Set<string>();
+    keys.add(newinmeterLedgerKey(row));
+    events.set(event, keys);
+  }
+  // Determine uniqueness across the entire authoritative response, before
+  // splitting it into database batches. Conflicting incoming variants of the
+  // same event are retained for investigation, never guessed away.
+  return new Set(
+    Array.from(events)
+      .filter(([, keys]) => keys.size === 1)
+      .map(([event]) => event)
+  );
 }
 
 async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string, forceRefresh = false) {
@@ -326,6 +351,7 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
     )
   );
   const tariffProfile = connectionRows[0]?.tariff_profile ?? null;
+  const correctionCandidates = ledgerCorrectionCandidates(rows);
   let total = 0;
 
   for (let index = 0; index < rows.length; index += BATCH_SIZE) {
@@ -334,7 +360,8 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
       rows.slice(index, index + BATCH_SIZE),
       runId,
       tariffProfile,
-      syncedAt
+      syncedAt,
+      correctionCandidates
     );
 
     if (!batch.length) {
@@ -375,9 +402,10 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
         reporting_model: unknown;
         sync_schedule_mode: "shadow" | "adaptive";
         last_reconciled_at: string | null;
+        auto_sync_enabled: boolean;
       }>
     >(
-      `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
+      `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at,auto_sync_enabled&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
     );
     const reconciliation =
       params.mode === "incremental" && scheduleState?.sync_schedule_mode === "adaptive"
@@ -424,6 +452,11 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       `/livemopay_connections?id=eq.${encodeURIComponent(params.connectionId)}`,
       {
         reporting_model: model,
+        ...(params.trigger === "manual" &&
+        scheduleState?.sync_schedule_mode === "adaptive" &&
+        scheduleState.auto_sync_enabled
+          ? { next_sync_at: model.predictedAt }
+          : {}),
         ...(reconciliation || params.mode !== "incremental" ? { last_reconciled_at: nowIso() } : {})
       },
       "return=minimal"

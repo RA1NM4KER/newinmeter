@@ -182,6 +182,10 @@ A meter upgrade can change upstream publication frequency independently per hous
 
 When a fetch returns only unchanged rows, `rows_changed = 0` skips rollup computation. The dashboard's `last_synced_at` lives in `dashboard_summary`, so updating the connection alone is insufficient. The separate `capture_runs_empty_sync_summary` trigger updates only successful-check metadata for these runs. Verified live against a zero-change fetch: the dashboard timestamp matched the latest successful capture run and the daily rollup totals still matched raw ledger records. If a failed run wrote records before finalization, the next ingestion treats records owned by that failed run as dirty so their affected dates get a successful refresh.
 
+### Historical reconciliation and balance-key corrections
+
+The existing ledger key includes cost and balance. A 90-day reconciliation found previously imported events whose upstream balance differed by one cent, producing a second key for the same event and double-counting usage. Treat an exact source timestamp plus charge label and period as correction evidence only when the full authoritative response has one variant of that event. Source-less legacy matching must additionally pin capture time and usage/tariff and restrict monetary differences to one cent. The ingestion RPC privately archives superseded rows before replacing them; conflicting incoming variants are deliberately left unresolved. Verified live on the pilot reconciliation: 75 superseded rows archived and zero duplicate identified events remaining. See `ledger_reconciliation_audit` and the operations guide before attempting a repair or rollback.
+
 ## Auth / login / OTP issues
 
 Supabase's own auth logs (`source = 'auth_logs'` in the unified `logs` table) show every sign-in
