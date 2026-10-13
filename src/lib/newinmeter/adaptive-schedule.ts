@@ -111,7 +111,7 @@ export function observeReporting(
   const advanced = latestPublicationAt !== previous.latestPublicationAt;
   const emptyStreak = advanced ? 0 : Math.min(20, previous.emptyStreak + 1);
   const candidates: number[] = [];
-  for (const stream of [energy, water]) {
+  for (const stream of [energy]) {
     const anchor = stream.samples.at(-1);
     if (
       anchor &&
@@ -131,8 +131,8 @@ export function observeReporting(
   }
   const fallback = computeNextAutoSyncAt(connectionId, now).getTime();
   const prediction = candidates.length ? Math.min(...candidates) : fallback;
-  // Coalesce nearby water/electricity arrivals into at most one ordinary
-  // fetch per hour. Otherwise different stream phases can double polling.
+  // Electricity alone drives polling; water observations are diagnostic only.
+  // Preserve the one-hour minimum between ordinary adaptive fetches.
   const predictedAt = new Date(
     candidates.length
       ? Math.max(now.getTime() + 60 * MINUTE, Math.min(prediction, now.getTime() + 6 * 60 * MINUTE))
@@ -146,8 +146,8 @@ export function observeReporting(
     predictedAt,
     latestPublicationAt,
     reason: candidates.length
-      ? `Publication prediction: electricity ${energy.cadenceMinutes ?? "unknown"} min, water ${water.cadenceMinutes ?? "unknown"} min`
-      : "Four-window fallback: insufficient recent cadence evidence"
+      ? `Electricity publication prediction: ${energy.cadenceMinutes} min`
+      : "Four-window fallback: insufficient recent electricity cadence evidence"
   };
 }
 
