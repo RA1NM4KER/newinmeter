@@ -1,3 +1,4 @@
+import { LifecycleIcon } from "./lifecycle-icon";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { DiagnosticsRefreshButton } from "./diagnostics-refresh-button";
@@ -334,8 +335,21 @@ export function DiagnosticsPage({
           <StatusRow
             label="Data lifecycle"
             value={
-              <span className="text-xs text-muted">
-                {overview.warmConnections} warm · {overview.coldConnections} cold
+              <span className="inline-flex flex-wrap items-center gap-x-1 text-xs text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <LifecycleIcon lifecycle="active" />
+                  {snapshot.connections.filter((connection) => connection.lifecycle === "active").length} active
+                </span>
+                {" · "}
+                <span className="inline-flex items-center gap-1.5">
+                  <LifecycleIcon lifecycle="paused" />
+                  {snapshot.connections.filter((connection) => connection.lifecycle === "paused").length} paused
+                </span>
+                {" · "}
+                <span className="inline-flex items-center gap-1.5">
+                  <LifecycleIcon lifecycle="cold" />
+                  {overview.coldConnections} cold
+                </span>
                 {overview.hibernatingConnections ? ` · ${overview.hibernatingConnections} hibernating` : ""}
                 {overview.restoringConnections ? ` · ${overview.restoringConnections} restoring` : ""}
                 {overview.restoreFailedConnections ? ` · ${overview.restoreFailedConnections} restore failed` : ""}

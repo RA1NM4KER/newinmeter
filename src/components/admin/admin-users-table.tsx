@@ -59,7 +59,7 @@ function AdminUserCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <ConnectionStatusBadge status={user.connectionStatus} />
+        <ConnectionStatusBadge status={user.connectionStatus} lifecycle={user.connectionLifecycle} />
         <FeatureChips user={user} />
         <RoleBadge role={user.role} />
       </div>
@@ -81,8 +81,7 @@ async function fetchAdminUsers() {
 }
 
 export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableProps) {
-  const { sortKey, sortDirection, onSortChange, onSortKeyChange, onSortDirectionChange } =
-    useAdminUsersUrlState();
+  const { sortKey, sortDirection, onSortChange, onSortKeyChange, onSortDirectionChange } = useAdminUsersUrlState();
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [errorByUserId, setErrorByUserId] = useState<Record<string, string>>({});
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -309,7 +308,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
             </div>
           );
         case "livemopay":
-          return <ConnectionStatusBadge status={user.connectionStatus} />;
+          return <ConnectionStatusBadge status={user.connectionStatus} lifecycle={user.connectionLifecycle} />;
         case "lastSync":
           return <LastSyncCell user={user} />;
       }
@@ -448,10 +447,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
                         className={`group cursor-pointer transition hover:bg-canvas/70 ${isActive ? "bg-accentSoft/50" : ""}`}
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <td
-                            className="px-4 py-3"
-                            key={cell.id}
-                          >
+                          <td className="px-4 py-3" key={cell.id}>
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
                         ))}
