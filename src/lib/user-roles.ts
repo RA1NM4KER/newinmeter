@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { adminSupabaseFetch, adminSupabaseFetchAllPages, adminSupabaseRequest } from "./supabase-rest";
+import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
 import { createSupabaseAdminClient } from "./supabase/admin-client";
 import { getFeatureAccessForUsers, type FeatureAccessDetail } from "./features";
 import type { FeatureKey } from "./newinmeter/features-shared";
@@ -97,9 +97,11 @@ type ConnectionRow = {
   next_sync_at: string | null;
   last_auto_sync_status: "success" | "failed" | null;
   last_auto_sync_at: string | null;
+  capture_runs: CaptureRunRow[];
 };
 
 type CaptureRunRow = {
+  id: string;
   connection_id: string | null;
   status: CaptureRunStatus;
   started_at: string;
@@ -136,28 +138,24 @@ export async function listAdminUserIds(): Promise<string[]> {
 // here so they aren't invisible to the admin.
 export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const roleRows = await adminSupabaseFetch<UserRoleRow[]>(`/user_roles?select=${SELECT}`);
+  const usersPromise = admin.auth.admin.listUsers({ perPage: 1000 }).then(({ data, error }) => {
+    if (error) throw new Error(error.message);
+    return data;
+  });
+  // Independent reads overlap; feature access depends only on Auth user IDs.
+  // The embedded limit applies per connection, using the existing history index.
+  const [data, roleRows, connectionRows, pausedRows, featureAccessByUserId] = await Promise.all([
+    usersPromise,
+    adminSupabaseFetch<UserRoleRow[]>(`/user_roles?select=${SELECT}`),
+    adminSupabaseFetch<ConnectionRow[]>(
+      "/livemopay_connections?select=id,user_id,status,updated_at,data_state,last_synced_at,auto_sync_enabled,next_sync_at," +
+        "last_auto_sync_status,last_auto_sync_at,capture_runs(id,connection_id,status,started_at,finished_at,rows_synced,error)" +
+        "&capture_runs.order=started_at.desc,id.desc&capture_runs.limit=1&order=updated_at.desc,id.desc"
+    ),
+    adminSupabaseRequest<{ connection_id: string }[]>("POST", "/rpc/auto_sync_paused_connection_ids", {}),
+    usersPromise.then(({ users }) => getFeatureAccessForUsers(users.map((user) => user.id)))
+  ]);
   const roleByUserId = new Map(roleRows.map((row) => [row.user_id, toPermissions(row)]));
-
-  // A user can have more than one connection row over time (e.g. an old
-  // 'error'/'disconnected' row plus a later reconnect) -- ordering by
-  // updated_at desc and keeping the first hit per user_id gives the current
-  // one.
-  const connectionRows = await adminSupabaseFetch<ConnectionRow[]>(
-    "/livemopay_connections?select=id,user_id,status,updated_at,data_state,last_synced_at,auto_sync_enabled,next_sync_at," +
-      "last_auto_sync_status,last_auto_sync_at&order=updated_at.desc"
-  );
-  const pausedRows = await adminSupabaseRequest<{ connection_id: string }[]>(
-    "POST",
-    "/rpc/auto_sync_paused_connection_ids",
-    {}
-  );
   const pausedIds = new Set(pausedRows.map((row) => row.connection_id));
   const currentConnectionByUserId = new Map<string, ConnectionRow>();
   const connectionStatusByUserId = new Map<string, LivemopayConnectionStatus>();
@@ -165,35 +163,25 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
     string,
     Pick<ConnectionRow, "auto_sync_enabled" | "next_sync_at" | "last_auto_sync_status" | "last_auto_sync_at">
   >();
-  const userIdByConnectionId = new Map<string, string>();
+  const lastRunByUserId = new Map<string, CaptureRunRow>();
   for (const row of connectionRows) {
     if (!connectionStatusByUserId.has(row.user_id)) {
       currentConnectionByUserId.set(row.user_id, row);
       connectionStatusByUserId.set(row.user_id, row.status);
       autoSyncByUserId.set(row.user_id, row);
     }
-    userIdByConnectionId.set(row.id, row.user_id);
-  }
-
-  // Same latest-row-wins approach for sync history: a connection accrues one
-  // capture_runs row per sync attempt, so this is "what happened last time
-  // we tried to pull this user's data" -- the thing that actually tells you
-  // who's stuck vs. who's syncing fine.
-  const captureRunRows = await adminSupabaseFetchAllPages<CaptureRunRow>(
-    "/capture_runs?select=connection_id,status,started_at,finished_at,rows_synced,error&order=started_at.desc,id.desc"
-  );
-  const lastRunByUserId = new Map<string, CaptureRunRow>();
-  for (const row of captureRunRows) {
-    if (!row.connection_id) {
-      continue;
-    }
-    const userId = userIdByConnectionId.get(row.connection_id);
-    if (userId && !lastRunByUserId.has(userId)) {
-      lastRunByUserId.set(userId, row);
+    // Preserve the latest attempt across reconnects, not just the current connection.
+    const run = row.capture_runs[0];
+    const previous = lastRunByUserId.get(row.user_id);
+    if (
+      run &&
+      (!previous ||
+        Date.parse(run.started_at) > Date.parse(previous.started_at) ||
+        (Date.parse(run.started_at) === Date.parse(previous.started_at) && run.id > previous.id))
+    ) {
+      lastRunByUserId.set(row.user_id, run);
     }
   }
-
-  const featureAccessByUserId = await getFeatureAccessForUsers(data.users.map((user) => user.id));
 
   return data.users
     .map((user) => {

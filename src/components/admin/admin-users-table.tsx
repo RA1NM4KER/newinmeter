@@ -95,7 +95,8 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
   const { data, isFetching, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: fetchAdminUsers,
-    initialData
+    initialData,
+    staleTime: 30_000
   });
 
   // Client-side sort by the selected column. Server returns oldest-joined-first.
@@ -118,7 +119,7 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
     return rows.sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) * dir);
   }, [data?.rows, sortKey, sortDirection]);
   const total = data?.total ?? 0;
-  const showTableSkeleton = isLoading || isManualRefreshing;
+  const showTableSkeleton = isLoading;
   const selectedUser = selectedUserId ? (users.find((user) => user.userId === selectedUserId) ?? null) : null;
 
   const stats = useMemo(() => {
