@@ -19,6 +19,7 @@ import { useDataTableUrlState } from "@/lib/url-state/use-data-table-url-state";
 import { formatCurrency } from "@/lib/format";
 import { buildEnergyRowsUrl } from "@/lib/endpoints";
 import type { EnergyRow, SyncMetadata } from "@/lib/types";
+import { PeriodLabel, periodLabelFor } from "./period-label";
 import { amountClassFor, amountDisplayFor, balanceClassFor, tariffDisplayFor, usageDisplayFor } from "./row-formatting";
 import { DataCardSkeletonList } from "./data-card-skeleton-list";
 import type { SortDirection, SortKey } from "./types";
@@ -108,13 +109,15 @@ function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
 
   return (
     <button
-      aria-label={`View details for ${chargeTypeLabelMap[row.chargeKind]} at ${row.periodDateTime.replace("T", " ")}`}
+      aria-label={`View details for ${chargeTypeLabelMap[row.chargeKind]} at ${periodLabelFor(row).accessibleLabel}`}
       className="block w-full appearance-none space-y-1.5 px-4 py-3 text-left outline-none transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
       onClick={onOpen}
       type="button"
     >
       <div className="flex w-full items-center justify-between gap-2">
-        <span className="font-medium text-ink">{row.periodDateTime.replace("T", " ")}</span>
+        <span className="font-medium text-ink">
+          <PeriodLabel row={row} />
+        </span>
         <span className="flex shrink-0 items-center gap-1.5">
           <span className="rounded bg-canvas px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
             {chargeTypeLabelMap[row.chargeKind]}
@@ -243,7 +246,11 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
         id: "period",
         accessorFn: (row) => row.periodDateTime,
         header: dataTableColumnLabel.period,
-        cell: ({ row }) => <span className="font-medium text-ink">{row.original.periodDateTime.replace("T", " ")}</span>
+        cell: ({ row }) => (
+          <span className="font-medium text-ink">
+            <PeriodLabel row={row.original} />
+          </span>
+        )
       },
       {
         id: "type",
@@ -512,7 +519,7 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
                 ) : (
                   table.getRowModel().rows.map((row) => (
                     <tr
-                      aria-label={`View details for ${chargeTypeLabelMap[row.original.chargeKind]} at ${row.original.periodDateTime.replace("T", " ")}`}
+                      aria-label={`View details for ${chargeTypeLabelMap[row.original.chargeKind]} at ${periodLabelFor(row.original).accessibleLabel}`}
                       className="cursor-pointer transition hover:bg-canvas/70 focus-visible:bg-canvas/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-accent/50"
                       key={row.id}
                       onClick={() => setSelectedRow(row.original)}

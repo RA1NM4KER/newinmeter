@@ -1,5 +1,6 @@
 "use client";
 
+import { intervalTimeLabel } from "@/lib/consumption-period";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCurrency, formatKwh } from "@/lib/format";
 import { chartColors, chartMargin } from "./chart-config";
@@ -17,6 +18,7 @@ export function HourlyChart({ data, metric, title }: HourlyChartProps) {
           <YAxis tickLine={false} axisLine={false} width={48} />
           <Tooltip
             {...chartTooltipProps}
+            labelFormatter={(label) => intervalTimeLabel(String(label), 60)}
             formatter={(value) => [
               metric === "spend" ? formatCurrency(Number(value)) : formatKwh(Number(value)),
               metric

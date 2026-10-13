@@ -1,5 +1,7 @@
 "use client";
 
+import { intervalTimeLabel } from "@/lib/consumption-period";
+
 import { useEffect, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { chartColors, chartMargin } from "@/components/charts/chart-config";
@@ -78,7 +80,7 @@ function HourlyUsageChart({
             <Tooltip
               {...chartTooltipProps}
               formatter={(value) => [formatKwh(Number(value)), "usage"]}
-              labelFormatter={(hour) => `${hour}:00`}
+              labelFormatter={(hour) => intervalTimeLabel(String(hour), 60)}
             />
             <Bar dataKey="kwh" radius={[3, 3, 0, 0]}>
               {hourly.map((point) => (
@@ -141,10 +143,7 @@ function DailyUsageChart({ from, to, highlightDate }: { from: string; to: string
           <CartesianGrid stroke={chartColors.line} vertical={false} />
           <XAxis dataKey="date" interval="preserveStartEnd" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
           <YAxis hide />
-          <Tooltip
-            {...chartTooltipProps}
-            formatter={(value) => [formatCurrency(Number(value)), "spend"]}
-          />
+          <Tooltip {...chartTooltipProps} formatter={(value) => [formatCurrency(Number(value)), "spend"]} />
           <Bar dataKey="spend" radius={[3, 3, 0, 0]}>
             {data.map((point) => (
               <Cell

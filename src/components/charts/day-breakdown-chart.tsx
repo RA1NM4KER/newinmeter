@@ -1,5 +1,6 @@
 "use client";
 
+import { intervalTimeLabel } from "@/lib/consumption-period";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -393,7 +394,7 @@ export function DayBreakdownChart({
 
                   return (
                     <div className="rounded-lg border border-line bg-paper px-2 py-1.5 text-[0.7rem] shadow-soft">
-                      <p className="leading-none text-muted">{label}</p>
+                      <p className="leading-none text-muted">{intervalTimeLabel(String(label), 30)}</p>
                       <div className="mt-1 flex items-center gap-3 whitespace-nowrap font-medium text-ink">
                         {spendValue !== undefined ? (
                           <span

@@ -1,5 +1,6 @@
 "use client";
 
+import { PeriodLabel, periodLabelFor } from "./period-label";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -99,7 +100,7 @@ export function DataDetailDrawer({ onClose, row }: { onClose: () => void; row: E
 
   return createPortal(
     <div
-      aria-label={`Details for ${chargeTypeLabel[row.chargeKind]} at ${row.periodDateTime.replace("T", " ")}`}
+      aria-label={`Details for ${chargeTypeLabel[row.chargeKind]} at ${periodLabelFor(row).accessibleLabel}`}
       aria-modal="true"
       className="fixed inset-0 z-50"
       role="dialog"
@@ -142,7 +143,9 @@ export function DataDetailDrawer({ onClose, row }: { onClose: () => void; row: E
           </div>
 
           <DetailGroup label="Overview">
-            <DetailRow label="Period">{dataDateTimeDisplayFor(row.periodDateTime)}</DetailRow>
+            <DetailRow label="Period">
+              <PeriodLabel row={row} />
+            </DetailRow>
             {meterEntry ? <DetailRow label="Meter entry">{meterEntry}</DetailRow> : null}
           </DetailGroup>
 
