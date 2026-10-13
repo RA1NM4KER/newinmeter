@@ -1,10 +1,13 @@
 import "server-only";
 
 import { cache } from "react";
-import { adminSupabaseFetch, adminSupabaseRequest } from "./supabase-rest";
+import { adminSupabaseFetch, adminSupabaseFetchAllPages, adminSupabaseRequest } from "./supabase-rest";
 import { createSupabaseAdminClient } from "./supabase/admin-client";
 import { getFeatureAccessForUsers, type FeatureAccessDetail } from "./features";
 import type { FeatureKey } from "./newinmeter/features-shared";
+
+import { connectionLifecycle, type ConnectionLifecycle } from "./connection-lifecycle";
+import type { ConnectionDataState } from "./newinmeter/connection";
 
 export type UserRole = "admin" | "user";
 
@@ -72,6 +75,7 @@ export type AdminUserListItem = UserPermissions & {
   createdAt: string;
   features: Record<FeatureKey, FeatureAccessDetail>;
   connectionStatus: LivemopayConnectionStatus | null;
+  connectionLifecycle: ConnectionLifecycle | null;
   lastRunStatus: CaptureRunStatus | null;
   lastRunAt: string | null;
   lastRunError: string | null;
@@ -87,6 +91,8 @@ type ConnectionRow = {
   user_id: string;
   status: LivemopayConnectionStatus;
   updated_at: string;
+  data_state: ConnectionDataState;
+  last_synced_at: string | null;
   auto_sync_enabled: boolean;
   next_sync_at: string | null;
   last_auto_sync_status: "success" | "failed" | null;
@@ -144,9 +150,16 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   // updated_at desc and keeping the first hit per user_id gives the current
   // one.
   const connectionRows = await adminSupabaseFetch<ConnectionRow[]>(
-    "/livemopay_connections?select=id,user_id,status,updated_at,auto_sync_enabled,next_sync_at," +
+    "/livemopay_connections?select=id,user_id,status,updated_at,data_state,last_synced_at,auto_sync_enabled,next_sync_at," +
       "last_auto_sync_status,last_auto_sync_at&order=updated_at.desc"
   );
+  const pausedRows = await adminSupabaseRequest<{ connection_id: string }[]>(
+    "POST",
+    "/rpc/auto_sync_paused_connection_ids",
+    {}
+  );
+  const pausedIds = new Set(pausedRows.map((row) => row.connection_id));
+  const currentConnectionByUserId = new Map<string, ConnectionRow>();
   const connectionStatusByUserId = new Map<string, LivemopayConnectionStatus>();
   const autoSyncByUserId = new Map<
     string,
@@ -155,6 +168,7 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   const userIdByConnectionId = new Map<string, string>();
   for (const row of connectionRows) {
     if (!connectionStatusByUserId.has(row.user_id)) {
+      currentConnectionByUserId.set(row.user_id, row);
       connectionStatusByUserId.set(row.user_id, row.status);
       autoSyncByUserId.set(row.user_id, row);
     }
@@ -165,8 +179,8 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   // capture_runs row per sync attempt, so this is "what happened last time
   // we tried to pull this user's data" -- the thing that actually tells you
   // who's stuck vs. who's syncing fine.
-  const captureRunRows = await adminSupabaseFetch<CaptureRunRow[]>(
-    "/capture_runs?select=connection_id,status,started_at,finished_at,rows_synced,error&order=started_at.desc"
+  const captureRunRows = await adminSupabaseFetchAllPages<CaptureRunRow>(
+    "/capture_runs?select=connection_id,status,started_at,finished_at,rows_synced,error&order=started_at.desc,id.desc"
   );
   const lastRunByUserId = new Map<string, CaptureRunRow>();
   for (const row of captureRunRows) {
@@ -185,6 +199,10 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
     .map((user) => {
       const permissions = roleByUserId.get(user.id);
       const lastRun = lastRunByUserId.get(user.id);
+      const connection = currentConnectionByUserId.get(user.id);
+      // Successful sync metadata survives ledger purging and missing capture history.
+      // Do not use connection update/cold timestamps as invented sync timestamps.
+      const retainedSuccessAt = connection?.last_synced_at ?? null;
 
       return {
         userId: user.id,
@@ -193,8 +211,11 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
         role: permissions?.role ?? "user",
         features: featureAccessByUserId.get(user.id)!,
         connectionStatus: connectionStatusByUserId.get(user.id) ?? null,
-        lastRunStatus: lastRun?.status ?? null,
-        lastRunAt: lastRun?.finished_at ?? lastRun?.started_at ?? null,
+        connectionLifecycle: connection
+          ? connectionLifecycle(connection.data_state, pausedIds.has(connection.id))
+          : null,
+        lastRunStatus: lastRun?.status ?? (retainedSuccessAt ? "success" : null),
+        lastRunAt: lastRun?.finished_at ?? lastRun?.started_at ?? retainedSuccessAt,
         lastRunError: lastRun?.error ?? null,
         lastRunRowsSynced: lastRun?.rows_synced ?? null,
         autoSyncEnabled: autoSyncByUserId.get(user.id)?.auto_sync_enabled ?? null,

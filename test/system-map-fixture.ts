@@ -35,6 +35,7 @@ export function mapConnection(overrides: Partial<DiagnosticConnection> = {}): Di
         error: null
       }
     ],
+    lifecycle: "active",
     dataState: "warm",
     hibernationError: null,
     coldAt: null,

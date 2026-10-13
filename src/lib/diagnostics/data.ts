@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connectionLifecycle, type ConnectionLifecycle } from "../connection-lifecycle";
 import { cache } from "react";
 import { parseReportingModel } from "../newinmeter/adaptive-schedule";
 import { countPushSubscriptions } from "../push-subscriptions";
@@ -111,6 +112,7 @@ export type DiagnosticConnection = {
   stale: boolean;
   consecutiveFailures: number;
   recentRuns: DiagnosticSyncRun[];
+  lifecycle: ConnectionLifecycle;
   dataState: DiagnosticConnectionRow["data_state"];
   hibernationError: string | null;
   coldAt: string | null;
@@ -310,6 +312,7 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
       stale: Boolean(lastSuccessfulSyncAt && now.getTime() - Date.parse(lastSuccessfulSyncAt) > 8 * 3_600_000),
       consecutiveFailures: failureCount,
       recentRuns,
+      lifecycle: connectionLifecycle(row.data_state, pausedConnectionIds.has(row.id)),
       dataState: row.data_state,
       hibernationError: row.hibernation_error ? sanitizeDiagnosticMessage(row.hibernation_error) : null,
       coldAt: row.cold_at,

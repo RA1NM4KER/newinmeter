@@ -1,3 +1,4 @@
+import { LifecycleIcon } from "./lifecycle-icon";
 import type { AdminUserListItem, CaptureRunStatus } from "@/lib/user-roles";
 
 function formatRelativeTime(isoDate: string): string {
@@ -39,7 +40,11 @@ export function LastSyncCell({ user }: { user: AdminUserListItem }) {
       className="inline-flex items-center gap-1.5 text-xs text-ink"
       title={user.lastRunStatus === "failed" ? (user.lastRunError ?? "Sync failed") : undefined}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${lastRunDotClass[user.lastRunStatus]}`} aria-hidden="true" />
+      {user.lastRunStatus === "success" && user.connectionLifecycle ? (
+        <LifecycleIcon lifecycle={user.connectionLifecycle} />
+      ) : (
+        <span className={`h-1.5 w-1.5 rounded-full ${lastRunDotClass[user.lastRunStatus]}`} aria-hidden="true" />
+      )}
       {lastRunLabel[user.lastRunStatus]} · {formatRelativeTime(user.lastRunAt)}
     </span>
   );

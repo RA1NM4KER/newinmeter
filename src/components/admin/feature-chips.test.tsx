@@ -13,6 +13,7 @@ function user(overrides: Partial<AdminUserListItem["features"]> = {}): AdminUser
     createdAt: "2026-01-01T00:00:00.000Z",
     features: { ai: rollout, activities: rollout, live: rollout, alerts: rollout, ...overrides },
     connectionStatus: null,
+    connectionLifecycle: null,
     lastRunStatus: null,
     lastRunAt: null,
     lastRunError: null,

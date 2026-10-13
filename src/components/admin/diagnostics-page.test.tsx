@@ -35,6 +35,7 @@ function connection(
     stale: health !== "healthy",
     consecutiveFailures: health === "critical" ? 3 : health === "warning" ? 1 : 0,
     recentRuns: [],
+    lifecycle: "active",
     dataState: "warm",
     hibernationError: null,
     coldAt: null,
@@ -135,13 +136,15 @@ describe("DiagnosticsPage", () => {
     data.overview.warmConnections = 1;
     data.overview.coldConnections = 1;
     data.connections = [
-      connection("healthy-user", "healthy"),
-      connection("cold-user", "healthy", { dataState: "cold", coldAt: "2026-08-01T00:00:00.000Z" })
+      connection("healthy-user", "healthy", { lifecycle: "paused" }),
+      connection("cold-user", "healthy", { lifecycle: "cold", dataState: "cold", coldAt: "2026-08-01T00:00:00.000Z" })
     ];
 
     render(<DiagnosticsPage snapshot={data} />);
 
-    expect(screen.getByText("1 warm · 1 cold")).toBeTruthy();
+    expect(screen.getByText("0 active")).toBeTruthy();
+    expect(screen.getByText("1 paused")).toBeTruthy();
+    expect(screen.getByText("1 cold")).toBeTruthy();
     expect(screen.getAllByText("Cold").length).toBeGreaterThan(0);
   });
 });
