@@ -502,7 +502,7 @@ export function SystemMapPage({ initialSnapshot }: { initialSnapshot: SystemMapS
             <span>Collected {when(snapshot.generatedAt)} SAST</span>
             <span>Refreshes every 45 seconds while visible</span>
           </div>
-          <details className="mt-5 rounded-lg border border-line bg-paper">
+          <details className="mt-5 rounded-lg border border-line bg-paper md:hidden">
             <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink">
               Connections <span className="ml-1 text-muted">({SYSTEM_EDGES.length})</span>
             </summary>
