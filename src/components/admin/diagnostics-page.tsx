@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { LifecycleIcon } from "./lifecycle-icon";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
@@ -134,12 +138,93 @@ function RunHistory({ runs }: { runs: DiagnosticSyncRun[] }) {
   );
 }
 
-function ConnectionRow({ connection, selected }: { connection: DiagnosticConnection; selected: boolean }) {
+async function fetchDetails<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not load diagnostic details.");
+  return response.json() as Promise<T>;
+}
+
+function DeferredDetails<T>({
+  title,
+  url,
+  version,
+  initiallyOpen = false,
+  className = "group",
+  compact = false,
+  children
+}: {
+  title: string;
+  url: string;
+  version: string;
+  initiallyOpen?: boolean;
+  className?: string;
+  compact?: boolean;
+  children: (data: T) => ReactNode;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+  useEffect(() => {
+    if (initiallyOpen) setOpen(true);
+  }, [initiallyOpen]);
+  const query = useQuery({
+    queryKey: ["diagnostic-details", url, version],
+    queryFn: () => fetchDetails<T>(url),
+    enabled: open,
+    staleTime: 30_000
+  });
+  return (
+    <details className={className} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-2 px-1 font-medium [&::-webkit-details-marker]:hidden ${compact ? "text-xs text-muted" : "text-sm text-ink"}`}
+      >
+        <span className="flex-1">{title}</span>
+        <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+      </summary>
+      {open ? (
+        query.isPending ? (
+          <p className="px-4 py-3 text-xs text-muted" role="status">
+            Loading details…
+          </p>
+        ) : query.isError ? (
+          <button className="px-4 py-3 text-xs text-red-600" onClick={() => void query.refetch()}>
+            Could not load details. Retry
+          </button>
+        ) : (
+          children(query.data)
+        )
+      ) : null}
+    </details>
+  );
+}
+
+function ConnectionRow({
+  connection: initialConnection,
+  selected,
+  deferred = false,
+  version = ""
+}: {
+  connection: DiagnosticConnection;
+  selected: boolean;
+  deferred?: boolean;
+  version?: string;
+}) {
+  const [open, setOpen] = useState(selected);
+  useEffect(() => {
+    if (selected) setOpen(true);
+  }, [selected]);
+  const query = useQuery({
+    queryKey: ["diagnostic-connection", initialConnection.id, version],
+    queryFn: () =>
+      fetchDetails<DiagnosticConnection[]>(`/api/admin/diagnostics?section=connections&ids=${initialConnection.id}`),
+    enabled: deferred && open,
+    staleTime: 30_000
+  });
+  const connection = query.data?.[0] ?? initialConnection;
   return (
     <details
       className="group scroll-mt-4 border-t border-line first:border-t-0"
       id={`connection-${connection.id}`}
-      open={selected}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 text-left transition hover:bg-canvas/60 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0 flex-1">
@@ -160,80 +245,92 @@ function ConnectionRow({ connection, selected }: { connection: DiagnosticConnect
         <ChevronDown className="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
       </summary>
 
-      <div className="border-t border-line bg-canvas/35 px-4 pb-4 pt-3">
-        <div className="grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <span className="block text-muted">Last successful sync</span>
-            <span className="text-ink">{when(connection.lastSuccessfulSyncAt)}</span>
-          </div>
-          <div>
-            <span className="block text-muted">Last attempt</span>
-            <span className="text-ink">
-              {when(connection.lastAttemptAt)}
-              {connection.lastAttemptStatus ? ` · ${connection.lastAttemptStatus}` : ""}
-            </span>
-          </div>
-          <div>
-            <span className="block text-muted">Last auto-sync</span>
-            <span className="text-ink">
-              {when(connection.lastAutoSyncAt)}
-              {connection.lastAutoSyncStatus ? ` · ${connection.lastAutoSyncStatus}` : ""}
-            </span>
-          </div>
-          <div>
-            <span className="block text-muted">Next scheduled</span>
-            <span className="text-ink">{when(connection.nextSyncAt)}</span>
-          </div>
-          {connection.reporting ? (
-            <div className="col-span-2">
-              <span className="block text-muted">Reporting schedule · {connection.reporting.mode}</span>
-              <span className="text-ink">{connection.reporting.reason}</span>
-              <span className="block text-muted">
-                Electricity confidence {Math.round(connection.reporting.energyConfidence * 100)}%, water{" "}
-                {Math.round(connection.reporting.waterConfidence * 100)}%
-              </span>
-              <span className="block text-ink">
-                Latest upstream publication: {when(connection.reporting.latestPublicationAt)}
-              </span>
-              <span className="block text-ink">Predicted next fetch: {when(connection.reporting.predictedAt)}</span>
-            </div>
-          ) : null}
-          {connection.dataState !== "warm" ? (
+      {deferred && query.isPending ? (
+        open ? (
+          <p className="px-4 py-3 text-xs text-muted" role="status">
+            Loading details…
+          </p>
+        ) : null
+      ) : deferred && query.isError ? (
+        <button className="px-4 py-3 text-xs text-red-600" onClick={() => void query.refetch()}>
+          Could not load details. Retry
+        </button>
+      ) : (
+        <div className="border-t border-line bg-canvas/35 px-4 pb-4 pt-3">
+          <div className="grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <span className="block text-muted">Data lifecycle</span>
+              <span className="block text-muted">Last successful sync</span>
+              <span className="text-ink">{when(connection.lastSuccessfulSyncAt)}</span>
+            </div>
+            <div>
+              <span className="block text-muted">Last attempt</span>
               <span className="text-ink">
-                {dataStateLabel[connection.dataState]}
-                {connection.dataState === "cold" && connection.coldAt ? ` since ${when(connection.coldAt)}` : ""}
-                {connection.dataState === "restoring" && connection.restoreStartedAt
-                  ? ` since ${when(connection.restoreStartedAt)}`
-                  : ""}
+                {when(connection.lastAttemptAt)}
+                {connection.lastAttemptStatus ? ` · ${connection.lastAttemptStatus}` : ""}
               </span>
             </div>
+            <div>
+              <span className="block text-muted">Last auto-sync</span>
+              <span className="text-ink">
+                {when(connection.lastAutoSyncAt)}
+                {connection.lastAutoSyncStatus ? ` · ${connection.lastAutoSyncStatus}` : ""}
+              </span>
+            </div>
+            <div>
+              <span className="block text-muted">Next scheduled</span>
+              <span className="text-ink">{when(connection.nextSyncAt)}</span>
+            </div>
+            {connection.reporting ? (
+              <div className="col-span-2">
+                <span className="block text-muted">Reporting schedule · {connection.reporting.mode}</span>
+                <span className="text-ink">{connection.reporting.reason}</span>
+                <span className="block text-muted">
+                  Electricity confidence {Math.round(connection.reporting.energyConfidence * 100)}%, water{" "}
+                  {Math.round(connection.reporting.waterConfidence * 100)}%
+                </span>
+                <span className="block text-ink">
+                  Latest upstream publication: {when(connection.reporting.latestPublicationAt)}
+                </span>
+                <span className="block text-ink">Predicted next fetch: {when(connection.reporting.predictedAt)}</span>
+              </div>
+            ) : null}
+            {connection.dataState !== "warm" ? (
+              <div>
+                <span className="block text-muted">Data lifecycle</span>
+                <span className="text-ink">
+                  {dataStateLabel[connection.dataState]}
+                  {connection.dataState === "cold" && connection.coldAt ? ` since ${when(connection.coldAt)}` : ""}
+                  {connection.dataState === "restoring" && connection.restoreStartedAt
+                    ? ` since ${when(connection.restoreStartedAt)}`
+                    : ""}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          {connection.claimStuck || connection.lastAutoSyncError || connection.lastError ? (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amberSoft px-3 py-2 text-xs text-amber-800 dark:border-amber-900/70 dark:text-amber-300">
+              {connection.claimStuck ? "The scheduler claim is older than its expected lease. " : ""}
+              {connection.lastAutoSyncError ?? connection.lastError ?? ""}
+            </p>
           ) : null}
+
+          {connection.hibernationError || connection.restoreError ? (
+            <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-400">
+              {connection.hibernationError ? `Cold-storage purge error: ${connection.hibernationError} ` : ""}
+              {connection.restoreError ? `Restore error: ${connection.restoreError}` : ""}
+            </p>
+          ) : null}
+
+          <div className="mt-4">
+            <h3 className="mb-2 text-xs font-medium text-ink">
+              Recent sync history · {connection.consecutiveFailures} consecutive failure
+              {connection.consecutiveFailures === 1 ? "" : "s"}
+            </h3>
+            <RunHistory runs={connection.recentRuns} />
+          </div>
         </div>
-
-        {connection.claimStuck || connection.lastAutoSyncError || connection.lastError ? (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amberSoft px-3 py-2 text-xs text-amber-800 dark:border-amber-900/70 dark:text-amber-300">
-            {connection.claimStuck ? "The scheduler claim is older than its expected lease. " : ""}
-            {connection.lastAutoSyncError ?? connection.lastError ?? ""}
-          </p>
-        ) : null}
-
-        {connection.hibernationError || connection.restoreError ? (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-400">
-            {connection.hibernationError ? `Cold-storage purge error: ${connection.hibernationError} ` : ""}
-            {connection.restoreError ? `Restore error: ${connection.restoreError}` : ""}
-          </p>
-        ) : null}
-
-        <div className="mt-4">
-          <h3 className="mb-2 text-xs font-medium text-ink">
-            Recent sync history · {connection.consecutiveFailures} consecutive failure
-            {connection.consecutiveFailures === 1 ? "" : "s"}
-          </h3>
-          <RunHistory runs={connection.recentRuns} />
-        </div>
-      </div>
+      )}
     </details>
   );
 }
@@ -280,11 +377,13 @@ function EventRow({ event, selected }: { event: DiagnosticEvent; selected: boole
 export function DiagnosticsPage({
   snapshot,
   selectedConnectionId,
-  selectedEventId
+  selectedEventId,
+  deferredDetails = false
 }: {
   snapshot: DiagnosticsSnapshot;
   selectedConnectionId?: string;
   selectedEventId?: string;
+  deferredDetails?: boolean;
 }) {
   const { overview } = snapshot;
   const problems = snapshot.connections.filter((connection) => connection.health !== "healthy");
@@ -394,6 +493,8 @@ export function DiagnosticsPage({
                   connection={connection}
                   key={connection.id}
                   selected={selectedConnectionId === connection.id}
+                  deferred={deferredDetails}
+                  version={snapshot.generatedAt}
                 />
               ))}
             </Card>
@@ -407,21 +508,44 @@ export function DiagnosticsPage({
             <span id="connections-heading">Connections</span>
           </SectionLabel>
           {healthyConnections.length ? (
-            <details className="group" open={selectedHealthyConnection}>
-              <summary className="flex cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
-                <span className="flex-1">View all healthy connections</span>
-                <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
-              </summary>
-              <Card className="mt-2 overflow-hidden">
-                {healthyConnections.map((connection) => (
-                  <ConnectionRow
-                    connection={connection}
-                    key={connection.id}
-                    selected={selectedConnectionId === connection.id}
-                  />
-                ))}
-              </Card>
-            </details>
+            deferredDetails ? (
+              <DeferredDetails<DiagnosticConnection[]>
+                title="View all healthy connections"
+                version={snapshot.generatedAt}
+                url={`/api/admin/diagnostics?section=connections&ids=${healthyConnections.map((connection) => connection.id).join(",")}&details=false`}
+                initiallyOpen={selectedHealthyConnection}
+              >
+                {(connections) => (
+                  <Card className="mt-2 overflow-hidden">
+                    {connections.map((connection) => (
+                      <ConnectionRow
+                        key={connection.id}
+                        connection={connection}
+                        selected={selectedConnectionId === connection.id}
+                        deferred
+                        version={snapshot.generatedAt}
+                      />
+                    ))}
+                  </Card>
+                )}
+              </DeferredDetails>
+            ) : (
+              <details className="group" open={selectedHealthyConnection}>
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-1 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
+                  <span className="flex-1">View all healthy connections</span>
+                  <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <Card className="mt-2 overflow-hidden">
+                  {healthyConnections.map((connection) => (
+                    <ConnectionRow
+                      connection={connection}
+                      key={connection.id}
+                      selected={selectedConnectionId === connection.id}
+                    />
+                  ))}
+                </Card>
+              </details>
+            )
           ) : (
             <p className="px-1 text-sm text-muted">No healthy connections.</p>
           )}
@@ -443,7 +567,32 @@ export function DiagnosticsPage({
             <p className="px-1 text-sm text-muted">No unresolved incidents.</p>
           )}
 
-          {resolvedEvents.length ? (
+          {deferredDetails ? (
+            <DeferredDetails<DiagnosticsSnapshot["events"]>
+              title="View recent resolved events"
+              className="group mt-3"
+              compact
+              version={snapshot.generatedAt}
+              url="/api/admin/diagnostics?section=resolved"
+              initiallyOpen={Boolean(
+                selectedEventId && !unresolvedEvents.some((event) => event.id === selectedEventId)
+              )}
+            >
+              {(events) =>
+                events.length ? (
+                  <Card className="mt-2 overflow-hidden">
+                    <ul>
+                      {events.map((event) => (
+                        <EventRow key={event.id} event={event} selected={event.id === selectedEventId} />
+                      ))}
+                    </ul>
+                  </Card>
+                ) : (
+                  <p className="px-4 py-3 text-xs text-muted">No recent resolved incidents.</p>
+                )
+              }
+            </DeferredDetails>
+          ) : resolvedEvents.length ? (
             <details className="group mt-3" open={selectedResolvedEvent}>
               <summary className="flex cursor-pointer list-none items-center gap-2 px-1 text-xs text-muted [&::-webkit-details-marker]:hidden">
                 <span className="flex-1">View recent resolved events</span>

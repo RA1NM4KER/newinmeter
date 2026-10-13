@@ -14,12 +14,13 @@ export default async function AdminDiagnosticsPage({
   const auth = await requireAdminSession();
   if (!auth.ok) notFound();
 
-  const snapshot = await getDiagnosticsSnapshot();
+  const snapshot = await getDiagnosticsSnapshot(new Date(), { details: false });
   return (
     <>
       <PublishAdminDiagnosticsHealth health={snapshot.overview.overall} />
       <DiagnosticsPage
         snapshot={snapshot}
+        deferredDetails
         selectedConnectionId={searchParams?.connection}
         selectedEventId={searchParams?.event}
       />

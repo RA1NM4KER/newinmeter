@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as renderUi, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import type { DiagnosticConnection, DiagnosticsSnapshot } from "@/lib/diagnostics/data";
 
 vi.mock("./diagnostics-refresh-button", () => ({
@@ -9,6 +11,14 @@ vi.mock("./diagnostics-refresh-button", () => ({
 }));
 
 import { DiagnosticsPage } from "./diagnostics-page";
+
+function render(ui: ReactElement) {
+  return renderUi(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 function connection(
   id: string,
@@ -147,4 +157,25 @@ describe("DiagnosticsPage", () => {
     expect(screen.getByText("1 cold")).toBeTruthy();
     expect(screen.getAllByText("Cold").length).toBeGreaterThan(0);
   });
+});
+
+it("does not fetch or render hidden details until a section is expanded", async () => {
+  const data = snapshot();
+  data.events = data.events.filter((event) => !event.resolvedAt);
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([data.connections[0]]), { status: 200 }));
+  vi.stubGlobal("fetch", fetch);
+  try {
+    render(<DiagnosticsPage snapshot={data} deferredDetails />);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByText("healthy-user@example.test")).toBeNull();
+    expect(screen.queryByText("Recent sync history", { exact: false })).toBeNull();
+    const disclosure = screen.getByText("View all healthy connections").closest("details")!;
+    disclosure.open = true;
+    fireEvent(disclosure, new Event("toggle", { bubbles: true }));
+    await waitFor(() => expect(screen.getByText("healthy-user@example.test")).toBeTruthy());
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toContain("section=connections");
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

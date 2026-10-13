@@ -201,8 +201,13 @@ export function diagnosticsSnapshotToJson(snapshot: DiagnosticsSnapshot): string
 // Diagnostics route and System map. The shared admin layout never loads
 // this snapshot; each route owns its data requirements.
 export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapshot(
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { details?: boolean; overview?: boolean; connectionIds?: string[] } = {}
 ): Promise<DiagnosticsSnapshot> {
+  const withDetails = options.details !== false;
+  const withOverview = options.overview !== false;
+  const connectionFilter = options.connectionIds ? `&id=in.(${options.connectionIds.join(",")})` : "";
+  const captureFilter = options.connectionIds ? `&connection_id=in.(${options.connectionIds.join(",")})` : "";
   const [
     connectionRows,
     captureRows,
@@ -215,25 +220,31 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
     pausedConnectionRows
   ] = await Promise.all([
     adminSupabaseFetch<DiagnosticConnectionRow[]>(
-      `/livemopay_connections?select=${DIAGNOSTIC_CONNECTION_SELECT}` +
-        "&is_demo=eq.false&status=in.(connected,error,pending_selection)&order=updated_at.desc"
+      `/livemopay_connections?select=${withDetails ? DIAGNOSTIC_CONNECTION_SELECT : DIAGNOSTIC_CONNECTION_SELECT.replace(",sync_schedule_mode,reporting_model", "")}` +
+        "&is_demo=eq.false&status=in.(connected,error,pending_selection)&order=updated_at.desc" +
+        connectionFilter
     ),
     adminSupabaseFetch<CaptureRunRow[]>(
-      "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error,rows_fetched,rows_changed" +
-        "&order=started_at.desc&limit=500"
+      (withDetails
+        ? "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error,rows_fetched,rows_changed"
+        : "/capture_runs?select=connection_id,started_at,finished_at,status") +
+        "&order=started_at.desc&limit=500" +
+        captureFilter
     ),
     listAllAuthUsers(),
-    getSystemHealthStates(),
-    listRecentSystemEvents(40),
-    listUnresolvedSystemEvents(),
-    countPushSubscriptions(),
+    withOverview ? getSystemHealthStates() : Promise.resolve([]),
+    withOverview && withDetails ? listRecentSystemEvents(40) : Promise.resolve([]),
+    withOverview ? listUnresolvedSystemEvents() : Promise.resolve([]),
+    withOverview ? countPushSubscriptions() : Promise.resolve(0),
     // A plain count, company_id/tariff_profile are filter predicates in the
     // URL here, never part of a select= clause, so they're never returned
     // to or serialized by anything this function builds.
-    adminSupabaseCount(
-      `/livemopay_connections?select=id&is_demo=eq.false&status=eq.connected` +
-        `&company_id=eq.${NEWINBOSCH_COMPANY_ID}&tariff_profile=is.null`
-    ),
+    withOverview
+      ? adminSupabaseCount(
+          `/livemopay_connections?select=id&is_demo=eq.false&status=eq.connected` +
+            `&company_id=eq.${NEWINBOSCH_COMPANY_ID}&tariff_profile=is.null`
+        )
+      : Promise.resolve(0),
     // Same predicate claim_due_auto_sync_connections excludes on, evaluated
     // for the whole set in one call instead of one RPC per connection (see
     // auto_sync_paused_connection_ids's own migration comment).
@@ -259,7 +270,7 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
 
   const connections = Array.from(latestConnectionByUser.values()).map((row): DiagnosticConnection => {
     const runs = runsByConnection.get(row.id) ?? [];
-    const recentRuns = runs.slice(0, 8).map(toRun);
+    const recentRuns = withDetails ? runs.slice(0, 8).map(toRun) : [];
     const lastAttempt = runs[0] ?? null;
     const lastSuccess = runs.find((run) => run.status === "success") ?? null;
     const lastSuccessfulSyncAt = lastSuccess?.finished_at ?? row.last_synced_at;
@@ -284,14 +295,16 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
 
     const reporting = parseReportingModel(row.reporting_model);
     return {
-      reporting: {
-        mode: row.sync_schedule_mode ?? "shadow",
-        reason: reporting.reason,
-        predictedAt: reporting.predictedAt,
-        latestPublicationAt: reporting.latestPublicationAt,
-        energyConfidence: reporting.energy.confidence,
-        waterConfidence: reporting.water.confidence
-      },
+      reporting: withDetails
+        ? {
+            mode: row.sync_schedule_mode ?? "shadow",
+            reason: reporting.reason,
+            predictedAt: reporting.predictedAt,
+            latestPublicationAt: reporting.latestPublicationAt,
+            energyConfidence: reporting.energy.confidence,
+            waterConfidence: reporting.water.confidence
+          }
+        : undefined,
       id: row.id,
       userEmail: emailByUserId.get(row.user_id) ?? null,
       accountLabel: row.account_label,
@@ -372,7 +385,7 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
       tariffProfileMissingCount
     },
     connections,
-    events: events.map((event) => ({
+    events: (withDetails ? events : unresolvedEvents).map((event) => ({
       id: event.id,
       createdAt: event.createdAt,
       severity: event.severity,

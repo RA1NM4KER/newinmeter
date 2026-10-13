@@ -114,6 +114,13 @@ export async function listRecentSystemEvents(limit = 40): Promise<SystemEvent[]>
   return rows.map(toEvent);
 }
 
+export async function listRecentResolvedSystemEvents(): Promise<SystemEvent[]> {
+  const rows = await adminSupabaseFetch<SystemEventRow[]>(
+    `/system_events?select=${EVENT_SELECT}&resolved_at=not.is.null&order=created_at.desc&limit=40`
+  );
+  return rows.map(toEvent);
+}
+
 export async function listUnresolvedSystemEvents(): Promise<SystemEvent[]> {
   const rows = await adminSupabaseFetch<SystemEventRow[]>(
     `/system_events?select=${EVENT_SELECT}&resolved_at=is.null&order=created_at.desc`

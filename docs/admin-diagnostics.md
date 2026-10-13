@@ -18,6 +18,16 @@ LiveMopay password, upstream account/property/company/device ID, push endpoint/k
 key, VAPID private key, or cron secret. Error text and event metadata are sanitized at the storage
 and serialization boundaries.
 
+## Loading behavior
+
+The initial Diagnostics page loads health/outcome metadata and unresolved incidents. It does not
+fetch full sync histories, reporting models, or resolved incident history, and collapsed healthy
+connection details are not rendered. Expanding a connection or the healthy-connections section
+loads scoped details; expanding resolved incidents loads that history separately. Deep links open
+and load their requested section automatically. Refresh reloads any currently open detail sections.
+All detail requests retain server-side admin authorization and rate limiting. The default JSON
+snapshot and the System map retain their existing full-data behavior.
+
 ## Health rules
 
 ### Scheduler
