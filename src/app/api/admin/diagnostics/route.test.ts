@@ -69,3 +69,16 @@ it("loads healthy-list summaries without their hidden histories", async () => {
     details: false
   });
 });
+
+it("returns only status and timestamp for the navigation indicator", async () => {
+  mocks.requireAdminSession.mockResolvedValue({ ok: true, session: { userId: "admin" } });
+  mocks.getSnapshot.mockResolvedValue({
+    generatedAt: "2026-10-13T12:00:00Z",
+    overview: { overall: "healthy" },
+    connections: [{ id: "private" }],
+    events: []
+  });
+  const response = await GET(new Request("https://newinmeter.vercel.app/api/admin/diagnostics?section=health"));
+  expect(await response.json()).toEqual({ health: "healthy", checkedAt: "2026-10-13T12:00:00Z" });
+  expect(mocks.getSnapshot).toHaveBeenLastCalledWith(expect.any(Date), { details: false, indicator: true });
+});

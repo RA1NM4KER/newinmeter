@@ -80,3 +80,31 @@ it("does not fetch global health and incident data for an expanded connection", 
   expect(mocks.count).not.toHaveBeenCalled();
   expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining("&connection_id=in.(conn)"));
 });
+
+it("computes indicator health without Auth users, histories, or incident payloads", async () => {
+  mocks.health.mockResolvedValue([
+    {
+      component: "scheduler:auto-sync",
+      status: "healthy",
+      lastCheckedAt: now.toISOString(),
+      lastSuccessAt: now.toISOString()
+    },
+    {
+      component: "livemopay:canary",
+      status: "healthy",
+      lastCheckedAt: now.toISOString(),
+      lastSuccessAt: now.toISOString()
+    }
+  ]);
+  const indicator = await getDiagnosticsSnapshot(now, { indicator: true });
+  expect(indicator.overview.overall).toBe("healthy");
+  expect(mocks.users).not.toHaveBeenCalled();
+  expect(mocks.recent).not.toHaveBeenCalled();
+  expect(mocks.unresolved).not.toHaveBeenCalled();
+  expect(mocks.push).not.toHaveBeenCalled();
+  expect(mocks.count).toHaveBeenCalledWith("/system_events?select=id&severity=eq.critical&resolved_at=is.null");
+  const capturePath = mocks.fetch.mock.calls.find(([path]) => path.startsWith("/capture_runs"))![0];
+  expect(capturePath).not.toMatch(/rows_fetched|rows_changed|error/);
+  mocks.count.mockResolvedValue(1);
+  expect((await getDiagnosticsSnapshot(now, { indicator: true })).overview.overall).toBe("critical");
+});

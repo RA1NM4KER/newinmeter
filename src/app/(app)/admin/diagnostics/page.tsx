@@ -17,7 +17,7 @@ export default async function AdminDiagnosticsPage({
   const snapshot = await getDiagnosticsSnapshot(new Date(), { details: false });
   return (
     <>
-      <PublishAdminDiagnosticsHealth health={snapshot.overview.overall} />
+      <PublishAdminDiagnosticsHealth health={snapshot.overview.overall} checkedAt={snapshot.generatedAt} />
       <DiagnosticsPage
         snapshot={snapshot}
         deferredDetails

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as renderUi, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+function render(ui: ReactElement) {
+  return renderUi(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+}
 
 const mocks = vi.hoisted(() => ({
   requireAdminSession: vi.fn(),
@@ -14,6 +20,7 @@ vi.mock("@/components/admin/admin-section-tabs", () => ({
   AdminSectionTabs: () => <div data-testid="admin-tabs" />
 }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/admin",
   notFound: () => {
     mocks.notFound();
     throw new Error("NEXT_NOT_FOUND");
@@ -25,10 +32,15 @@ import AdminLayout from "./layout";
 describe("(app)/admin/layout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {}))
+    );
   });
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   // notFound(), not a redirect to /login -- an authenticated non-admin

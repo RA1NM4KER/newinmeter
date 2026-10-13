@@ -202,9 +202,10 @@ export function diagnosticsSnapshotToJson(snapshot: DiagnosticsSnapshot): string
 // this snapshot; each route owns its data requirements.
 export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapshot(
   now: Date = new Date(),
-  options: { details?: boolean; overview?: boolean; connectionIds?: string[] } = {}
+  options: { details?: boolean; overview?: boolean; connectionIds?: string[]; indicator?: boolean } = {}
 ): Promise<DiagnosticsSnapshot> {
-  const withDetails = options.details !== false;
+  const indicator = options.indicator === true;
+  const withDetails = !indicator && options.details !== false;
   const withOverview = options.overview !== false;
   const connectionFilter = options.connectionIds ? `&id=in.(${options.connectionIds.join(",")})` : "";
   const captureFilter = options.connectionIds ? `&connection_id=in.(${options.connectionIds.join(",")})` : "";
@@ -217,7 +218,8 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
     unresolvedEvents,
     activePushSubscriptions,
     tariffProfileMissingCount,
-    pausedConnectionRows
+    pausedConnectionRows,
+    criticalEventCount
   ] = await Promise.all([
     adminSupabaseFetch<DiagnosticConnectionRow[]>(
       `/livemopay_connections?select=${withDetails ? DIAGNOSTIC_CONNECTION_SELECT : DIAGNOSTIC_CONNECTION_SELECT.replace(",sync_schedule_mode,reporting_model", "")}` +
@@ -231,15 +233,15 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
         "&order=started_at.desc&limit=500" +
         captureFilter
     ),
-    listAllAuthUsers(),
+    indicator ? Promise.resolve([]) : listAllAuthUsers(),
     withOverview ? getSystemHealthStates() : Promise.resolve([]),
     withOverview && withDetails ? listRecentSystemEvents(40) : Promise.resolve([]),
-    withOverview ? listUnresolvedSystemEvents() : Promise.resolve([]),
-    withOverview ? countPushSubscriptions() : Promise.resolve(0),
+    withOverview && !indicator ? listUnresolvedSystemEvents() : Promise.resolve([]),
+    withOverview && !indicator ? countPushSubscriptions() : Promise.resolve(0),
     // A plain count, company_id/tariff_profile are filter predicates in the
     // URL here, never part of a select= clause, so they're never returned
     // to or serialized by anything this function builds.
-    withOverview
+    withOverview && !indicator
       ? adminSupabaseCount(
           `/livemopay_connections?select=id&is_demo=eq.false&status=eq.connected` +
             `&company_id=eq.${NEWINBOSCH_COMPANY_ID}&tariff_profile=is.null`
@@ -248,7 +250,10 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
     // Same predicate claim_due_auto_sync_connections excludes on, evaluated
     // for the whole set in one call instead of one RPC per connection (see
     // auto_sync_paused_connection_ids's own migration comment).
-    adminSupabaseRequest<{ connection_id: string }[]>("POST", "/rpc/auto_sync_paused_connection_ids", {})
+    adminSupabaseRequest<{ connection_id: string }[]>("POST", "/rpc/auto_sync_paused_connection_ids", {}),
+    indicator
+      ? adminSupabaseCount("/system_events?select=id&severity=eq.critical&resolved_at=is.null")
+      : Promise.resolve(null)
   ]);
 
   const pausedConnectionIds = new Set(pausedConnectionRows.map((row) => row.connection_id));
@@ -350,7 +355,8 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
     now
   );
   const connectionState = worstHealthState(connections.map((connection) => connection.health));
-  const unresolvedCriticalEvents = unresolvedEvents.filter((event) => event.severity === "critical").length;
+  const unresolvedCriticalEvents =
+    criticalEventCount ?? unresolvedEvents.filter((event) => event.severity === "critical").length;
   const overall = worstHealthState([
     scheduler.state,
     livemopay.state,

@@ -25,6 +25,8 @@ fetch full sync histories, reporting models, or resolved incident history, and c
 connection details are not rendered. Expanding a connection or the healthy-connections section
 loads scoped details; expanding resolved incidents loads that history separately. Deep links open
 and load their requested section automatically. Refresh reloads any currently open detail sections.
+The shared admin shell performs a client-side status-only check (`section=health`) after arrival, cached for one minute. It returns only overall health and its check time, using the same health rules without loading Auth user lists, reporting models, full run details, or incident payloads. It never blocks Users rendering; unknown/unavailable status is shown in grey.
+
 All detail requests retain server-side admin authorization and rate limiting. The default JSON
 snapshot and the System map retain their existing full-data behavior.
 

@@ -10,7 +10,7 @@ export type AdminSectionTabId = "users" | "features" | "engagement" | "system" |
 
 function tabs(
   diagnosticsHealth?: HealthState
-): Array<{ id: AdminSectionTabId; label: string; indicatorClassName?: string }> {
+): Array<{ id: AdminSectionTabId; label: string; indicatorClassName?: string; indicatorLabel?: string }> {
   return [
     { id: "users", label: "Users" },
     { id: "features", label: "Features" },
@@ -19,7 +19,8 @@ function tabs(
     {
       id: "diagnostics",
       label: "Diagnostics",
-      indicatorClassName: diagnosticsHealth ? healthDotClass[diagnosticsHealth] : undefined
+      indicatorClassName: diagnosticsHealth ? healthDotClass[diagnosticsHealth] : "bg-muted/50",
+      indicatorLabel: diagnosticsHealth ? `Health: ${diagnosticsHealth}` : "Health not checked or unavailable"
     }
   ];
 }

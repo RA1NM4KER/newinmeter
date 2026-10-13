@@ -20,6 +20,13 @@ export async function GET(request: Request) {
   if (rate.response) return rate.response;
 
   const params = new URL(request.url).searchParams;
+  if (params.get("section") === "health") {
+    const snapshot = await getDiagnosticsSnapshot(new Date(), { details: false, indicator: true });
+    return NextResponse.json(
+      { health: snapshot.overview.overall, checkedAt: snapshot.generatedAt },
+      { headers: rate.headers }
+    );
+  }
   if (params.get("section") === "connections") {
     const parsed = z
       .array(z.string().uuid())
