@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, prefetch: mocks.prefetch })
 }));
 
+import { AdminDiagnosticsHealthProvider, PublishAdminDiagnosticsHealth } from "./admin-diagnostics-health";
 import { AdminSectionTabs } from "./admin-section-tabs";
 
 describe("AdminSectionTabs", () => {
@@ -29,6 +30,29 @@ describe("AdminSectionTabs", () => {
 
     expect(screen.getByRole("tab", { name: "Features" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tab", { name: "Users" }).getAttribute("aria-selected")).toBe("false");
+    expect(mocks.prefetch).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("shows health only after Diagnostics publishes it, then retains and refreshes it without prefetching", () => {
+    function Shell({ health }: { health?: "healthy" | "critical" }) {
+      return (
+        <AdminDiagnosticsHealthProvider>
+          <AdminSectionTabs />
+          {health ? <PublishAdminDiagnosticsHealth health={health} /> : null}
+        </AdminDiagnosticsHealthProvider>
+      );
+    }
+    const { rerender } = render(<Shell />);
+    const tab = screen.getByRole("tab", { name: "Diagnostics" });
+    expect(tab.querySelector("span")).toBeNull();
+    rerender(<Shell health="healthy" />);
+    expect(tab.querySelector("span")?.className).toContain("bg-accent");
+    rerender(<Shell />);
+    expect(tab.querySelector("span")?.className).toContain("bg-accent");
+    rerender(<Shell health="critical" />);
+    expect(tab.querySelector("span")?.className).toContain("bg-red-500");
+    expect(mocks.prefetch).not.toHaveBeenCalled();
   });
 
   it("moves the underline immediately and navigates without scrolling the shell", () => {
@@ -40,14 +64,14 @@ describe("AdminSectionTabs", () => {
     expect(mocks.push).toHaveBeenCalledWith("/admin/diagnostics", { scroll: false });
   });
 
-  it("keeps Engagement in the shared shell and prefetches its route", () => {
+  it("loads Engagement only when selected", () => {
     render(<AdminSectionTabs />);
 
     fireEvent.click(screen.getByRole("tab", { name: "Engagement" }));
 
     expect(screen.getByRole("tab", { name: "Engagement" }).getAttribute("aria-selected")).toBe("true");
     expect(mocks.push).toHaveBeenCalledWith("/admin/engagement", { scroll: false });
-    expect(mocks.prefetch).toHaveBeenCalledWith("/admin/engagement");
+    expect(mocks.prefetch).not.toHaveBeenCalled();
   });
 
   it("navigates from Diagnostics back to Users through the same shell", () => {
@@ -63,7 +87,7 @@ describe("AdminSectionTabs", () => {
     mocks.pathname = "/admin/system";
     render(<AdminSectionTabs />);
     expect(screen.getByRole("tab", { name: "System" }).getAttribute("aria-selected")).toBe("true");
-    expect(mocks.prefetch).toHaveBeenCalledWith("/admin/system");
+    expect(mocks.prefetch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
     expect(mocks.push).toHaveBeenCalledWith("/admin/diagnostics", { scroll: false });
   });

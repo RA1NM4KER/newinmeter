@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PublishAdminDiagnosticsHealth } from "@/components/admin/admin-diagnostics-health";
 import { DiagnosticsPage } from "@/components/admin/diagnostics-page";
 import { requireAdminSession } from "@/lib/auth/session";
 import { getDiagnosticsSnapshot } from "@/lib/diagnostics/data";
@@ -15,10 +16,13 @@ export default async function AdminDiagnosticsPage({
 
   const snapshot = await getDiagnosticsSnapshot();
   return (
-    <DiagnosticsPage
-      snapshot={snapshot}
-      selectedConnectionId={searchParams?.connection}
-      selectedEventId={searchParams?.event}
-    />
+    <>
+      <PublishAdminDiagnosticsHealth health={snapshot.overview.overall} />
+      <DiagnosticsPage
+        snapshot={snapshot}
+        selectedConnectionId={searchParams?.connection}
+        selectedEventId={searchParams?.event}
+      />
+    </>
   );
 }

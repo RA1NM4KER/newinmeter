@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useAdminDiagnosticsHealth } from "./admin-diagnostics-health";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { healthDotClass, type HealthState } from "@/lib/diagnostics/health";
 
@@ -39,7 +40,8 @@ function tabFromPathname(pathname: string): AdminSectionTabId {
   return "users";
 }
 
-export function AdminSectionTabs({ diagnosticsHealth }: { diagnosticsHealth?: HealthState }) {
+export function AdminSectionTabs() {
+  const diagnosticsHealth = useAdminDiagnosticsHealth();
   const router = useRouter();
   const pathname = usePathname();
   const routeTab = tabFromPathname(pathname);
@@ -49,10 +51,6 @@ export function AdminSectionTabs({ diagnosticsHealth }: { diagnosticsHealth?: He
   useEffect(() => {
     if (pendingTab === routeTab) setPendingTab(null);
   }, [pendingTab, routeTab]);
-
-  useEffect(() => {
-    for (const href of Object.values(tabHref)) router.prefetch(href);
-  }, [router]);
 
   function change(id: AdminSectionTabId) {
     setPendingTab(id);

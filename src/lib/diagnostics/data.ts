@@ -197,10 +197,9 @@ export function diagnosticsSnapshotToJson(snapshot: DiagnosticsSnapshot): string
   return JSON.stringify(snapshot);
 }
 
-// Cached per request: the admin layout reads just overview.overall to color
-// the Diagnostics tab's status dot on every admin page, and the diagnostics
-// page itself reads the full snapshot -- cache() dedupes those into one
-// fetch instead of querying connections/capture_runs/auth users twice.
+// Cached per request for consumers that need diagnostics, including the
+// Diagnostics route and System map. The shared admin layout never loads
+// this snapshot; each route owns its data requirements.
 export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapshot(
   now: Date = new Date()
 ): Promise<DiagnosticsSnapshot> {

@@ -2,27 +2,27 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AdminSectionTabs } from "@/components/admin/admin-section-tabs";
 import { requireAdminSession } from "@/lib/auth/session";
-import { getDiagnosticsSnapshot } from "@/lib/diagnostics/data";
+import { AdminDiagnosticsHealthProvider } from "@/components/admin/admin-diagnostics-health";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const auth = await requireAdminSession();
   if (!auth.ok) notFound();
 
-  // Keep admin navigation available during a diagnostics outage. The System
-  // page can show its retry state without the parent layout failing first.
-  const snapshot = await getDiagnosticsSnapshot().catch(() => null);
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
-      <div className="hidden shrink-0 sm:block">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Admin</h1>
-        <p className="mt-1 text-sm text-muted">Manage users, feature access, product engagement, and system health.</p>
-      </div>
+    <AdminDiagnosticsHealthProvider>
+      <div className="flex min-h-0 flex-1 flex-col gap-5 pt-6">
+        <div className="hidden shrink-0 sm:block">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Admin</h1>
+          <p className="mt-1 text-sm text-muted">
+            Manage users, feature access, product engagement, and system health.
+          </p>
+        </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <AdminSectionTabs diagnosticsHealth={snapshot?.overview.overall} />
-        {children}
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <AdminSectionTabs />
+          {children}
+        </div>
       </div>
-    </div>
+    </AdminDiagnosticsHealthProvider>
   );
 }
