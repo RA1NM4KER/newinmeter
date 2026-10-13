@@ -11,6 +11,7 @@ import {
   refreshLiveMopaySession,
   type NewinmeterCsvRow
 } from "./web";
+import { observeReporting, reconciliationStartDate } from "./adaptive-schedule";
 import { resolveTariffBand } from "./tariff-profiles";
 
 const BATCH_SIZE = 500;
@@ -317,9 +318,8 @@ export function buildEnergyRowsUpsertBatch(
   });
 }
 
-async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string) {
+async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId: string, forceRefresh = false) {
   const syncedAt = nowIso();
-  const onConflict = encodeURIComponent("connection_id,charge_label,period_dt,cost,balance");
   const connectionRows = await retryTransientSupabaseOperation(() =>
     adminSupabaseFetch<Array<{ tariff_profile: string | null }>>(
       `/livemopay_connections?select=tariff_profile&id=eq.${encodeURIComponent(connectionId)}&limit=1`
@@ -341,16 +341,14 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
       continue;
     }
 
-    await retryTransientSupabaseOperation(() =>
-      adminSupabaseRequest(
-        "POST",
-        `/energy_rows?on_conflict=${onConflict}`,
-        batch,
-        "resolution=merge-duplicates,return=minimal"
-      )
+    total += await retryTransientSupabaseOperation(() =>
+      adminSupabaseRequest<number>("POST", "/rpc/upsert_changed_energy_rows", {
+        p_connection_id: connectionId,
+        p_run_id: runId,
+        p_rows: batch,
+        p_force_refresh: forceRefresh
+      })
     );
-
-    total += batch.length;
   }
 
   return total;
@@ -372,12 +370,27 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       await params.onRefreshTokenRotated(session.refreshToken);
     }
 
+    const [scheduleState] = await adminSupabaseFetch<
+      Array<{
+        reporting_model: unknown;
+        sync_schedule_mode: "shadow" | "adaptive";
+        last_reconciled_at: string | null;
+      }>
+    >(
+      `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
+    );
+    const reconciliation =
+      params.mode === "incremental" && scheduleState?.sync_schedule_mode === "adaptive"
+        ? reconciliationStartDate(scheduleState?.last_reconciled_at ?? null)
+        : null;
     const startDate =
       params.mode === "full"
         ? "2000-01-01"
         : params.mode === "restore"
           ? recentRestoreStartDate()
-          : (await latestPeriodDateForConnection(params.connectionId)) || `${currentNewinmeterLocalYear()}-01-01`;
+          : (reconciliation ??
+            (await latestPeriodDateForConnection(params.connectionId)) ??
+            `${currentNewinmeterLocalYear()}-01-01`);
 
     const rows = await fetchLiveMopayLedger({
       idToken: session.idToken,
@@ -392,8 +405,29 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
     // rows. Only touches energy_rows; user-owned Activities are untouched.
     const removedStaleRefunds = await deleteMisparsedRefundTopups(params.connectionId, refundTopupMatchers(rows));
 
-    const synced = await upsertRows(params.connectionId, rows, runId);
+    const synced = await upsertRows(params.connectionId, rows, runId, removedStaleRefunds > 0);
+    const model = observeReporting(scheduleState?.reporting_model, rows, params.connectionId);
+    await adminSupabaseRequest(
+      "PATCH",
+      `/capture_runs?id=eq.${encodeURIComponent(runId)}&status=eq.running`,
+      {
+        rows_fetched: rows.length,
+        rows_changed: synced + removedStaleRefunds,
+        upstream_latest_at: model.latestPublicationAt,
+        predicted_next_at: model.predictedAt
+      },
+      "return=minimal"
+    );
     await finishCaptureRun(runId, "success", { rowsSynced: synced });
+    await adminSupabaseRequest(
+      "PATCH",
+      `/livemopay_connections?id=eq.${encodeURIComponent(params.connectionId)}`,
+      {
+        reporting_model: model,
+        ...(reconciliation || params.mode !== "incremental" ? { last_reconciled_at: nowIso() } : {})
+      },
+      "return=minimal"
+    );
 
     const cleanupNote =
       removedStaleRefunds > 0 ? ` Removed ${removedStaleRefunds} stale mis-parsed refund row(s).` : "";
@@ -401,7 +435,10 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
     return {
       mode: params.mode,
       output: `Fetched ${rows.length} rows from LiveMopay. Synced ${synced} rows to Supabase.${cleanupNote}`,
-      rowsSynced: synced
+      rowsSynced: synced,
+      rowsFetched: rows.length,
+      rowsChanged: synced + removedStaleRefunds,
+      nextSyncAt: scheduleState?.sync_schedule_mode === "adaptive" ? model.predictedAt : null
     };
   } catch (error) {
     try {

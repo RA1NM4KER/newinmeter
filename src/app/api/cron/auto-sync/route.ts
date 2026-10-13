@@ -56,7 +56,7 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
       authTag: connection.refreshTokenAuthTag
     });
 
-    await runLivemopaySync({
+    const sync = await runLivemopaySync({
       connectionId: connection.id,
       accountId: connection.accountId,
       companyId: connection.companyId,
@@ -70,7 +70,8 @@ async function processClaimedConnection(connection: ClaimedAutoSyncConnection): 
       onRefreshTokenRotated: (newRefreshToken) => replaceConnectionRefreshToken(connection.id, newRefreshToken)
     });
 
-    await markAutoSyncSuccess(connection.id);
+    if (sync.nextSyncAt) await markAutoSyncSuccess(connection.id, sync.nextSyncAt);
+    else await markAutoSyncSuccess(connection.id);
     // Same guaranteed-fresh-rollups reasoning as the manual /api/sync hook;
     // never throws, never affects this connection's outcome either way.
     await evaluateAlertsAfterSync(connection.id, connection.userId);

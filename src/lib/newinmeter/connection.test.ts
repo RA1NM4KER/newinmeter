@@ -296,6 +296,7 @@ describe("newinmeter-connection auto-sync scheduling", () => {
   });
 
   it("records a retryable failure with a modest backoff and releases the claim", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([{ auto_sync_failure_streak: 0 }]);
     mocks.adminSupabaseRequest.mockResolvedValue(undefined);
     const before = Date.now();
     await markAutoSyncFailure("conn-auto", "network blip");
@@ -307,6 +308,26 @@ describe("newinmeter-connection auto-sync scheduling", () => {
     const minutesAhead = (new Date(payload.next_sync_at).getTime() - before) / 60_000;
     expect(minutesAhead).toBeGreaterThan(5);
     expect(minutesAhead).toBeLessThanOrEqual(60);
+  });
+
+  it("uses an adaptive prediction and resets failure backoff after success", async () => {
+    mocks.adminSupabaseRequest.mockResolvedValue(undefined);
+    await markAutoSyncSuccess("conn-auto", "2026-10-13T12:00:00.000Z");
+    expect(mocks.adminSupabaseRequest.mock.calls[0][2]).toMatchObject({
+      next_sync_at: "2026-10-13T12:00:00.000Z",
+      auto_sync_failure_streak: 0
+    });
+  });
+
+  it("backs off repeated failures to six hours", async () => {
+    mocks.adminSupabaseFetch.mockResolvedValue([{ auto_sync_failure_streak: 8 }]);
+    mocks.adminSupabaseRequest.mockResolvedValue(undefined);
+    const before = Date.now();
+    await markAutoSyncFailure("conn-auto", "upstream unavailable");
+    const payload = mocks.adminSupabaseRequest.mock.calls[0][2];
+    expect(payload.auto_sync_failure_streak).toBe(9);
+    expect((Date.parse(payload.next_sync_at) - before) / 60000).toBeGreaterThanOrEqual(360);
+    expect((Date.parse(payload.next_sync_at) - before) / 60000).toBeLessThan(361);
   });
 
   it("releasing a claim only clears sync_claimed_at, leaving next_sync_at untouched", async () => {
