@@ -119,7 +119,12 @@ function RunHistory({ runs }: { runs: DiagnosticSyncRun[] }) {
               <td className="py-2.5 pr-4 capitalize text-muted">{run.mode}</td>
               <td className="py-2.5 pr-4 capitalize text-ink">{run.status}</td>
               <td className="py-2.5 pr-4 text-muted">{duration(run.durationMs)}</td>
-              <td className="max-w-sm py-2.5 text-muted">{run.error ?? run.rowsSynced ?? "—"}</td>
+              <td className="max-w-sm py-2.5 text-muted">
+                {run.error ??
+                  (run.rowsFetched != null
+                    ? `${run.rowsFetched} fetched, ${run.rowsChanged ?? 0} changed`
+                    : (run.rowsSynced ?? "—"))}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -178,6 +183,20 @@ function ConnectionRow({ connection, selected }: { connection: DiagnosticConnect
             <span className="block text-muted">Next scheduled</span>
             <span className="text-ink">{when(connection.nextSyncAt)}</span>
           </div>
+          {connection.reporting ? (
+            <div className="col-span-2">
+              <span className="block text-muted">Reporting schedule · {connection.reporting.mode}</span>
+              <span className="text-ink">{connection.reporting.reason}</span>
+              <span className="block text-muted">
+                Electricity confidence {Math.round(connection.reporting.energyConfidence * 100)}%, water{" "}
+                {Math.round(connection.reporting.waterConfidence * 100)}%
+              </span>
+              <span className="block text-ink">
+                Latest upstream publication: {when(connection.reporting.latestPublicationAt)}
+              </span>
+              <span className="block text-ink">Predicted next fetch: {when(connection.reporting.predictedAt)}</span>
+            </div>
+          ) : null}
           {connection.dataState !== "warm" ? (
             <div>
               <span className="block text-muted">Data lifecycle</span>
@@ -326,7 +345,9 @@ export function DiagnosticsPage({
           <StatusRow
             label="Tariff profile"
             value={
-              <span className={`text-xs ${overview.tariffProfileMissingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted"}`}>
+              <span
+                className={`text-xs ${overview.tariffProfileMissingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted"}`}
+              >
                 {overview.tariffProfileMissingCount > 0
                   ? `${overview.tariffProfileMissingCount} connected Newinbosch account${overview.tariffProfileMissingCount === 1 ? "" : "s"} missing a profile`
                   : "None missing"}

@@ -688,9 +688,9 @@ export async function recoverStaleConnectionRestores(staleAfterMinutes: number):
 // reset -- see markConnectionSyncOutcome), sets the automatic-specific
 // success state, clears any stale automatic error, releases the scheduler
 // claim, and computes the next deterministic scheduled window.
-export async function markAutoSyncSuccess(connectionId: string): Promise<void> {
+export async function markAutoSyncSuccess(connectionId: string, predictedAt?: string): Promise<void> {
   const nowIso = new Date().toISOString();
-  const nextSyncAt = computeNextAutoSyncAt(connectionId, new Date()).toISOString();
+  const nextSyncAt = predictedAt ?? computeNextAutoSyncAt(connectionId, new Date()).toISOString();
 
   await adminSupabaseRequest(
     "PATCH",
@@ -701,6 +701,7 @@ export async function markAutoSyncSuccess(connectionId: string): Promise<void> {
       stale_notified_at: null,
       last_auto_sync_at: nowIso,
       last_auto_sync_status: "success",
+      auto_sync_failure_streak: 0,
       last_auto_sync_error: null,
       sync_claimed_at: null,
       next_sync_at: nextSyncAt,
@@ -718,7 +719,14 @@ export async function markAutoSyncSuccess(connectionId: string): Promise<void> {
 // 5-minute scheduler tick.
 export async function markAutoSyncFailure(connectionId: string, message: string): Promise<void> {
   const nowIso = new Date().toISOString();
-  const nextSyncAt = computeAutoSyncRetryAt(new Date()).toISOString();
+  const [state] = await adminSupabaseFetch<Array<{ auto_sync_failure_streak: number }>>(
+    `/livemopay_connections?select=auto_sync_failure_streak&id=eq.${encodeURIComponent(connectionId)}&limit=1`
+  );
+  const failureStreak = Math.min(20, (state?.auto_sync_failure_streak ?? 0) + 1);
+  const retryAt = computeAutoSyncRetryAt(new Date()).getTime();
+  const nextSyncAt = new Date(
+    retryAt + (Math.min(360, 30 * 2 ** Math.min(failureStreak - 1, 4)) - 30) * 60_000
+  ).toISOString();
 
   await adminSupabaseRequest(
     "PATCH",
@@ -727,6 +735,7 @@ export async function markAutoSyncFailure(connectionId: string, message: string)
       last_error: message,
       last_auto_sync_at: nowIso,
       last_auto_sync_status: "failed",
+      auto_sync_failure_streak: failureStreak,
       last_auto_sync_error: message,
       sync_claimed_at: null,
       next_sync_at: nextSyncAt,

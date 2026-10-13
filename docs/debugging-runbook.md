@@ -9,11 +9,11 @@ committed anywhere).
 
 ## The three systems and what each one is for
 
-| System | What it's for | Where to look |
-|---|---|---|
-| **Supabase** (project "Livenopay", ref `xpzpfmhkcbaqcnauqqzi`) | Auth, database, the unified log stream (auth, postgrest, postgres) | Supabase MCP tools (`execute_sql`, `query_logs`, `list_tables`), or the dashboard |
-| **Vercel** (project `newinmeter`, team scope `ra1nm4kers-projects`, domain `newinmeter.vercel.app`) | Hosting, deployments, serverless function/edge logs, cron jobs (the 3 in `vercel.json`) | `vercel` CLI (needs `--scope ra1nm4kers-projects` or it defaults to the wrong account) |
-| **Resend** (sending domain `kefas.co.za`) | Outbound transactional email (Supabase Auth's custom SMTP points here, see Supabase dashboard → Authentication → Emails → SMTP Settings) | resend.com dashboard: Emails (per-message delivery status), Domains (SPF/DKIM/DMARC record status) |
+| System                                                                                              | What it's for                                                                                                                            | Where to look                                                                                      |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Supabase** (project "Livenopay", ref `xpzpfmhkcbaqcnauqqzi`)                                      | Auth, database, the unified log stream (auth, postgrest, postgres)                                                                       | Supabase MCP tools (`execute_sql`, `query_logs`, `list_tables`), or the dashboard                  |
+| **Vercel** (project `newinmeter`, team scope `ra1nm4kers-projects`, domain `newinmeter.vercel.app`) | Hosting, deployments, serverless function/edge logs, cron jobs (the 3 in `vercel.json`)                                                  | `vercel` CLI (needs `--scope ra1nm4kers-projects` or it defaults to the wrong account)             |
+| **Resend** (sending domain `kefas.co.za`)                                                           | Outbound transactional email (Supabase Auth's custom SMTP points here, see Supabase dashboard → Authentication → Emails → SMTP Settings) | resend.com dashboard: Emails (per-message delivery status), Domains (SPF/DKIM/DMARC record status) |
 
 ## Given one user's email: trace their whole state
 
@@ -175,6 +175,12 @@ need to force a fresh full resync to backfill something that was fixed after the
 parser bug above), see "Replaying a sync manually" below, don't just tell the user to click Sync
 if the bug already ran and silently dropped data, a resync with the same buggy code changes
 nothing.
+
+## Meter reporting cadence and empty successful syncs
+
+A meter upgrade can change upstream publication frequency independently per house. Infer cadence from `source_ts` clusters, including zero-consumption intervals, rather than from kWh totals or the NewinMeter fetch timestamps. Stored gaps may instead reflect `auto_sync_is_paused_for_inactivity()` or cold storage, so check those states before attributing a gap to the meter. One directly inspected ledger released 3,380 historical electricity readings in a single posting batch after NewinMeter had already paused; a latest-period-only interpretation would have misdiagnosed that account. Adaptive predictions are stored in `reporting_model`, with `sync_schedule_mode` selecting shadow or adaptive operation. See `docs/adaptive-sync-operations.md` for budgets, reconciliation, and rollout controls.
+
+When a fetch returns only unchanged rows, `rows_changed = 0` skips rollup computation. The dashboard's `last_synced_at` lives in `dashboard_summary`, so updating the connection alone is insufficient. The separate `capture_runs_empty_sync_summary` trigger updates only successful-check metadata for these runs. Verified live against a zero-change fetch: the dashboard timestamp matched the latest successful capture run and the daily rollup totals still matched raw ledger records. If a failed run wrote records before finalization, the next ingestion treats records owned by that failed run as dirty so their affected dates get a successful refresh.
 
 ## Auth / login / OTP issues
 

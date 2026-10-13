@@ -10,7 +10,7 @@ export const healthDotClass: Record<HealthState, string> = {
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
-export const SCHEDULER_EXPECTED_INTERVAL_MINUTES = 5;
+export const SCHEDULER_EXPECTED_INTERVAL_MINUTES = 10;
 export const SCHEDULER_WARNING_AFTER_MINUTES = 15;
 export const SCHEDULER_CRITICAL_AFTER_MINUTES = 30;
 export const SYNC_CLAIM_STUCK_AFTER_MINUTES = 15;

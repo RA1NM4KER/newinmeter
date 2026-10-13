@@ -142,6 +142,18 @@ describe("POST /api/cron/auto-sync", () => {
     expect(body).toMatchObject({ claimed: 3, success: 2, retryable: 1 });
   });
 
+  it("schedules an adaptive account using its learned prediction", async () => {
+    mocks.claimDueAutoSyncConnections.mockResolvedValue([connection("a")]);
+    mocks.runLivemopaySync.mockResolvedValue({
+      mode: "incremental",
+      rowsSynced: 0,
+      nextSyncAt: "2026-10-13T12:00:00Z"
+    });
+    await POST(request());
+    expect(mocks.markAutoSyncSuccess).toHaveBeenCalledWith("a", "2026-10-13T12:00:00Z");
+    expect(mocks.evaluateAlertsAfterSync).toHaveBeenCalledWith("a", expect.any(String));
+  });
+
   it("records success and passes incremental mode with the correct connection fields", async () => {
     mocks.claimDueAutoSyncConnections.mockResolvedValue([connection("a")]);
     mocks.runLivemopaySync.mockResolvedValue({ mode: "incremental", output: "ok", rowsSynced: 1 });

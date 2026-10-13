@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { parseReportingModel } from "../newinmeter/adaptive-schedule";
 import { countPushSubscriptions } from "../push-subscriptions";
 import { adminSupabaseCount, adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import { listAllAuthUsers } from "../user-roles";
@@ -22,7 +23,7 @@ import {
 export const DIAGNOSTIC_CONNECTION_SELECT =
   "id,user_id,account_label,status,connected_at,last_synced_at,last_error,auto_sync_enabled,next_sync_at," +
   "last_auto_sync_at,last_auto_sync_status,last_auto_sync_error,sync_claimed_at," +
-  "data_state,hibernation_error,cold_at,restore_started_at,restore_error";
+  "data_state,hibernation_error,cold_at,restore_started_at,restore_error,sync_schedule_mode,reporting_model";
 
 // The one estate this app currently serves. Used only as a server-side
 // filter predicate for the count query below, never selected
@@ -32,6 +33,8 @@ export const DIAGNOSTIC_CONNECTION_SELECT =
 // test), a plain count doesn't cross that line, adding the column to the
 // connection select would.
 type DiagnosticConnectionRow = {
+  sync_schedule_mode?: "shadow" | "adaptive";
+  reporting_model?: unknown;
   id: string;
   user_id: string;
   account_label: string | null;
@@ -53,6 +56,8 @@ type DiagnosticConnectionRow = {
 };
 
 type CaptureRunRow = {
+  rows_fetched?: number | null;
+  rows_changed?: number | null;
   id: string;
   connection_id: string;
   started_at: string;
@@ -65,6 +70,8 @@ type CaptureRunRow = {
 };
 
 export type DiagnosticSyncRun = {
+  rowsFetched?: number | null;
+  rowsChanged?: number | null;
   id: string;
   startedAt: string;
   finishedAt: string | null;
@@ -77,6 +84,14 @@ export type DiagnosticSyncRun = {
 };
 
 export type DiagnosticConnection = {
+  reporting?: {
+    mode: "shadow" | "adaptive";
+    reason: string;
+    predictedAt: string | null;
+    latestPublicationAt: string | null;
+    energyConfidence: number;
+    waterConfidence: number;
+  };
   id: string;
   userEmail: string | null;
   accountLabel: string | null;
@@ -170,6 +185,8 @@ function toRun(row: CaptureRunRow): DiagnosticSyncRun {
     mode: row.mode,
     trigger: row.trigger,
     rowsSynced: row.rows_synced,
+    rowsFetched: row.rows_fetched ?? null,
+    rowsChanged: row.rows_changed ?? null,
     error: row.error ? sanitizeDiagnosticMessage(row.error) : null
   };
 }
@@ -201,7 +218,7 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
         "&is_demo=eq.false&status=in.(connected,error,pending_selection)&order=updated_at.desc"
     ),
     adminSupabaseFetch<CaptureRunRow[]>(
-      "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error" +
+      "/capture_runs?select=id,connection_id,started_at,finished_at,status,mode,trigger,rows_synced,error,rows_fetched,rows_changed" +
         "&order=started_at.desc&limit=500"
     ),
     listAllAuthUsers(),
@@ -264,7 +281,16 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
       now
     );
 
+    const reporting = parseReportingModel(row.reporting_model);
     return {
+      reporting: {
+        mode: row.sync_schedule_mode ?? "shadow",
+        reason: reporting.reason,
+        predictedAt: reporting.predictedAt,
+        latestPublicationAt: reporting.latestPublicationAt,
+        energyConfidence: reporting.energy.confidence,
+        waterConfidence: reporting.water.confidence
+      },
       id: row.id,
       userEmail: emailByUserId.get(row.user_id) ?? null,
       accountLabel: row.account_label,
@@ -327,7 +353,7 @@ export const getDiagnosticsSnapshot = cache(async function getDiagnosticsSnapsho
       scheduler: scheduler.state,
       schedulerReason: scheduler.reason,
       schedulerLastInvocationAt: schedulerState?.lastCheckedAt ?? null,
-      schedulerExpectedMinutes: 5,
+      schedulerExpectedMinutes: 10,
       connectionCount: connections.length,
       healthyConnections: connections.filter((connection) => connection.health === "healthy").length,
       needsAttentionConnections: connections.filter((connection) => connection.health !== "healthy").length,
