@@ -335,7 +335,7 @@ export function DiagnosticsPage({
           <StatusRow
             label="Data lifecycle"
             value={
-              <span className="text-xs text-muted">
+              <span className="inline-flex flex-wrap items-center gap-x-1 text-xs text-muted">
                 <span className="inline-flex items-center gap-1.5">
                   <LifecycleIcon lifecycle="active" />
                   {snapshot.connections.filter((connection) => connection.lifecycle === "active").length} active
