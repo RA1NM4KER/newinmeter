@@ -12,7 +12,8 @@ const dateTime = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "short"
 });
-export function InactiveFor({ user }: { user: Pick<AdminUserListItem, "lastActiveAt" | "inactivitySource"> }) {
+export function InactiveFor({ user }: { user: Pick<AdminUserListItem, "role" | "lastActiveAt" | "inactivitySource"> }) {
+  if (user.role === "admin") return <span className="text-xs text-muted">Not tracked · admin</span>;
   if (!user.lastActiveAt || !Number.isFinite(Date.parse(user.lastActiveAt)))
     return <span className="text-xs text-muted">Unknown</span>;
   const source =
