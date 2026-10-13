@@ -104,20 +104,21 @@ export function AdminUsersTable({ currentUserId, initialData }: AdminUsersTableP
     const rows = [...(data?.rows ?? [])];
     const dir = sortDirection === "asc" ? 1 : -1;
 
-    if (sortKey === "lastSync") {
-      // Users who have never synced sort to the bottom regardless of direction.
-      return rows.sort((a, b) => {
+    return rows.sort((a, b) => {
+      if (a.userId === currentUserId) return b.userId === currentUserId ? 0 : -1;
+      if (b.userId === currentUserId) return 1;
+      if (sortKey === "lastSync") {
+        // Other never-synced users stay at the bottom in either direction.
         const ta = a.lastRunAt ? Date.parse(a.lastRunAt) : null;
         const tb = b.lastRunAt ? Date.parse(b.lastRunAt) : null;
         if (ta === null && tb === null) return 0;
         if (ta === null) return 1;
         if (tb === null) return -1;
         return (ta - tb) * dir;
-      });
-    }
-
-    return rows.sort((a, b) => (Date.parse(a.createdAt) - Date.parse(b.createdAt)) * dir);
-  }, [data?.rows, sortKey, sortDirection]);
+      }
+      return (Date.parse(a.createdAt) - Date.parse(b.createdAt)) * dir;
+    });
+  }, [data?.rows, sortKey, sortDirection, currentUserId]);
   const total = data?.total ?? 0;
   const showTableSkeleton = isLoading;
   const selectedUser = selectedUserId ? (users.find((user) => user.userId === selectedUserId) ?? null) : null;

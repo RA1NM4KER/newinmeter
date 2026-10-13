@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AdminUserListItem } from "@/lib/user-roles";
+const sort = vi.hoisted(() => ({ key: "lastSync" as "lastSync" | "joined", direction: "desc" as "asc" | "desc" }));
 vi.mock("@/lib/url-state/use-admin-users-url-state", () => ({
   useAdminUsersUrlState: () => ({
-    sortKey: "lastSync",
-    sortDirection: "desc",
+    sortKey: sort.key,
+    sortDirection: sort.direction,
     onSortChange: vi.fn(),
     onSortKeyChange: vi.fn(),
     onSortDirectionChange: vi.fn()
@@ -60,5 +61,47 @@ it("does not immediately refetch SSR data and keeps rows visible during manual r
   complete(new Response(JSON.stringify({ rows: [{ ...user, email: "new@example.test" }], total: 1 }), { status: 200 }));
   await waitFor(() => expect(screen.getAllByText("new@example.test")).toHaveLength(2));
   expect(screen.queryByText("old@example.test")).toBeNull();
+  client.clear();
+});
+
+beforeEach(() => {
+  sort.key = "lastSync";
+  sort.direction = "desc";
+});
+it.each([
+  ["joined", "asc"],
+  ["joined", "desc"],
+  ["lastSync", "asc"],
+  ["lastSync", "desc"]
+] as const)("pins the current user before %s %s while preserving the remaining order", (key, direction) => {
+  sort.key = key;
+  sort.direction = direction;
+  const rows = [
+    {
+      ...user,
+      userId: "older",
+      email: "older@example.test",
+      createdAt: "2026-01-01T00:00:00Z",
+      lastRunAt: "2026-01-01T00:00:00Z"
+    },
+    {
+      ...user,
+      userId: "newer",
+      email: "newer@example.test",
+      createdAt: "2026-10-01T00:00:00Z",
+      lastRunAt: "2026-10-01T00:00:00Z"
+    },
+    { ...user, userId: "self", email: "self@example.test", createdAt: "2026-06-01T00:00:00Z", lastRunAt: null }
+  ];
+  const client = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={client}>
+      <AdminUsersTable currentUserId="self" initialData={{ rows, total: rows.length }} />
+    </QueryClientProvider>
+  );
+  const tableRows = Array.from(container.querySelectorAll("tbody tr"));
+  expect(tableRows[0].textContent).toContain("self@example.test");
+  expect(tableRows[1].textContent).toContain(direction === "asc" ? "older@example.test" : "newer@example.test");
+  expect(container.querySelector(".sm\\:hidden .divide-y")?.textContent?.indexOf("self@example.test")).toBe(0);
   client.clear();
 });
