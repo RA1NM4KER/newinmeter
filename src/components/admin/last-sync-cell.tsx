@@ -42,7 +42,7 @@ const lastRunDotClass: Record<CaptureRunStatus, string> = {
   running: "bg-amber-500"
 };
 
-export function LastSyncCell({ user }: { user: AdminUserListItem }) {
+export function LastSyncCell({ user, showExactTime = false }: { user: AdminUserListItem; showExactTime?: boolean }) {
   if (!user.lastRunStatus || !user.lastRunAt) {
     return <span className="text-xs text-muted">No sync yet</span>;
   }
@@ -50,15 +50,21 @@ export function LastSyncCell({ user }: { user: AdminUserListItem }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs text-ink"
-      title={`${syncDateTime.format(new Date(user.lastRunAt))} SAST${user.lastRunStatus === "failed" ? ` · ${user.lastRunError ?? "Sync failed"}` : ""}`}
+      title={
+        showExactTime
+          ? `${syncDateTime.format(new Date(user.lastRunAt))} SAST${user.lastRunStatus === "failed" ? ` · ${user.lastRunError ?? "Sync failed"}` : ""}`
+          : user.lastRunStatus === "failed"
+            ? (user.lastRunError ?? "Sync failed")
+            : undefined
+      }
     >
       {user.lastRunStatus === "success" && user.connectionLifecycle ? (
         <LifecycleIcon lifecycle={user.connectionLifecycle} />
       ) : (
         <span className={`h-1.5 w-1.5 rounded-full ${lastRunDotClass[user.lastRunStatus]}`} aria-hidden="true" />
       )}
-      {lastRunLabel[user.lastRunStatus]} · {formatRelativeTime(user.lastRunAt)} ·{" "}
-      {syncTime.format(new Date(user.lastRunAt))}
+      {lastRunLabel[user.lastRunStatus]} · {formatRelativeTime(user.lastRunAt)}
+      {showExactTime ? ` · ${syncTime.format(new Date(user.lastRunAt))}` : ""}
     </span>
   );
 }

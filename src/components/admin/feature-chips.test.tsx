@@ -12,6 +12,8 @@ function user(overrides: Partial<AdminUserListItem["features"]> = {}): AdminUser
     email: "user@example.com",
     createdAt: "2026-01-01T00:00:00.000Z",
     features: { ai: rollout, activities: rollout, live: rollout, alerts: rollout, ...overrides },
+    lastActiveAt: null,
+    inactivitySource: null,
     connectionStatus: null,
     connectionLifecycle: null,
     lastRunStatus: null,

@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import type { AdminUserListItem, UserRole } from "@/lib/user-roles";
 import { FEATURES } from "@/lib/newinmeter/features-shared";
 import { ConnectionStatusBadge } from "./connection-status-badge";
+import { InactiveFor } from "./inactive-for";
 import { AutoSyncStatus } from "./auto-sync-status";
 import { LastSyncCell } from "./last-sync-cell";
 import type { FeatureDraft, ManageDrawerProps } from "./types";
@@ -182,10 +183,13 @@ export function ManageDrawer({
                 <ConnectionStatusBadge status={user.connectionStatus} />
               </InfoRow>
               <InfoRow label="Last sync">
-                <LastSyncCell user={user} />
+                <LastSyncCell user={user} showExactTime />
               </InfoRow>
               <InfoRow label="Auto-sync">
                 <AutoSyncStatus user={user} />
+              </InfoRow>
+              <InfoRow label="Inactive for">
+                <InactiveFor user={user} />
               </InfoRow>
             </div>
           </section>

@@ -84,6 +84,8 @@ export type AdminUserListItem = UserPermissions & {
   nextSyncAt: string | null;
   lastAutoSyncStatus: "success" | "failed" | null;
   lastAutoSyncAt: string | null;
+  lastActiveAt: string | null;
+  inactivitySource: "foreground" | "sign_in" | "connection" | null;
 };
 
 type ConnectionRow = {
@@ -91,6 +93,7 @@ type ConnectionRow = {
   user_id: string;
   status: LivemopayConnectionStatus;
   updated_at: string;
+  connected_at: string;
   data_state: ConnectionDataState;
   last_synced_at: string | null;
   auto_sync_enabled: boolean;
@@ -144,17 +147,19 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
   });
   // Independent reads overlap; feature access depends only on Auth user IDs.
   // The embedded limit applies per connection, using the existing history index.
-  const [data, roleRows, connectionRows, pausedRows, featureAccessByUserId] = await Promise.all([
+  const [data, roleRows, connectionRows, pausedRows, featureAccessByUserId, activityRows] = await Promise.all([
     usersPromise,
     adminSupabaseFetch<UserRoleRow[]>(`/user_roles?select=${SELECT}`),
     adminSupabaseFetch<ConnectionRow[]>(
-      "/livemopay_connections?select=id,user_id,status,updated_at,data_state,last_synced_at,auto_sync_enabled,next_sync_at," +
+      "/livemopay_connections?select=id,user_id,status,updated_at,connected_at,data_state,last_synced_at,auto_sync_enabled,next_sync_at," +
         "last_auto_sync_status,last_auto_sync_at,capture_runs(id,connection_id,status,started_at,finished_at,rows_synced,error)" +
         "&capture_runs.order=started_at.desc,id.desc&capture_runs.limit=1&order=updated_at.desc,id.desc"
     ),
     adminSupabaseRequest<{ connection_id: string }[]>("POST", "/rpc/auto_sync_paused_connection_ids", {}),
-    usersPromise.then(({ users }) => getFeatureAccessForUsers(users.map((user) => user.id)))
+    usersPromise.then(({ users }) => getFeatureAccessForUsers(users.map((user) => user.id))),
+    adminSupabaseRequest<{ user_id: string; last_seen_at: string }[]>("POST", "/rpc/admin_user_last_activity", {})
   ]);
+  const activityByUserId = new Map(activityRows.map((row) => [row.user_id, row.last_seen_at]));
   const roleByUserId = new Map(roleRows.map((row) => [row.user_id, toPermissions(row)]));
   const pausedIds = new Set(pausedRows.map((row) => row.connection_id));
   const currentConnectionByUserId = new Map<string, ConnectionRow>();
@@ -191,6 +196,19 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
       // Successful sync metadata survives ledger purging and missing capture history.
       // Do not use connection update/cold timestamps as invented sync timestamps.
       const retainedSuccessAt = connection?.last_synced_at ?? null;
+      const foregroundAt = activityByUserId.get(user.id);
+      const signInAt = user.last_sign_in_at ?? null;
+      const connectedAt = connection?.connected_at ?? null;
+      const useConnection = connectedAt && (!signInAt || Date.parse(connectedAt) > Date.parse(signInAt));
+      const fallbackAt = useConnection ? connectedAt : signInAt;
+      const lastActiveAt = foregroundAt ?? fallbackAt;
+      const inactivitySource = foregroundAt
+        ? ("foreground" as const)
+        : fallbackAt
+          ? useConnection
+            ? ("connection" as const)
+            : ("sign_in" as const)
+          : null;
 
       return {
         userId: user.id,
@@ -209,7 +227,9 @@ export async function listAllUserPermissions(): Promise<AdminUserListItem[]> {
         autoSyncEnabled: autoSyncByUserId.get(user.id)?.auto_sync_enabled ?? null,
         nextSyncAt: autoSyncByUserId.get(user.id)?.next_sync_at ?? null,
         lastAutoSyncStatus: autoSyncByUserId.get(user.id)?.last_auto_sync_status ?? null,
-        lastAutoSyncAt: autoSyncByUserId.get(user.id)?.last_auto_sync_at ?? null
+        lastAutoSyncAt: autoSyncByUserId.get(user.id)?.last_auto_sync_at ?? null,
+        lastActiveAt,
+        inactivitySource
       };
     })
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));

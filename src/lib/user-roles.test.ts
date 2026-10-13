@@ -30,6 +30,7 @@ function connection(id: string, extra = {}) {
     user_id: id,
     status: "connected",
     updated_at: at,
+    connected_at: at,
     data_state: "warm",
     last_synced_at: null,
     auto_sync_enabled: true,
@@ -65,7 +66,11 @@ function setup(connections: ReturnType<typeof connection>[], runs: unknown[] = [
   );
   mocks.pages.mockResolvedValue(runs);
   mocks.features.mockResolvedValue(new Map());
-  mocks.request.mockResolvedValue([{ connection_id: "paused" }, { connection_id: "cold" }]);
+  mocks.request.mockImplementation((_method, path) =>
+    Promise.resolve(
+      path === "/rpc/admin_user_last_activity" ? [] : [{ connection_id: "paused" }, { connection_id: "cold" }]
+    )
+  );
 }
 describe("admin sync history and lifecycle", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -124,6 +129,40 @@ describe("admin sync history and lifecycle", () => {
     resolveUsers({ data: { users: [{ id: "active", email: "active@example.test", created_at: at }] }, error: null });
     await result;
     expect(mocks.features).toHaveBeenCalledWith(["active"]);
+  });
+  it("uses foreground activity even when sign-in is newer", async () => {
+    setup([connection("active")]);
+    mocks.users.mockResolvedValue({
+      data: { users: [{ id: "active", created_at: at, last_sign_in_at: "2026-10-13T12:00:00Z" }] },
+      error: null
+    });
+    mocks.request.mockImplementation((_method, path) =>
+      Promise.resolve(
+        path === "/rpc/admin_user_last_activity" ? [{ user_id: "active", last_seen_at: "2026-10-01T12:00:00Z" }] : []
+      )
+    );
+    expect((await listAllUserPermissions())[0]).toMatchObject({
+      lastActiveAt: "2026-10-01T12:00:00Z",
+      inactivitySource: "foreground"
+    });
+  });
+  it("falls back to the later sign-in or connection time and leaves missing evidence unknown", async () => {
+    setup([connection("active"), connection("unknown", { connected_at: null })]);
+    mocks.users.mockResolvedValue({
+      data: {
+        users: [
+          { id: "active", created_at: at, last_sign_in_at: "2026-10-13T12:00:00Z" },
+          { id: "unknown", created_at: at }
+        ]
+      },
+      error: null
+    });
+    const rows = await listAllUserPermissions();
+    expect(rows.find((r) => r.userId === "active")).toMatchObject({
+      lastActiveAt: "2026-10-13T12:00:00Z",
+      inactivitySource: "sign_in"
+    });
+    expect(rows.find((r) => r.userId === "unknown")).toMatchObject({ lastActiveAt: null, inactivitySource: null });
   });
   it("uses preserved successful sync metadata when history is absent, without inventing row counts", async () => {
     setup([connection("cold", { data_state: "cold", last_synced_at: at })]);

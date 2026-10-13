@@ -52,9 +52,26 @@ describe("admin lifecycle indicators", () => {
             connectionLifecycle: "active"
           } as AdminUserListItem
         }
+        showExactTime
       />
     );
     expect(screen.getByText("Synced · 41m ago · 20:19").getAttribute("title")).toBe("13 Oct 2026, 20:19 SAST");
+  });
+  it("keeps the table label relative-only by default", () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-13T19:00:00Z"));
+    render(
+      <LastSyncCell
+        user={
+          {
+            lastRunStatus: "success",
+            lastRunAt: "2026-10-13T18:19:00Z",
+            connectionLifecycle: "active"
+          } as AdminUserListItem
+        }
+      />
+    );
+    expect(screen.getByText("Synced · 41m ago").getAttribute("title")).toBeNull();
+    expect(screen.queryByText(/20:19/)).toBeNull();
   });
   it("retains the never-synced label without a known timestamp", () => {
     render(

@@ -16,6 +16,8 @@ vi.mock("./manage-drawer", () => ({ ManageDrawer: () => null }));
 import { AdminUsersTable } from "./admin-users-table";
 const disabled = { enabled: false, source: "rollout" as const };
 const user: AdminUserListItem = {
+  lastActiveAt: null,
+  inactivitySource: null,
   userId: "user",
   email: "old@example.test",
   createdAt: "2026-01-01T00:00:00Z",
