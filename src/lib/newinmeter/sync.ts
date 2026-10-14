@@ -1,5 +1,6 @@
 import "server-only";
 
+import { checkRequestBudget, withRequestBudget } from "../request-budget";
 import { randomUUID } from "node:crypto";
 import { adminSupabaseFetch, adminSupabaseRequest } from "../supabase-rest";
 import {
@@ -36,13 +37,17 @@ const TRANSIENT_SUPABASE_RETRY_DELAY_MS = 250;
 // operations that are naturally idempotent, or after reconciling their state.
 function isTransientSupabaseError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return /\b(502|503|504)\b|gateway timeout|fetch failed|network/i.test(message);
+  return (
+    (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) ||
+    /\b(502|503|504)\b|gateway timeout|fetch failed|network/i.test(message)
+  );
 }
 
 async function retryTransientSupabaseOperation<T>(operation: () => Promise<T>): Promise<T> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt < TRANSIENT_SUPABASE_RETRY_ATTEMPTS; attempt += 1) {
+    checkRequestBudget();
     try {
       return await operation();
     } catch (error) {
@@ -51,6 +56,7 @@ async function retryTransientSupabaseOperation<T>(operation: () => Promise<T>): 
         throw error;
       }
 
+      checkRequestBudget();
       await new Promise((resolve) => setTimeout(resolve, TRANSIENT_SUPABASE_RETRY_DELAY_MS * 2 ** attempt));
     }
   }
@@ -355,6 +361,7 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
   let total = 0;
 
   for (let index = 0; index < rows.length; index += BATCH_SIZE) {
+    checkRequestBudget();
     const batch = buildEnergyRowsUpsertBatch(
       connectionId,
       rows.slice(index, index + BATCH_SIZE),
@@ -368,6 +375,15 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
       continue;
     }
 
+    const started = Date.now();
+    const batchNumber = Math.floor(index / BATCH_SIZE) + 1;
+    console.info("newinmeter_sync_batch", {
+      connectionId,
+      runId,
+      batch: batchNumber,
+      rows: batch.length,
+      event: "started"
+    });
     total += await retryTransientSupabaseOperation(() =>
       adminSupabaseRequest<number>("POST", "/rpc/upsert_changed_energy_rows", {
         p_connection_id: connectionId,
@@ -376,6 +392,13 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
         p_force_refresh: forceRefresh
       })
     );
+    console.info("newinmeter_sync_batch", {
+      connectionId,
+      runId,
+      batch: batchNumber,
+      event: "finished",
+      durationMs: Date.now() - started
+    });
   }
 
   return total;
@@ -385,27 +408,66 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
 // Id tokens are never persisted, so every sync starts by refreshing the
 // LiveMopay session from the connection's stored (encrypted) refresh token.
 export async function runLivemopaySync(params: LivemopaySyncParams) {
-  const runId = await startCaptureRun(params.connectionId, params.mode, params.trigger);
-  if (!runId) {
-    throw new Error("Failed to create capture run.");
-  }
+  let runId: string | undefined;
+  const stage = async <T>(
+    name: string,
+    operation: () => Promise<T>,
+    fields: Record<string, number | string | boolean> = {}
+  ): Promise<T> => {
+    const started = Date.now();
+    console.info("newinmeter_sync_stage", {
+      connectionId: params.connectionId,
+      runId,
+      stage: name,
+      event: "started",
+      ...fields
+    });
+    try {
+      const value = await operation();
+      console.info("newinmeter_sync_stage", {
+        connectionId: params.connectionId,
+        runId,
+        stage: name,
+        event: "finished",
+        durationMs: Date.now() - started,
+        ...fields
+      });
+      return value;
+    } catch (error) {
+      console.warn("newinmeter_sync_stage", {
+        connectionId: params.connectionId,
+        runId,
+        stage: name,
+        event: "failed",
+        durationMs: Date.now() - started,
+        errorName: error instanceof Error ? error.name : "Unknown",
+        ...fields
+      });
+      throw error;
+    }
+  };
+  const work = async () => {
+    runId = await stage("start", () => startCaptureRun(params.connectionId, params.mode, params.trigger));
+    if (!runId) throw new Error("Failed to create capture run.");
+    const activeRunId = runId;
 
-  try {
-    const session = await refreshLiveMopaySession(params.refreshToken);
+    const session = await stage("session", () => refreshLiveMopaySession(params.refreshToken));
 
     if (session.refreshToken !== params.refreshToken) {
-      await params.onRefreshTokenRotated(session.refreshToken);
+      await stage("token-persistence", () => params.onRefreshTokenRotated(session.refreshToken));
     }
 
-    const [scheduleState] = await adminSupabaseFetch<
-      Array<{
-        reporting_model: unknown;
-        sync_schedule_mode: "shadow" | "adaptive";
-        last_reconciled_at: string | null;
-        auto_sync_enabled: boolean;
-      }>
-    >(
-      `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at,auto_sync_enabled&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
+    const [scheduleState] = await stage("schedule-state", () =>
+      adminSupabaseFetch<
+        Array<{
+          reporting_model: unknown;
+          sync_schedule_mode: "shadow" | "adaptive";
+          last_reconciled_at: string | null;
+          auto_sync_enabled: boolean;
+        }>
+      >(
+        `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at,auto_sync_enabled&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
+      )
     );
     const reconciliation =
       params.mode === "incremental" && scheduleState?.sync_schedule_mode === "adaptive"
@@ -420,46 +482,61 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
             (await latestPeriodDateForConnection(params.connectionId)) ??
             `${currentNewinmeterLocalYear()}-01-01`);
 
-    const rows = await fetchLiveMopayLedger({
-      idToken: session.idToken,
-      accountId: params.accountId,
-      companyId: params.companyId,
-      propertyId: params.propertyId,
-      startDate
-    });
+    const rows = await stage(
+      "ledger",
+      () =>
+        fetchLiveMopayLedger({
+          idToken: session.idToken,
+          accountId: params.accountId,
+          companyId: params.companyId,
+          propertyId: params.propertyId,
+          startDate
+        }),
+      { reconciliation: Boolean(reconciliation), startDate }
+    );
 
     // Remove any stale "Top Up" rows that the old parser mislabelled but
     // LiveMopay now reports as refunds, before inserting the corrected refund
     // rows. Only touches energy_rows; user-owned Activities are untouched.
-    const removedStaleRefunds = await deleteMisparsedRefundTopups(params.connectionId, refundTopupMatchers(rows));
-
-    const synced = await upsertRows(params.connectionId, rows, runId, removedStaleRefunds > 0);
-    const model = observeReporting(scheduleState?.reporting_model, rows, params.connectionId);
-    await adminSupabaseRequest(
-      "PATCH",
-      `/capture_runs?id=eq.${encodeURIComponent(runId)}&status=eq.running`,
-      {
-        rows_fetched: rows.length,
-        rows_changed: synced + removedStaleRefunds,
-        upstream_latest_at: model.latestPublicationAt,
-        predicted_next_at: model.predictedAt
-      },
-      "return=minimal"
+    const removedStaleRefunds = await stage("refund-cleanup", () =>
+      deleteMisparsedRefundTopups(params.connectionId, refundTopupMatchers(rows))
     );
-    await finishCaptureRun(runId, "success", { rowsSynced: synced });
-    await adminSupabaseRequest(
-      "PATCH",
-      `/livemopay_connections?id=eq.${encodeURIComponent(params.connectionId)}`,
-      {
-        reporting_model: model,
-        ...(params.trigger === "manual" &&
-        scheduleState?.sync_schedule_mode === "adaptive" &&
-        scheduleState.auto_sync_enabled
-          ? { next_sync_at: model.predictedAt }
-          : {}),
-        ...(reconciliation || params.mode !== "incremental" ? { last_reconciled_at: nowIso() } : {})
-      },
-      "return=minimal"
+
+    const synced = await stage(
+      "upsert",
+      () => upsertRows(params.connectionId, rows, activeRunId, removedStaleRefunds > 0),
+      { rows: rows.length, batches: Math.ceil(rows.length / BATCH_SIZE) }
+    );
+    const model = observeReporting(scheduleState?.reporting_model, rows, params.connectionId);
+    await stage("capture-metadata", () =>
+      adminSupabaseRequest(
+        "PATCH",
+        `/capture_runs?id=eq.${encodeURIComponent(activeRunId)}&status=eq.running`,
+        {
+          rows_fetched: rows.length,
+          rows_changed: synced + removedStaleRefunds,
+          upstream_latest_at: model.latestPublicationAt,
+          predicted_next_at: model.predictedAt
+        },
+        "return=minimal"
+      )
+    );
+    await stage("finalize", () => finishCaptureRun(activeRunId, "success", { rowsSynced: synced }));
+    await stage("connection-metadata", () =>
+      adminSupabaseRequest(
+        "PATCH",
+        `/livemopay_connections?id=eq.${encodeURIComponent(params.connectionId)}`,
+        {
+          reporting_model: model,
+          ...(params.trigger === "manual" &&
+          scheduleState?.sync_schedule_mode === "adaptive" &&
+          scheduleState.auto_sync_enabled
+            ? { next_sync_at: model.predictedAt }
+            : {}),
+          ...(reconciliation || params.mode !== "incremental" ? { last_reconciled_at: nowIso() } : {})
+        },
+        "return=minimal"
+      )
     );
 
     const cleanupNote =
@@ -473,9 +550,19 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       rowsChanged: synced + removedStaleRefunds,
       nextSyncAt: scheduleState?.sync_schedule_mode === "adaptive" ? model.predictedAt : null
     };
+  };
+  try {
+    // Manual/full/restore callers retain their existing execution policy.
+    return await (params.trigger === "auto" ? withRequestBudget(90_000, work) : work());
   } catch (error) {
+    if (!runId) throw error;
+    const failedRunId = runId;
     try {
-      await finishCaptureRun(runId, "failed", { error: error instanceof Error ? error.message : String(error) });
+      const cleanup = () =>
+        finishCaptureRun(failedRunId, "failed", { error: error instanceof Error ? error.message : String(error) });
+      await stage("failure-cleanup", () =>
+        params.trigger === "auto" ? withRequestBudget(10_000, cleanup) : cleanup()
+      );
     } catch (finalizeError) {
       // Preserve the original cause. The stale-run recovery job will close an
       // inconclusive failure after its lease expires instead of leaving the

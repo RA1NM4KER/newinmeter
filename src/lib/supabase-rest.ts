@@ -2,6 +2,8 @@ import "server-only";
 
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "./env";
 
+import { fetchWithRequestBudget } from "./request-budget";
+
 const PAGE_SIZE = 1000;
 
 function restUrl() {
@@ -88,7 +90,7 @@ export async function adminSupabaseRawResponse(
 ): Promise<Response> {
   const key = getSupabaseServiceRoleKey();
 
-  return fetch(`${restUrl()}${path}`, {
+  return fetchWithRequestBudget(`${restUrl()}${path}`, {
     method,
     signal,
     headers: {

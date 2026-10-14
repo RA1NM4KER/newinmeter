@@ -50,7 +50,7 @@ vi.mock("@/lib/token-encryption", async () => {
 
 import { SyncAlreadyRunningError } from "@/lib/newinmeter/sync";
 import { TokenDecryptionError } from "@/lib/token-encryption";
-import { POST } from "./route";
+import { POST, maxDuration } from "./route";
 
 const CRON_SECRET = "test-cron-secret";
 
@@ -109,6 +109,8 @@ describe("POST /api/cron/auto-sync", () => {
 
     expect(body).toMatchObject({ ok: true, claimed: 0 });
     expect(mocks.runLivemopaySync).not.toHaveBeenCalled();
+    expect(mocks.claimDueAutoSyncConnections).toHaveBeenCalledWith(4, 10);
+    expect(maxDuration).toBe(120);
   });
 
   it("recovers abandoned capture runs before claiming new work", async () => {

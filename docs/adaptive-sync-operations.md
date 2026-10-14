@@ -22,6 +22,14 @@ Retries after lost HTTP responses count writes already owned by the current run.
 
 Capture runs record `rows_fetched`, `rows_changed`, `upstream_latest_at`, `predicted_next_at`, and existing timestamps for duration. `rows_synced` now counts rows written rather than every row submitted. Admin diagnostics show shadow/adaptive mode, prediction reason, confidence, latest upstream publication, next predicted fetch, and fetched/changed counts separately from the last successful check.
 
+## Worker execution budgets
+
+The worker's Vercel ceiling is 120 seconds, within the existing pg_net 120-second request timeout. It claims at most four accounts per invocation, matching its concurrency of four: one wave of work, with further due accounts picked up on later five-minute ticks. The request-local invocation budget is 110 seconds, automatic sync work is limited to 90 seconds, and individual LiveMopay/Supabase requests are limited to 20 seconds. Push delivery uses the remaining request budget as its native HTTP timeout. Nested budgets cannot exceed the invocation deadline and are isolated between concurrent requests/accounts using AsyncLocalStorage.
+
+An automatic work deadline leaves the parent budget available for up to ten seconds of failure finalization. Requests are cancelled through AbortSignal rather than abandoned using Promise.race. A cancelled database request may nevertheless commit; existing idempotent upserts, finalization reconciliation and terminal-status guards remain essential. Only fully completed reconciliation advances last_reconciled_at. If cleanup cannot be confirmed, the existing fifteen-minute stale-run recovery still applies; the ten-minute claim lease, rolling daily fetch cap, inactivity/cold exclusions, and electricity scheduling rules remain unchanged. Manual/full/restore work retains its previous execution policy outside the cron budget.
+
+`newinmeter_sync_stage` logs stage start/finish/failure and elapsed milliseconds; `newinmeter_sync_batch` adds batch progress for ingestion. They include connection/run identifiers and counts, never tokens, ledger payloads, upstream identities or request URLs. These timings distinguish session refresh, ledger fetch, batch ingestion, metadata persistence and finalization delays. The October 14 interruption was confirmed by a platform 60-second timeout; the exact stalled request was not logged. Automatic recovery later completed the 8,915-row reconciliation in about 28 seconds, so historical volume alone is not proof of the original stall's cause.
+
 ## Release and rollback
 
 Apply `20261013083319_adaptive_meter_sync.sql`, `20261013083651_successful_empty_sync_summary.sql`, and `20261013085305_reconcile_corrected_ledger_keys.sql` before deploying the new worker and diagnostics select. The migration is additive and defaults all accounts to shadow mode. The old worker remains compatible during the transition.

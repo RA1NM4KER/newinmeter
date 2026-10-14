@@ -1,5 +1,7 @@
 import "server-only";
 
+import { fetchWithRequestBudget } from "../request-budget";
+
 import { z } from "zod";
 import {
   getNewinmeterFirebaseApiKey,
@@ -173,7 +175,7 @@ async function readJsonResponse<T>(response: Response, context: string) {
 }
 
 async function postJson<T>(url: string, payload: unknown, headers?: Record<string, string>) {
-  const response = await fetch(url, {
+  const response = await fetchWithRequestBudget(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -187,7 +189,7 @@ async function postJson<T>(url: string, payload: unknown, headers?: Record<strin
 }
 
 async function getJson<T>(url: string, headers: Record<string, string>) {
-  const response = await fetch(url, {
+  const response = await fetchWithRequestBudget(url, {
     method: "GET",
     headers,
     cache: "no-store"
@@ -245,7 +247,7 @@ export async function loginWithLiveMopayCredentials(email: string, password: str
   const apiKey = getNewinmeterFirebaseApiKey();
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithRequestBudget(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, returnSecureToken: true }),
@@ -293,7 +295,7 @@ export async function loginWithLiveMopayCredentials(email: string, password: str
 export async function refreshLiveMopaySession(refreshToken: string): Promise<LiveMopaySession> {
   const apiKey = getNewinmeterFirebaseApiKey();
   const url = `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(apiKey)}`;
-  const response = await fetch(url, {
+  const response = await fetchWithRequestBudget(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }).toString(),

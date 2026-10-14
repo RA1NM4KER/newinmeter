@@ -1,3 +1,4 @@
+import { withRequestBudget } from "@/lib/request-budget";
 import { NextResponse } from "next/server";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { getCronSecret } from "@/lib/env";
@@ -26,17 +27,13 @@ import { decryptRefreshToken, TokenDecryptionError } from "@/lib/token-encryptio
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// Bounded batch + bounded concurrency (see below) keeps a single invocation
-// well under this even on a cold start; any backlog beyond the batch limit
-// is picked up by the next 5-minute pg_cron tick rather than trying to
-// drain everything in one request.
-export const maxDuration = 60;
+// Allow daily reconciliation to complete, while application deadlines leave
+// ten seconds before the platform's hard stop. pg_net already permits 120s.
+export const maxDuration = 120;
 
-// Per-invocation claim size -- separate from AUTO_SYNC_CONCURRENCY below.
-// Claiming more than fit in flight at once is fine (they queue behind the
-// concurrency limit); claiming everything due at once is not, since a large
-// backlog would otherwise all pile onto one worker invocation.
-const AUTO_SYNC_CLAIM_BATCH_LIMIT = 10;
+// Claim one concurrency wave: queued accounts must not inherit an almost
+// exhausted invocation. The next five-minute tick handles remaining due work.
+const AUTO_SYNC_CLAIM_BATCH_LIMIT = 4;
 // How long a claim survives an abandoned worker before another invocation
 // may reclaim the same connection. Comfortably longer than any real
 // incremental sync takes.
@@ -125,52 +122,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
   }
 
-  // Recover runs abandoned by a worker crash or an ambiguous database gateway
-  // timeout before attempting new work. Without this, the unique running-run
-  // index blocks that connection forever even though its scheduler claim has
-  // already expired.
-  const recoveredRuns = await recoverStaleCaptureRuns(CAPTURE_RUN_RECOVERY_TTL_MINUTES);
-  const recoveredRestores = await recoverStaleConnectionRestores(30);
-  if (recoveredRuns.length) {
-    console.warn("newinmeter_stale_capture_runs_recovered", recoveredRuns.length);
-  }
-
-  const claimed = await claimDueAutoSyncConnections(AUTO_SYNC_CLAIM_BATCH_LIMIT, AUTO_SYNC_CLAIM_TTL_MINUTES);
-
-  const results = await mapWithConcurrency(claimed, AUTO_SYNC_CONCURRENCY, processClaimedConnection);
-
-  const counts = { success: 0, retryable: 0, authError: 0, alreadyRunning: 0, unexpected: 0 };
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      counts[result.value] += 1;
-    } else {
-      // processClaimedConnection catches everything itself, so this should
-      // be unreachable -- kept only so one truly unexpected throw still
-      // can't take down the response.
-      console.error("newinmeter_auto_sync_unexpected", result.reason);
-      counts.unexpected += 1;
+  return withRequestBudget(110_000, async () => {
+    // Recover runs abandoned by a worker crash or an ambiguous database gateway
+    // timeout before attempting new work. Without this, the unique running-run
+    // index blocks that connection forever even though its scheduler claim has
+    // already expired.
+    const recoveredRuns = await recoverStaleCaptureRuns(CAPTURE_RUN_RECOVERY_TTL_MINUTES);
+    const recoveredRestores = await recoverStaleConnectionRestores(30);
+    if (recoveredRuns.length) {
+      console.warn("newinmeter_stale_capture_runs_recovered", recoveredRuns.length);
     }
-  }
 
-  await Promise.all([
-    recordSchedulerInvocation({
+    const claimed = await claimDueAutoSyncConnections(AUTO_SYNC_CLAIM_BATCH_LIMIT, AUTO_SYNC_CLAIM_TTL_MINUTES);
+
+    const results = await mapWithConcurrency(claimed, AUTO_SYNC_CONCURRENCY, processClaimedConnection);
+
+    const counts = { success: 0, retryable: 0, authError: 0, alreadyRunning: 0, unexpected: 0 };
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        counts[result.value] += 1;
+      } else {
+        // processClaimedConnection catches everything itself, so this should
+        // be unreachable -- kept only so one truly unexpected throw still
+        // can't take down the response.
+        console.error("newinmeter_auto_sync_unexpected", result.reason);
+        counts.unexpected += 1;
+      }
+    }
+
+    await Promise.all([
+      recordSchedulerInvocation({
+        claimed: claimed.length,
+        recoveredRuns: recoveredRuns.length,
+        recoveredRestores: recoveredRestores.length,
+        ...counts
+      }).catch(() => {
+        console.error("newinmeter_scheduler_heartbeat_failed");
+      }),
+      reportBroadSyncOutcome(counts).catch(() => {
+        console.error("newinmeter_broad_sync_health_failed");
+      })
+    ]);
+
+    return NextResponse.json({
+      ok: true,
       claimed: claimed.length,
       recoveredRuns: recoveredRuns.length,
       recoveredRestores: recoveredRestores.length,
       ...counts
-    }).catch(() => {
-      console.error("newinmeter_scheduler_heartbeat_failed");
-    }),
-    reportBroadSyncOutcome(counts).catch(() => {
-      console.error("newinmeter_broad_sync_health_failed");
-    })
-  ]);
-
-  return NextResponse.json({
-    ok: true,
-    claimed: claimed.length,
-    recoveredRuns: recoveredRuns.length,
-    recoveredRestores: recoveredRestores.length,
-    ...counts
+    });
   });
 }

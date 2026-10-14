@@ -1,5 +1,6 @@
 import "server-only";
 
+import { currentRequestTimeoutMs } from "./request-budget";
 import webpush from "web-push";
 import { getVapidPrivateKey, getVapidPublicKey, getVapidSubject } from "./env";
 import { openSystemIncident, recordSystemHealthCheck, resolveSystemIncident } from "./diagnostics/store";
@@ -93,13 +94,13 @@ export async function sendPushToUserWithReport(userId: string, payload: PushPayl
   const results = await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
-        await webpush.sendNotification(
-          {
-            endpoint: subscription.endpoint,
-            keys: { p256dh: subscription.p256dh, auth: subscription.auth }
-          },
-          body
-        );
+        const target = {
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth }
+        };
+        const timeout = currentRequestTimeoutMs();
+        if (timeout === undefined) await webpush.sendNotification(target, body);
+        else await webpush.sendNotification(target, body, { timeout });
         return "delivered" as const;
       } catch (error) {
         const statusCode = (error as { statusCode?: number }).statusCode;
