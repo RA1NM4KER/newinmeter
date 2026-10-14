@@ -7,12 +7,24 @@ export async function fetchDashboardSection<K extends DashboardSection>(
   section: K,
   signal: AbortSignal
 ): Promise<DashboardSectionData[K]> {
-  const response = await fetch(`/api/dashboard/${section}`, {
-    cache: "no-store",
-    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)])
-  });
-  if (!response.ok) throw new Error("Unable to load this dashboard section.");
-  return response.json();
+  // iPhone X remains on iOS 16, which lacks AbortSignal.any(). Use the
+  // established controller/event APIs so cancellation and deadlines work there.
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (signal.aborted) cancel();
+  else signal.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(cancel, 20_000);
+  try {
+    const response = await fetch(`/api/dashboard/${section}`, {
+      cache: "no-store",
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error("Unable to load this dashboard section.");
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", cancel);
+  }
 }
 
 function useSection<K extends DashboardSection>(section: K, userId: string, revision: string) {
