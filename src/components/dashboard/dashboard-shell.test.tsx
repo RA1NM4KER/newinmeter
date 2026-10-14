@@ -91,6 +91,9 @@ describe("progressive dashboard", () => {
   it("shows balance and totals independently, while hourly and prompts still load", async () => {
     mount();
     await waitFor(() => expect(requests.size).toBe(4));
+    expect(screen.getByLabelText("Loading water spend")).toBeTruthy();
+    expect(screen.getByLabelText("Loading water usage")).toBeTruthy();
+    expect(screen.queryByLabelText("Loading suggestions")).toBeNull();
     resolve("summary", { dateStart: "2026-10-01", dateEnd: "2026-10-02", latestBalance: 300 });
     await waitFor(() => expect(screen.getByTestId("Latest balance").textContent).toBe(formatCurrency(300)));
     expect(screen.queryByTestId("Total spend")).toBeNull();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { DataSyncAction } from "@/components/data/data-sync-action";
@@ -26,6 +26,7 @@ import { previousComparableScope } from "@/lib/period-comparison";
 import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 import { FilterBar } from "./filter-bar";
 import { Insights } from "./insights";
+import { MetricCardSkeleton } from "./metric-card-skeleton";
 import { buildMetricCards } from "./metric-cards";
 import type { DashboardShellProps } from "./types";
 
@@ -130,6 +131,7 @@ export function DashboardShell({
 
       {resources.daily.data && <WelcomeBackCard dailyRows={dailyRows} isDemo={isDemo} />}
       <DashboardSectionState
+        hidePending
         label="suggestions"
         resources={[resources.prompts, resources.daily, resources.summary]}
         compact
@@ -156,26 +158,33 @@ export function DashboardShell({
           ref={metricsRailRef}
           className="snap-rail touch-pan-x touch-pan-y flex snap-x gap-4 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4 xl:grid-cols-5 [&>section]:min-w-max [&>section]:snap-start sm:[&>section]:min-w-0"
         >
-          {metricCards.map((card) => (
-            <DashboardSectionState
-              key={card.label}
-              label={card.label}
-              compact
-              resources={
-                card.resource === "summary"
-                  ? [resources.summary]
-                  : [resources[card.resource ?? "daily"], resources.summary]
-              }
-            >
-              <MetricCard
+          {metricCards.map((card, index) => (
+            <Fragment key={card.label}>
+              <DashboardSectionState
                 label={card.label}
-                value={card.value}
-                detail={card.detail}
-                description={card.description}
-                tone={card.tone}
-                comparison={card.comparison}
-              />
-            </DashboardSectionState>
+                compact
+                resources={
+                  card.resource === "summary"
+                    ? [resources.summary]
+                    : [resources[card.resource ?? "daily"], resources.summary]
+                }
+              >
+                <MetricCard
+                  label={card.label}
+                  value={card.value}
+                  detail={card.detail}
+                  description={card.description}
+                  tone={card.tone}
+                  comparison={card.comparison}
+                />
+              </DashboardSectionState>
+              {index === 2 && resources.daily.isPending && (
+                <>
+                  <MetricCardSkeleton label="water spend" />
+                  <MetricCardSkeleton label="water usage" />
+                </>
+              )}
+            </Fragment>
           ))}
         </section>
         <ScrollHint containerRef={metricsRailRef} />

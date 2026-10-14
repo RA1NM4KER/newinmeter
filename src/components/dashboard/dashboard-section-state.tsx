@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MetricCardSkeleton } from "./metric-card-skeleton";
 import { Button } from "@/components/ui/button";
 
 export type SectionResource = { isPending: boolean; isError: boolean; refetch: () => unknown };
@@ -9,12 +10,14 @@ export function DashboardSectionState({
   label,
   resources,
   children,
-  compact = false
+  compact = false,
+  hidePending = false
 }: {
   label: string;
   resources: SectionResource[];
   children: ReactNode;
   compact?: boolean;
+  hidePending?: boolean;
 }) {
   const failed = resources.filter((resource) => resource.isError);
   if (failed.length)
@@ -26,7 +29,9 @@ export function DashboardSectionState({
         </Button>
       </section>
     );
-  if (resources.some((resource) => resource.isPending))
+  if (resources.some((resource) => resource.isPending)) {
+    if (hidePending) return null;
+    if (compact) return <MetricCardSkeleton label={label} />;
     return (
       <section
         role="status"
@@ -36,5 +41,6 @@ export function DashboardSectionState({
         <Skeleton className={compact ? "h-28 w-full" : "h-80 w-full"} />
       </section>
     );
+  }
   return <>{children}</>;
 }
