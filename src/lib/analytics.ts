@@ -1,4 +1,4 @@
-import { formatCurrency, formatKl, formatKwh, formatPercent, formatTariff, shortDate } from "./format";
+import { formatCurrency, formatKl, formatPercent, formatTariff } from "./format";
 import type {
   Analytics,
   DailyPoint,
@@ -377,7 +377,6 @@ function buildInsights(
     .slice(0, 3);
   const topHourShare = totalSpend > 0 ? sum(topHours.map((hour) => hour.spend)) / totalSpend : 0;
   const trend = previousTrend(daily);
-  const highestSpendDay = maxBy(daily, (day) => day.spend);
   const highestTariff = maxBy(dailyRows, (row) => row.peakTariff);
   const tariffChangeCount = tariffTimeline.slice(1).reduce((count, point, index) => {
     return count + (Math.abs(point.tariff - tariffTimeline[index].tariff) >= 0.05 ? 1 : 0);
@@ -410,13 +409,6 @@ function buildInsights(
       title: "Recent trend",
       body: `Recent daily spend is ${formatPercent(trend)} versus the previous comparable slice.`,
       tone: trend > 10 ? "watch" : trend < -10 ? "good" : "neutral"
-    });
-  }
-
-  if (highestSpendDay) {
-    insights.push({
-      title: "Peak day",
-      body: `${shortDate(highestSpendDay.date)} led spend at ${formatCurrency(highestSpendDay.spend)} from ${formatKwh(highestSpendDay.kwh)}.`
     });
   }
 
