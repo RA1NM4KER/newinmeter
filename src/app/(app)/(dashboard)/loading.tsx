@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useFilterUrlState } from "@/lib/url-state/use-filter-url-state";
 
 export default function DashboardLoading() {
-  const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({});
+  const { from, to, quickRange, onDateChange, onQuickRange } = useFilterUrlState({});
   const metricsRailRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -20,7 +20,7 @@ export default function DashboardLoading() {
         quickRange={quickRange}
         onDateChange={onDateChange}
         onQuickRange={onQuickRange}
-        loading={isPending}
+        loading
         leftControls={<DataSyncAction loading />}
         rightControls={<AssistantPanel from={from} to={to} compact />}
         rightControlsExpanded

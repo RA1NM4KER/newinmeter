@@ -4,6 +4,7 @@ import type { Analytics } from "@/lib/types";
 
 type MetricCardItem = {
   label: string;
+  resource?: "summary" | "daily" | "hourly";
   value: string;
   detail?: string;
   description: string;
@@ -60,6 +61,7 @@ export function buildMetricCards(
   const cards: MetricCardItem[] = [
     {
       label: "Latest balance",
+      resource: "summary",
       value: typeof metrics.latestBalance === "number" ? formatCurrency(metrics.latestBalance) : "n/a",
       detail: metrics.latestPeriod ? longDateTime(metrics.latestPeriod) : undefined,
       description: "Your most recent LiveMopay balance, as of the last capture.",
@@ -109,6 +111,7 @@ export function buildMetricCards(
     },
     {
       label: "Highest usage hour",
+      resource: "hourly",
       value: metrics.highestUsageHour ? formatKwh(metrics.highestUsageHour.kwh) : "n/a",
       detail: metrics.highestUsageHour
         ? `${metrics.highestUsageHour.date} ${metrics.highestUsageHour.hour} · ${formatCurrency(metrics.highestUsageHour.spend)}`

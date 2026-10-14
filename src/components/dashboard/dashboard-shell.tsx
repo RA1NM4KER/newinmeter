@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { DataSyncAction } from "@/components/data/data-sync-action";
 import { CumulativeSpendChart } from "@/components/charts/cumulative-spend-chart";
@@ -14,6 +13,10 @@ import { TariffChart } from "@/components/charts/tariff-chart";
 import { InstallPromoCard } from "./install-promo-card";
 import { DashboardPromptCard, WelcomeBackCard } from "./feature-prompt-cards";
 import { promptDayKey } from "@/lib/dashboard-prompts";
+import { useDashboardSections } from "./use-dashboard-sections";
+import { DashboardSectionState } from "./dashboard-section-state";
+import type { DailyRollupRow, HourlyRollupRow, DashboardSummary } from "@/lib/types";
+
 import { MetricCard } from "@/components/ui/metric-card";
 import { ScrollHint } from "@/components/ui/scroll-hint";
 import { createAnalytics } from "@/lib/analytics";
@@ -26,19 +29,30 @@ import { Insights } from "./insights";
 import { buildMetricCards } from "./metric-cards";
 import type { DashboardShellProps } from "./types";
 
+const EMPTY_DAILY: DailyRollupRow[] = [];
+const EMPTY_HOURLY: HourlyRollupRow[] = [];
+const EMPTY_SUMMARY: DashboardSummary = {};
+
 export function DashboardShell({
-  dailyRows,
-  hourlyRows,
-  summary,
-  alertRules = [],
-  featureAdoption = null,
-  featureRates = {},
-  promptDay,
+  userId,
+  revision,
   isAiAssistantEnabled = true,
   isActivitiesEnabled = false,
   isAlertsEnabled = false,
   isDemo = false
 }: DashboardShellProps) {
+  const resources = useDashboardSections(userId, revision);
+  const dailyRows = resources.daily.data ?? EMPTY_DAILY;
+  const hourlyRows = resources.hourly.data ?? EMPTY_HOURLY;
+  const summary = resources.summary.data ?? EMPTY_SUMMARY;
+  const { alertRules = [], featureAdoption = null, featureRates = {}, promptDay } = resources.prompts.data ?? {};
+  const childFetches = useIsFetching({
+    predicate: (query) =>
+      query.getObserversCount() > 0 &&
+      ["activities", "day-intervals", "activity-report"].includes(String(query.queryKey[0]))
+  });
+  const loading =
+    Object.values(resources).some((resource) => resource.isFetching || resource.isPending) || childFetches > 0;
   const { from, to, quickRange, isPending, onDateChange, onQuickRange } = useFilterUrlState({
     from: summary.dateStart,
     to: summary.dateEnd
@@ -104,29 +118,37 @@ export function DashboardShell({
         quickRange={quickRange}
         onDateChange={onDateChange}
         onQuickRange={onQuickRange}
-        loading={isPending}
-        leftControls={<DataSyncAction isDemo={isDemo} lastSyncedAt={summary.lastSyncedAt} />}
+        loading={isPending || loading}
+        leftControls={
+          <DataSyncAction isDemo={isDemo} lastSyncedAt={summary.lastSyncedAt} loading={!resources.summary.data} />
+        }
         rightControls={isAiAssistantEnabled ? <AssistantPanel from={from} to={to} compact /> : undefined}
         rightControlsExpanded
         fullBleed
         sticky
       />
 
-      <WelcomeBackCard dailyRows={dailyRows} isDemo={isDemo} />
-      <DashboardPromptCard
-        rules={alertRules}
-        latestBalance={summary.latestBalance}
-        dailyRows={dailyRows}
-        adoption={featureAdoption}
-        rates={featureRates}
-        dayKey={promptDay ?? promptDayKey()}
-        alertsAvailable={isAlertsEnabled}
-        aiAvailable={isAiAssistantEnabled}
-        activitiesAvailable={isActivitiesEnabled}
-        from={from}
-        to={to}
-        isDemo={isDemo}
-      />
+      {resources.daily.data && <WelcomeBackCard dailyRows={dailyRows} isDemo={isDemo} />}
+      <DashboardSectionState
+        label="suggestions"
+        resources={[resources.prompts, resources.daily, resources.summary]}
+        compact
+      >
+        <DashboardPromptCard
+          rules={alertRules}
+          latestBalance={summary.latestBalance}
+          dailyRows={dailyRows}
+          adoption={featureAdoption}
+          rates={featureRates}
+          dayKey={promptDay ?? promptDayKey()}
+          alertsAvailable={isAlertsEnabled}
+          aiAvailable={isAiAssistantEnabled}
+          activitiesAvailable={isActivitiesEnabled}
+          from={from}
+          to={to}
+          isDemo={isDemo}
+        />
+      </DashboardSectionState>
       <InstallPromoCard alertsEnabled={isAlertsEnabled} isDemo={isDemo} />
 
       <div className="relative">
@@ -135,15 +157,25 @@ export function DashboardShell({
           className="snap-rail touch-pan-x touch-pan-y flex snap-x gap-4 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-4 xl:grid-cols-5 [&>section]:min-w-max [&>section]:snap-start sm:[&>section]:min-w-0"
         >
           {metricCards.map((card) => (
-            <MetricCard
+            <DashboardSectionState
               key={card.label}
               label={card.label}
-              value={card.value}
-              detail={card.detail}
-              description={card.description}
-              tone={card.tone}
-              comparison={card.comparison}
-            />
+              compact
+              resources={
+                card.resource === "summary"
+                  ? [resources.summary]
+                  : [resources[card.resource ?? "daily"], resources.summary]
+              }
+            >
+              <MetricCard
+                label={card.label}
+                value={card.value}
+                detail={card.detail}
+                description={card.description}
+                tone={card.tone}
+                comparison={card.comparison}
+              />
+            </DashboardSectionState>
           ))}
         </section>
         <ScrollHint containerRef={metricsRailRef} />
@@ -154,21 +186,27 @@ export function DashboardShell({
           ref={spendKwhRailRef}
           className="snap-rail touch-pan-x touch-pan-y -mx-3 flex snap-x gap-5 overflow-x-auto px-3 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:px-0 lg:pb-0 [&>section]:min-w-[88vw] [&>section]:snap-center sm:[&>section]:min-w-[24rem] lg:[&>section]:min-w-0"
         >
-          <DailySpendChart data={analytics.daily} />
-          <DailyKwhChart data={analytics.daily} activities={activities} onSelectDate={selectDay} />
+          <DashboardSectionState label="daily spend" resources={[resources.daily, resources.hourly, resources.summary]}>
+            <DailySpendChart data={analytics.daily} />
+          </DashboardSectionState>
+          <DashboardSectionState label="daily usage" resources={[resources.daily, resources.hourly, resources.summary]}>
+            <DailyKwhChart data={analytics.daily} activities={activities} onSelectDate={selectDay} />
+          </DashboardSectionState>
         </section>
         <ScrollHint containerRef={spendKwhRailRef} />
       </div>
 
       <div ref={dayDetailRef} className="scroll-mt-4">
-        <DayBreakdownChart
-          activitiesEnabled={isActivitiesEnabled}
-          dailyRows={dailyRows}
-          dateOptions={dateOptions}
-          globalDomains={globalDomains}
-          selectedDate={effectiveSelectedDate}
-          onSelectedDateChange={setSelectedDate}
-        />
+        <DashboardSectionState label="day breakdown" resources={[resources.daily, resources.summary]}>
+          <DayBreakdownChart
+            activitiesEnabled={isActivitiesEnabled}
+            dailyRows={dailyRows}
+            dateOptions={dateOptions}
+            globalDomains={globalDomains}
+            selectedDate={effectiveSelectedDate}
+            onSelectedDateChange={setSelectedDate}
+          />
+        </DashboardSectionState>
       </div>
 
       <div className="relative">
@@ -176,8 +214,15 @@ export function DashboardShell({
           ref={tariffCumulativeRailRef}
           className="snap-rail touch-pan-x touch-pan-y -mx-3 flex snap-x gap-5 overflow-x-auto px-3 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:px-0 lg:pb-0 [&>section]:min-w-[88vw] [&>section]:snap-center sm:[&>section]:min-w-[24rem] lg:[&>section]:min-w-0"
         >
-          <TariffChart electricity={analytics.tariffTimeline} water={analytics.waterTariffTimeline} />
-          <CumulativeSpendChart data={analytics.daily} />
+          <DashboardSectionState label="tariffs" resources={[resources.daily, resources.summary]}>
+            <TariffChart electricity={analytics.tariffTimeline} water={analytics.waterTariffTimeline} />
+          </DashboardSectionState>
+          <DashboardSectionState
+            label="cumulative spend"
+            resources={[resources.daily, resources.hourly, resources.summary]}
+          >
+            <CumulativeSpendChart data={analytics.daily} />
+          </DashboardSectionState>
         </section>
         <ScrollHint containerRef={tariffCumulativeRailRef} />
       </div>
@@ -187,13 +232,19 @@ export function DashboardShell({
           ref={hourlyRailRef}
           className="snap-rail touch-pan-x touch-pan-y -mx-3 flex snap-x gap-5 overflow-x-auto px-3 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:px-0 lg:pb-0 [&>section]:min-w-[88vw] [&>section]:snap-center sm:[&>section]:min-w-[24rem] lg:[&>section]:min-w-0"
         >
-          <HourlyChart data={analytics.hourly} metric="spend" title="Total energy spend by hour" />
-          <HourlyChart data={analytics.hourly} metric="kwh" title="Total energy usage by hour" />
+          <DashboardSectionState label="total energy spend by hour" resources={[resources.hourly, resources.summary]}>
+            <HourlyChart data={analytics.hourly} metric="spend" title="Total energy spend by hour" />
+          </DashboardSectionState>
+          <DashboardSectionState label="total energy usage by hour" resources={[resources.hourly, resources.summary]}>
+            <HourlyChart data={analytics.hourly} metric="kwh" title="Total energy usage by hour" />
+          </DashboardSectionState>
         </section>
         <ScrollHint containerRef={hourlyRailRef} />
       </div>
 
-      <Insights insights={analytics.insights} />
+      <DashboardSectionState label="insights" resources={[resources.daily, resources.hourly, resources.summary]}>
+        <Insights insights={analytics.insights} />
+      </DashboardSectionState>
     </div>
   );
 }
