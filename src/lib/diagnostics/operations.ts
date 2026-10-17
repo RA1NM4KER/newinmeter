@@ -159,7 +159,14 @@ export async function reportAlertEvaluationOutcome(
 }
 
 export async function recordSchedulerInvocation(details: Record<string, number>): Promise<void> {
-  const previous = await retryTransientSupabaseOperation(() => getSystemHealthState("scheduler:auto-sync"));
+  const previous = await retryTransientSupabaseOperation(() => getSystemHealthState("scheduler:auto-sync")).catch(
+    (error) => {
+      console.error("newinmeter_scheduler_previous_health_failed", {
+        errorName: error instanceof Error ? error.name : "Unknown"
+      });
+      return null;
+    }
+  );
   const previousAssessment = classifySchedulerHealth(previous?.lastCheckedAt ?? null);
 
   await retryTransientSupabaseOperation(() =>
@@ -178,12 +185,20 @@ export async function recordSchedulerInvocation(details: Record<string, number>)
       eventType: "scheduler_activity_recovered",
       message: "The automatic-sync scheduler resumed after a delayed heartbeat.",
       resolvedAt: new Date().toISOString()
+    }).catch((error) => {
+      console.error("newinmeter_scheduler_recovery_event_failed", {
+        errorName: error instanceof Error ? error.name : "Unknown"
+      });
     });
   }
   await resolveSystemIncident("scheduler:auto-sync:stopped", {
     category: "scheduler",
     eventType: "scheduler_recovered",
     message: "The automatic-sync scheduler recovered."
+  }).catch((error) => {
+    console.error("newinmeter_scheduler_incident_resolution_failed", {
+      errorName: error instanceof Error ? error.name : "Unknown"
+    });
   });
 }
 

@@ -31,10 +31,25 @@ describe("scheduler heartbeat retries", () => {
     expect(mocks.resolve).toHaveBeenCalledTimes(1);
   });
 
-  it("does not retry event inserts after an ambiguous response", async () => {
+  it("keeps a committed heartbeat successful without retrying an ambiguous event insert", async () => {
     mocks.event.mockRejectedValueOnce(new Error("network response lost"));
-    await expect(recordSchedulerInvocation({ claimed: 0 })).rejects.toThrow("network response lost");
+    await recordSchedulerInvocation({ claimed: 0 });
     expect(mocks.health).toHaveBeenCalledTimes(1);
     expect(mocks.event).toHaveBeenCalledTimes(1);
+  });
+
+  it("still writes the heartbeat if its optional previous-state lookup fails", async () => {
+    mocks.get.mockRejectedValue(new Error("gateway timeout 504"));
+    await recordSchedulerInvocation({ claimed: 0 });
+    expect(mocks.get).toHaveBeenCalledTimes(3);
+    expect(mocks.health).toHaveBeenCalledTimes(1);
+    expect(mocks.event).not.toHaveBeenCalled();
+  });
+
+  it("keeps incident resolution failure distinct from heartbeat failure", async () => {
+    mocks.resolve.mockRejectedValueOnce(new Error("gateway timeout 504"));
+    await recordSchedulerInvocation({ claimed: 0 });
+    expect(mocks.health).toHaveBeenCalledTimes(1);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
   });
 });
