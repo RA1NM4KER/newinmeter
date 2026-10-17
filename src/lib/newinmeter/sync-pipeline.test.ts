@@ -76,7 +76,7 @@ beforeEach(() => {
             auto_sync_enabled: true,
             is_demo: false,
             data_state: "warm",
-            next_sync_at: null,
+            next_sync_at: "2026-10-14T13:00:00+00:00",
             auto_sync_failure_streak: 0
           }
         ]);

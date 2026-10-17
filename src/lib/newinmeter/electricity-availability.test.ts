@@ -218,6 +218,17 @@ describe("passive schedule context", () => {
     });
     expect(JSON.stringify(model)).toBe(copy);
   });
+  it("accepts the timezone-offset due timestamps returned by PostgREST", () => {
+    const s = electricitySchedule({
+      model,
+      mode: "adaptive",
+      dueAt: "2026-10-17T07:14:00+00:00",
+      trigger: "auto",
+      httpFailureStreak: 0
+    });
+    expect(s.dueAt).toBe("2026-10-17T07:14:00.000Z");
+    expect(observation("2026-10-17T09:15:00Z", [], { schedule: s }).schedule.dueAt).toBe(s.dueAt);
+  });
   it("distinguishes manual, HTTP failure, post-prediction retry and fixed fallback", () => {
     const p = {
       model,

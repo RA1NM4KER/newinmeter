@@ -85,7 +85,7 @@ export function electricitySchedule(params: {
     policyVersion: "adaptive-v1",
     publicationBufferMinutes: 10,
     mode: params.mode,
-    dueAt: params.dueAt,
+    dueAt: params.dueAt && Number.isFinite(Date.parse(params.dueAt)) ? new Date(params.dueAt).toISOString() : null,
     modelTargetAt: m.predictedAt,
     anchorAt,
     expectedPublicationAt,
