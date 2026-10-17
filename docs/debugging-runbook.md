@@ -170,7 +170,8 @@ limit 10;
 ```
 
 `mode = 'full'` re-fetches everything from `2000-01-01` (see `runLivemopaySync` in
-`src/lib/newinmeter/sync.ts`); `'incremental'` only fetches since the latest stored period. If you
+`src/lib/newinmeter/sync.ts`); `'incremental'` usually fetches since the latest stored period,
+with a daily 90-day lookback for adaptive connections. If you
 need to force a fresh full resync to backfill something that was fixed after the fact (like the
 parser bug above), see "Replaying a sync manually" below, don't just tell the user to click Sync
 if the bug already ran and silently dropped data, a resync with the same buggy code changes
@@ -181,6 +182,8 @@ nothing.
 A meter upgrade can change upstream publication frequency independently per house. Infer cadence from `source_ts` clusters, including zero-consumption intervals, rather than from kWh totals or the NewinMeter fetch timestamps. Stored gaps may instead reflect `auto_sync_is_paused_for_inactivity()` or cold storage, so check those states before attributing a gap to the meter. One directly inspected ledger released 3,380 historical electricity readings in a single posting batch after NewinMeter had already paused; a latest-period-only interpretation would have misdiagnosed that account. Adaptive predictions are stored in `reporting_model`, with `sync_schedule_mode` selecting shadow or adaptive operation. See `docs/adaptive-sync-operations.md` for budgets, reconciliation, and rollout controls.
 
 When a fetch returns only unchanged rows, `rows_changed = 0` skips rollup computation. The dashboard's `last_synced_at` lives in `dashboard_summary`, so updating the connection alone is insufficient. The separate `capture_runs_empty_sync_summary` trigger updates only successful-check metadata for these runs. Verified live against a zero-change fetch: the dashboard timestamp matched the latest successful capture run and the daily rollup totals still matched raw ledger records. If a failed run wrote records before finalization, the next ingestion treats records owned by that failed run as dirty so their affected dates get a successful refresh.
+
+Successful checks do not prove electricity was published upstream. On 17 October, direct 90-day ledger queries and independent `summary/all` requests for four accounts at one property both stopped electricity at 14 October 00:00 SAST while water continued. Every fetched electricity ledger key matched stored records. This establishes an upstream gap for that observation, not a permanent explanation for future gaps. Compare both endpoints before repairing ingestion, and distinguish summary timestamps in UTC from stored consumption periods in SAST. The ledger start date filters publication history, so returned consumption periods can precede that date; applying the same date cutoff to the database comparison can invent missing records.
 
 ### Historical reconciliation and balance-key corrections
 
@@ -233,7 +236,7 @@ Delivered, and does the domain have valid SPF/DKIM.
 
 ```sh
 vercel logs --project newinmeter --scope ra1nm4kers-projects --environment production \
-  --since 3h --level error --limit 500 --json > /tmp/nm-logs.jsonl
+  --since 50m --level error --limit 500 --json > /tmp/nm-logs.jsonl
 ```
 
 Gotchas:
@@ -247,6 +250,22 @@ Gotchas:
   logging/capture limitation of this pull method, not proof the code path wasn't hit, consider a
   direct replay instead (below).
 - `--since` accepts relative windows like `3h`, `24h`.
+- On the Hobby project inspected on 17 October, raw runtime retention was one hour. The MCP
+  returned an explicit retention error for older windows, while some CLI filters returned no
+  rows. Neither result establishes that production had no errors. Grouped runtime errors can
+  retain older samples, but first/last-seen dates and counts are not exact incident counts for
+  the requested production window. Inspect the sample deployment target: the CRON_SECRET
+  sample in this investigation came from preview. `cron.job_run_details.status = 'succeeded'`
+  means the SQL enqueue call succeeded, not that its HTTP worker did; inspect
+  `net._http_response` promptly because its responses survive approximately six hours.
+- Scheduler setup now reports `newinmeter_scheduler_setup_failed` with a safe stage/error
+  class and returns 503. Recovery and heartbeat reads/upserts use bounded retries; claims
+  and event inserts are not retried after ambiguous responses. `heartbeatRecorded` reflects
+  heartbeat persistence, while optional previous-state, recovery-event and incident-resolution
+  failures have separate log categories. Verified against a production authenticated worker
+  response with HTTP 200 and `heartbeatRecorded: true`, plus failure-path regressions. An
+  application timeout can precede capture-run creation; absence of a failed capture does not
+  prove that no automatic attempt failed. Check connection outcomes and worker logs too.
 
 ## Replaying a sync (or any server-only logic) manually
 
