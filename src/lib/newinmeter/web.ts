@@ -599,6 +599,7 @@ export async function fetchLiveMopayLedger(params: {
   companyId: string;
   propertyId: string;
   startDate: string;
+  onParsedResponse?: (facts: { rawRows: number; skippedRows: number }) => void;
 }): Promise<NewinmeterCsvRow[]> {
   const payload = await fetchLiveMopayLedgerPayload(params);
 
@@ -611,6 +612,7 @@ export async function fetchLiveMopayLedger(params: {
     }
   }
 
+  params.onParsedResponse?.({ rawRows: payload.length, skippedRows: payload.length - rows.length });
   return dedupeNewinmeterRows(rows);
 }
 

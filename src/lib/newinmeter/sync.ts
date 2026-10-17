@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getNewinmeterWebBaseUrl } from "../env";
 import { checkRequestBudget, withRequestBudget } from "../request-budget";
 import { isTransientSupabaseError, retryTransientSupabaseOperation } from "../supabase-retry";
 import { randomUUID } from "node:crypto";
@@ -14,6 +15,12 @@ import {
   type NewinmeterCsvRow
 } from "./web";
 import { observeReporting, reconciliationStartDate } from "./adaptive-schedule";
+import {
+  buildElectricityObservation,
+  electricitySchedule,
+  electricityScopeKey,
+  type ElectricityObservation
+} from "./electricity-availability";
 import { resolveTariffBand } from "./tariff-profiles";
 
 const BATCH_SIZE = 500;
@@ -375,6 +382,8 @@ async function upsertRows(connectionId: string, rows: NewinmeterCsvRow[], runId:
 // LiveMopay session from the connection's stored (encrypted) refresh token.
 export async function runLivemopaySync(params: LivemopaySyncParams) {
   let runId: string | undefined;
+  let electricityObservation: ElectricityObservation | null = null;
+  let observationRecorded = false;
   const stage = async <T>(
     name: string,
     operation: () => Promise<T>,
@@ -430,9 +439,13 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
           sync_schedule_mode: "shadow" | "adaptive";
           last_reconciled_at: string | null;
           auto_sync_enabled: boolean;
+          is_demo: boolean;
+          data_state: string;
+          next_sync_at: string | null;
+          auto_sync_failure_streak: number;
         }>
       >(
-        `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at,auto_sync_enabled&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
+        `/livemopay_connections?select=reporting_model,sync_schedule_mode,last_reconciled_at,auto_sync_enabled,is_demo,data_state,next_sync_at,auto_sync_failure_streak&id=eq.${encodeURIComponent(params.connectionId)}&limit=1`
       )
     );
     const reconciliation =
@@ -448,6 +461,8 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
             (await latestPeriodDateForConnection(params.connectionId)) ??
             `${currentNewinmeterLocalYear()}-01-01`);
 
+    const fetchStartedAt = nowIso();
+    let parserComplete = false;
     const rows = await stage(
       "ledger",
       () =>
@@ -456,10 +471,50 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
           accountId: params.accountId,
           companyId: params.companyId,
           propertyId: params.propertyId,
-          startDate
+          startDate,
+          onParsedResponse: (facts) => {
+            parserComplete = facts.skippedRows === 0;
+          }
         }),
       { reconciliation: Boolean(reconciliation), startDate }
     );
+
+    const fetchFinishedAt = nowIso();
+    if (
+      scheduleState?.sync_schedule_mode === "adaptive" &&
+      scheduleState.is_demo === false &&
+      scheduleState.data_state === "warm" &&
+      params.trigger !== "restore"
+    ) {
+      try {
+        electricityObservation = buildElectricityObservation({
+          rows,
+          scopeKey: electricityScopeKey([
+            getNewinmeterWebBaseUrl(),
+            params.accountId,
+            params.companyId,
+            params.propertyId
+          ]),
+          fetchStartedAt,
+          fetchFinishedAt,
+          startDate,
+          trigger: params.trigger,
+          reconciliation: Boolean(reconciliation),
+          autoSyncEnabled: scheduleState.auto_sync_enabled,
+          parserComplete,
+          schedule: electricitySchedule({
+            model: scheduleState.reporting_model,
+            mode: scheduleState.sync_schedule_mode,
+            dueAt: scheduleState.next_sync_at ?? null,
+            trigger: params.trigger,
+            httpFailureStreak: scheduleState.auto_sync_failure_streak ?? 0
+          })
+        });
+      } catch {
+        // Measurement must never become a new ingestion failure mode.
+        console.warn("newinmeter_availability_build_failed");
+      }
+    }
 
     // Remove any stale "Top Up" rows that the old parser mislabelled but
     // LiveMopay now reports as refunds, before inserting the corrected refund
@@ -473,20 +528,31 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       () => upsertRows(params.connectionId, rows, activeRunId, removedStaleRefunds > 0),
       { rows: rows.length, batches: Math.ceil(rows.length / BATCH_SIZE) }
     );
-    const model = observeReporting(scheduleState?.reporting_model, rows, params.connectionId);
-    await stage("capture-metadata", () =>
-      adminSupabaseRequest(
-        "PATCH",
-        `/capture_runs?id=eq.${encodeURIComponent(activeRunId)}&status=eq.running`,
-        {
+    const decisionAt = new Date();
+    const model = observeReporting(scheduleState?.reporting_model, rows, params.connectionId, decisionAt);
+    if (electricityObservation)
+      electricityObservation.nextDecision = electricitySchedule({
+        model,
+        mode: scheduleState!.sync_schedule_mode,
+        dueAt: model.predictedAt,
+        trigger: "auto",
+        httpFailureStreak: 0,
+        decisionAt
+      });
+    const recorded = await stage("capture-metadata", () =>
+      adminSupabaseRequest<boolean | null>("POST", "/rpc/record_capture_metadata", {
+        p_run_id: activeRunId,
+        p_metadata: {
           rows_fetched: rows.length,
           rows_changed: synced + removedStaleRefunds,
           upstream_latest_at: model.latestPublicationAt,
           predicted_next_at: model.predictedAt
         },
-        "return=minimal"
-      )
+        p_observation: electricityObservation
+      })
     );
+    observationRecorded = recorded === true;
+    if (electricityObservation && recorded === false) console.warn("newinmeter_availability_not_recorded");
     await stage("finalize", () => finishCaptureRun(activeRunId, "success", { rowsSynced: synced }));
     await stage("connection-metadata", () =>
       adminSupabaseRequest(
@@ -534,6 +600,22 @@ export async function runLivemopaySync(params: LivemopaySyncParams) {
       // inconclusive failure after its lease expires instead of leaving the
       // connection locked forever.
       console.error("newinmeter_capture_run_failure_finalize_inconclusive", runId, finalizeError);
+    }
+    // Finalize/release first. A fetched response is still valid evidence if
+    // ledger ingestion failed, but recording it must not consume cleanup time.
+    if (electricityObservation && !observationRecorded) {
+      try {
+        const recorded = await withRequestBudget(1000, () =>
+          adminSupabaseRequest<boolean>("POST", "/rpc/record_capture_metadata", {
+            p_run_id: failedRunId,
+            p_metadata: null,
+            p_observation: electricityObservation
+          })
+        );
+        if (!recorded) console.warn("newinmeter_availability_not_recorded");
+      } catch {
+        console.warn("newinmeter_availability_not_recorded");
+      }
     }
     throw error;
   }

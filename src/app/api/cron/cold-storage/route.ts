@@ -1,3 +1,4 @@
+import { pruneElectricityObservations } from "@/lib/newinmeter/availability-storage";
 import { recordPassiveOutcome } from "@/lib/diagnostics/passive-health";
 import { NextResponse } from "next/server";
 import { getCronSecret } from "@/lib/env";
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
       result.results.some((entry) => entry.error) ? "failure" : "success",
       startedAt
     );
-    return NextResponse.json(result);
+    const availabilityObservationsPruned = await pruneElectricityObservations();
+    return NextResponse.json({ ...result, availabilityObservationsPruned });
   } catch (error) {
     await recordPassiveOutcome("cron:cold-storage", "failure", startedAt);
     throw error;
