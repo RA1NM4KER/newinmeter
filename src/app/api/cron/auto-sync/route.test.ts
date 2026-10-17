@@ -125,6 +125,47 @@ describe("POST /api/cron/auto-sync", () => {
     expect(mocks.recordScheduler).toHaveBeenCalledWith(expect.objectContaining({ recoveredRuns: 1 }));
   });
 
+  it("retries transient stale recovery before dispatching any claims", async () => {
+    mocks.recoverStaleCaptureRuns.mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"));
+    mocks.claimDueAutoSyncConnections.mockResolvedValue([]);
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(mocks.recoverStaleCaptureRuns).toHaveBeenCalledTimes(2);
+    expect(mocks.claimDueAutoSyncConnections).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports exhausted setup retries without a false heartbeat or claims", async () => {
+    mocks.recoverStaleCaptureRuns.mockRejectedValue(new Error("gateway timeout 504"));
+    try {
+      const response = await POST(request());
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ ok: false, stage: "recover-runs", retryOnNextTick: true });
+      expect(mocks.recoverStaleCaptureRuns).toHaveBeenCalledTimes(3);
+      expect(mocks.claimDueAutoSyncConnections).not.toHaveBeenCalled();
+      expect(mocks.recordScheduler).not.toHaveBeenCalled();
+    } finally {
+      mocks.recoverStaleCaptureRuns.mockResolvedValue([]);
+    }
+  });
+
+  it("never retries an ambiguous claim or dispatches an unknown claimed wave", async () => {
+    mocks.claimDueAutoSyncConnections.mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ stage: "claim" });
+    expect(mocks.claimDueAutoSyncConnections).toHaveBeenCalledTimes(1);
+    expect(mocks.runLivemopaySync).not.toHaveBeenCalled();
+  });
+
+  it("exposes a degraded heartbeat without changing successful ingestion into a failure", async () => {
+    mocks.claimDueAutoSyncConnections.mockResolvedValue([connection("a")]);
+    mocks.runLivemopaySync.mockResolvedValue({ rowsSynced: 1 });
+    mocks.recordScheduler.mockRejectedValueOnce(new Error("gateway timeout 504"));
+    const response = await POST(request());
+    expect(await response.json()).toMatchObject({ ok: true, success: 1, heartbeatRecorded: false });
+    expect(mocks.markAutoSyncFailure).not.toHaveBeenCalled();
+  });
+
   it("one claimed connection failing does not abort the others in the same batch", async () => {
     mocks.claimDueAutoSyncConnections.mockResolvedValue([connection("a"), connection("b"), connection("c")]);
     mocks.runLivemopaySync.mockImplementation(async ({ connectionId }: { connectionId: string }) => {

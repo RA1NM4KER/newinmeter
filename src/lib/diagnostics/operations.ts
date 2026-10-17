@@ -1,5 +1,6 @@
 import "server-only";
 
+import { retryTransientSupabaseOperation } from "../supabase-retry";
 import { adminSupabaseFetch } from "../supabase-rest";
 import { classifySchedulerHealth, REPEATED_FAILURE_THRESHOLD } from "./health";
 import { sendOperationalPushToAdmins } from "./notifications";
@@ -158,15 +159,17 @@ export async function reportAlertEvaluationOutcome(
 }
 
 export async function recordSchedulerInvocation(details: Record<string, number>): Promise<void> {
-  const previous = await getSystemHealthState("scheduler:auto-sync");
+  const previous = await retryTransientSupabaseOperation(() => getSystemHealthState("scheduler:auto-sync"));
   const previousAssessment = classifySchedulerHealth(previous?.lastCheckedAt ?? null);
 
-  await recordSystemHealthCheck({
-    component: "scheduler:auto-sync",
-    status: "healthy",
-    succeeded: true,
-    details
-  });
+  await retryTransientSupabaseOperation(() =>
+    recordSystemHealthCheck({
+      component: "scheduler:auto-sync",
+      status: "healthy",
+      succeeded: true,
+      details
+    })
+  );
 
   if (previous && previousAssessment.state === "critical") {
     await recordSystemEvent({
