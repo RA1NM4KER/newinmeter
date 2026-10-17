@@ -1,3 +1,4 @@
+import { retryTransientSupabaseOperation } from "@/lib/supabase-retry";
 import { withRequestBudget } from "@/lib/request-budget";
 import { NextResponse } from "next/server";
 import { mapWithConcurrency } from "@/lib/concurrency";
@@ -127,13 +128,33 @@ export async function POST(request: Request) {
     // timeout before attempting new work. Without this, the unique running-run
     // index blocks that connection forever even though its scheduler claim has
     // already expired.
-    const recoveredRuns = await recoverStaleCaptureRuns(CAPTURE_RUN_RECOVERY_TTL_MINUTES);
-    const recoveredRestores = await recoverStaleConnectionRestores(30);
+    let setupStage = "recover-runs";
+    let recoveredRuns;
+    let recoveredRestores;
+    let claimed;
+    try {
+      // Recovery only transitions stale state and is safe to repeat after a
+      // lost response. Claims are not: an ambiguous retry could claim a second
+      // wave whose first wave would then wait for its lease to expire.
+      recoveredRuns = await retryTransientSupabaseOperation(() =>
+        recoverStaleCaptureRuns(CAPTURE_RUN_RECOVERY_TTL_MINUTES)
+      );
+      setupStage = "recover-restores";
+      recoveredRestores = await retryTransientSupabaseOperation(() => recoverStaleConnectionRestores(30));
+      setupStage = "claim";
+      claimed = await claimDueAutoSyncConnections(AUTO_SYNC_CLAIM_BATCH_LIMIT, AUTO_SYNC_CLAIM_TTL_MINUTES);
+    } catch (error) {
+      // Names and stage identify the failed boundary without logging response
+      // bodies, URLs, or a claim payload containing encrypted credentials.
+      console.error("newinmeter_scheduler_setup_failed", {
+        stage: setupStage,
+        errorName: error instanceof Error ? error.name : "Unknown"
+      });
+      return NextResponse.json({ ok: false, stage: setupStage, retryOnNextTick: true }, { status: 503 });
+    }
     if (recoveredRuns.length) {
       console.warn("newinmeter_stale_capture_runs_recovered", recoveredRuns.length);
     }
-
-    const claimed = await claimDueAutoSyncConnections(AUTO_SYNC_CLAIM_BATCH_LIMIT, AUTO_SYNC_CLAIM_TTL_MINUTES);
 
     const results = await mapWithConcurrency(claimed, AUTO_SYNC_CONCURRENCY, processClaimedConnection);
 
@@ -150,14 +171,18 @@ export async function POST(request: Request) {
       }
     }
 
+    let heartbeatRecorded = true;
     await Promise.all([
       recordSchedulerInvocation({
         claimed: claimed.length,
         recoveredRuns: recoveredRuns.length,
         recoveredRestores: recoveredRestores.length,
         ...counts
-      }).catch(() => {
-        console.error("newinmeter_scheduler_heartbeat_failed");
+      }).catch((error) => {
+        heartbeatRecorded = false;
+        console.error("newinmeter_scheduler_heartbeat_failed", {
+          errorName: error instanceof Error ? error.name : "Unknown"
+        });
       }),
       reportBroadSyncOutcome(counts).catch(() => {
         console.error("newinmeter_broad_sync_health_failed");
@@ -166,6 +191,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      heartbeatRecorded,
       claimed: claimed.length,
       recoveredRuns: recoveredRuns.length,
       recoveredRestores: recoveredRestores.length,
