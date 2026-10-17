@@ -12,6 +12,7 @@ const rowSchema = z.object({
   observation: electricityObservationSchema,
   capture_runs: z.object({
     status: z.string(),
+    mode: z.string(),
     started_at: z.string(),
     finished_at: z.string().nullable(),
     rows_fetched: z.number().nullable(),
@@ -35,7 +36,7 @@ async function main() {
     throw Error("Usage: evaluate-electricity-availability.ts fromISO toISO privateOutputDirectory");
   const rows = (
     await adminSupabaseFetchAllPages<unknown>(
-      `/electricity_fetch_observations?select=run_id,connection_id,observation,capture_runs(status,started_at,finished_at,rows_fetched,rows_changed)&observed_at=gte.${encodeURIComponent(from)}&observed_at=lt.${encodeURIComponent(to)}&order=observed_at,run_id`
+      `/electricity_fetch_observations?select=run_id,connection_id,observation,capture_runs(status,mode,started_at,finished_at,rows_fetched,rows_changed)&observed_at=gte.${encodeURIComponent(from)}&observed_at=lt.${encodeURIComponent(to)}&order=observed_at,run_id`
     )
   ).map((row) => rowSchema.parse(row));
   const aliases = new Map<string, string>(),
@@ -53,7 +54,13 @@ async function main() {
   }));
   const result = evaluateElectricityAvailability(captures);
   const eligible = result.publications.filter(
-    (p) => !p.historical && !p.sourceCorrectionPossible && !p.overlappingBatch && !p.reappeared
+    (p) =>
+      Date.parse(p.publicationAt) >= Date.parse(from) &&
+      Date.parse(p.publicationAt) < Date.parse(to) &&
+      !p.historical &&
+      !p.sourceCorrectionPossible &&
+      !p.overlappingBatch &&
+      !p.reappeared
   );
   const bounded = eligible.filter((p) => p.windowMinutes !== null);
   const summary = {
@@ -72,8 +79,11 @@ async function main() {
       interpretation:
         "Bounds, not observed visibility delays. Negative lower bounds are retained; a source timestamp is not a proven availability onset."
     },
-    noNewRetainedPublication: result.fetches.filter((f) => !f.newPublications).length,
-    noNewElectricityWithReturnedWater: result.fetches.filter((f) => !f.newPublications && f.waterRows > 0).length,
+    baselineCaptures: result.fetches.filter((f) => f.baseline).length,
+    postBaselineNoNewPublication: result.fetches.filter((f) => !f.baseline && !f.newPublications).length,
+    noNewElectricityWithReturnedWater: result.fetches.filter(
+      (f) => !f.baseline && !f.newPublications && f.waterRows > 0
+    ).length,
     incompleteInventories: rows.filter(
       (r) => !r.observation.parserComplete || r.observation.truncated || r.observation.invalidSourceRows > 0
     ).length,

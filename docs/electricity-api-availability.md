@@ -56,7 +56,7 @@ NODE_OPTIONS=--dns-result-order=ipv4first node_modules/.bin/tsx \
   .secrets/audits/electricity-availability-20261031
 ```
 
-Choose the actual production instrumentation start after deployment verification, then 14 complete days. Include a preceding day if available to reduce left censoring, and analyze the intended 14-day cohort separately. `availability.json` contains aliased connections/fetches/scopes, response inventories, per-publication availability bounds, classifications, anomalies and descriptive summaries. Scope aliases permit deduplicating shared upstream accounts. The exporter itself does not select or deploy a scheduling policy.
+Choose the actual production instrumentation start after deployment verification, then 14 complete days. Include a preceding day if available to reduce left censoring, and analyze the intended 14-day cohort separately. `availability.json` contains aliased connections/fetches/scopes, capture modes, response inventories, per-publication availability bounds, classifications, anomalies and descriptive summaries. Primary tuning summaries require the source publication timestamp to fall inside the requested window; older baseline inventory remains available as context. First retained snapshots are reported separately from post-baseline misses. Scope aliases permit deduplicating shared upstream accounts. The exporter itself does not select or deploy a scheduling policy.
 
 Read-only production coverage check:
 
