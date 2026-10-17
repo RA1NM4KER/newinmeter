@@ -12,7 +12,7 @@ create table public.livemopay_connections(id uuid primary key);
 create table public.capture_runs(id uuid primary key,connection_id uuid not null references public.livemopay_connections(id),status text,rows_fetched integer,rows_changed integer,upstream_latest_at timestamptz,predicted_next_at timestamptz);
 grant usage on schema public to service_role;
 grant select,update on public.capture_runs to service_role;
-\ir ../supabase/migrations/20261017120250_passive_electricity_availability.sql
+\ir ../supabase/migrations/20261017121714_passive_electricity_availability.sql
 insert into public.livemopay_connections values('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 insert into public.capture_runs values('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000001','running',null,null,null,null);
 set local role service_role;
