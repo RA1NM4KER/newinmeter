@@ -40,6 +40,8 @@ function rows(count: number): NewinmeterCsvRow[] {
   }));
 }
 beforeEach(() => {
+  web.ledger.mockReset();
+  web.session.mockReset();
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-14T13:00:00Z"));
   vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
@@ -54,6 +56,7 @@ beforeEach(() => {
   web.session.mockResolvedValue({ idToken: "id-token", refreshToken: params.refreshToken });
   web.ledger.mockImplementation(async () => {
     await fetchWithRequestBudget("https://ledger.example/read");
+    web.ledger.mock.calls.at(-1)?.[0].onParsedResponse?.({ rawRows: 9000, skippedRows: 0 });
     return rows(9000);
   });
   vi.stubGlobal(
@@ -66,8 +69,22 @@ beforeEach(() => {
         return Response.json([{ id: startedRunId, status: state }]);
       }
       if (url.includes("select=reporting_model"))
-        return Response.json([{ sync_schedule_mode: "adaptive", last_reconciled_at: null, auto_sync_enabled: true }]);
+        return Response.json([
+          {
+            sync_schedule_mode: "adaptive",
+            last_reconciled_at: null,
+            auto_sync_enabled: true,
+            is_demo: false,
+            data_state: "warm",
+            next_sync_at: "2026-10-14T13:00:00+00:00",
+            auto_sync_failure_streak: 0
+          }
+        ]);
       if (url.includes("select=tariff_profile")) return Response.json([{ tariff_profile: null }]);
+      if (url.includes("record_capture_metadata")) {
+        patches.push(body.p_metadata ?? {});
+        return Response.json(true);
+      }
       if (url.includes("upsert_changed_energy_rows")) {
         batches++;
         if (mode === "stall" && batches > 1)
@@ -103,6 +120,11 @@ describe("bounded reconciliation pipeline", () => {
     expect(state).toBe("success");
     expect(patches.some((p) => typeof p.last_reconciled_at === "string")).toBe(true);
     expect(web.ledger).toHaveBeenCalledWith(expect.objectContaining({ startDate: "2026-07-16" }));
+    expect(web.ledger).toHaveBeenCalledTimes(1);
+    const observation = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("record_capture_metadata"))!;
+    const payload = JSON.parse(String(observation[1]?.body));
+    expect(payload.p_observation).toMatchObject({ version: 1, reconciliation: true, parserComplete: true });
+    expect(payload.p_observation.fetchFinishedAt).toBe("2026-10-14T13:00:00.000Z");
   });
   it("aborts stalled batch requests, finalizes failure, and does not advance reconciliation", async () => {
     mode = "stall";
@@ -111,7 +133,40 @@ describe("bounded reconciliation pipeline", () => {
     expect(await result).toMatchObject({ name: "TimeoutError" });
     expect(state).toBe("failed");
     expect(patches.some((p) => "last_reconciled_at" in p)).toBe(false);
+    expect(web.ledger).toHaveBeenCalledTimes(1);
+    const calls = vi.mocked(fetch).mock.calls;
+    const finish = calls.findIndex(([url]) => String(url).includes("finish_capture_run"));
+    const evidence = calls.findIndex(([url]) => String(url).includes("record_capture_metadata"));
+    expect(evidence).toBeGreaterThan(finish);
+    expect(JSON.parse(String(calls[evidence][1]?.body)).p_metadata).toBeNull();
     expect(batches).toBe(4); // One completed batch, three bounded idempotent attempts.
+  });
+  it("records manual water-only responses without adding a ledger request or altering reconciliation", async () => {
+    mode = "lost-finalization";
+    web.ledger.mockImplementation(async (request) => {
+      request.onParsedResponse?.({ rawRows: 1, skippedRows: 0 });
+      return [{ ...rows(1)[0], charge_label: "Water:", kwh: "0", water_kl: "1" }];
+    });
+    await runLivemopaySync({ ...params, trigger: "manual" });
+    expect(web.ledger).toHaveBeenCalledOnce();
+    expect(web.session).toHaveBeenCalledOnce();
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("record_capture_metadata"))!;
+    expect(JSON.parse(String(call[1]?.body)).p_observation).toMatchObject({
+      trigger: "manual",
+      reconciliation: true,
+      electricityRows: 0,
+      waterRows: 1,
+      items: [],
+      parserComplete: true,
+      schedule: { kind: "manual" }
+    });
+  });
+  it("does not turn an HTTP failure into an empty electricity observation", async () => {
+    web.ledger.mockRejectedValueOnce(new Error("upstream 500"));
+    await expect(runLivemopaySync(params)).rejects.toThrow("upstream 500");
+    expect(state).toBe("failed");
+    expect(web.ledger).toHaveBeenCalledOnce();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("record_capture_metadata"))).toBe(false);
   });
   it("does not turn committed success into failure when finalization's response is lost", async () => {
     mode = "lost-finalization";

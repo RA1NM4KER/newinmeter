@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   recordPassiveOutcome: vi.fn(),
+  pruneObservations: vi.fn(),
   getCronSecret: vi.fn(),
   claim: vi.fn(),
   purge: vi.fn(),
   complete: vi.fn(),
   markError: vi.fn()
 }));
+
+vi.mock("@/lib/newinmeter/availability-storage", () => ({ pruneElectricityObservations: mocks.pruneObservations }));
 
 vi.mock("@/lib/env", () => ({ getCronSecret: mocks.getCronSecret }));
 vi.mock("@/lib/newinmeter/connection", () => ({
@@ -28,6 +31,7 @@ describe("cold-storage scheduled worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getCronSecret.mockReturnValue("secret");
+    mocks.pruneObservations.mockResolvedValue(0);
     mocks.claim.mockResolvedValue([]);
     mocks.markError.mockResolvedValue(undefined);
   });
@@ -35,6 +39,7 @@ describe("cold-storage scheduled worker", () => {
   it("rejects requests before claiming", async () => {
     expect((await GET(request("wrong"))).status).toBe(401);
     expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.pruneObservations).not.toHaveBeenCalled();
     expect(mocks.recordPassiveOutcome).not.toHaveBeenCalled();
   });
 
@@ -80,6 +85,21 @@ describe("cold-storage scheduled worker", () => {
     expect(mocks.recordPassiveOutcome).toHaveBeenCalledWith("cron:cold-storage", "failure", expect.any(Number));
     await expect(response.json()).resolves.toMatchObject({
       results: [{ state: "hibernating", error: "statement timeout" }]
+    });
+  });
+  it("prunes passive evidence on the existing daily invocation even without cold accounts", async () => {
+    mocks.pruneObservations.mockResolvedValue(12);
+    await expect((await GET(request())).json()).resolves.toMatchObject({
+      claimed: 0,
+      availabilityObservationsPruned: 12
+    });
+    expect(mocks.pruneObservations).toHaveBeenCalledOnce();
+  });
+  it("keeps lifecycle work successful when passive retention is unavailable", async () => {
+    mocks.pruneObservations.mockResolvedValue(null);
+    await expect((await GET(request())).json()).resolves.toMatchObject({
+      ok: true,
+      availabilityObservationsPruned: null
     });
   });
   it("records an invocation failure when claiming cannot complete", async () => {
