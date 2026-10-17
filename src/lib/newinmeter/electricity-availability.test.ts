@@ -238,7 +238,10 @@ describe("passive schedule context", () => {
       httpFailureStreak: 0
     };
     expect(electricitySchedule({ ...p, trigger: "manual" }).kind).toBe("manual");
-    expect(electricitySchedule({ ...p, httpFailureStreak: 1 }).kind).toBe("http_retry");
+    expect(electricitySchedule({ ...p, httpFailureStreak: 1 })).toMatchObject({
+      kind: "http_retry",
+      kindInferred: true
+    });
     expect(electricitySchedule({ ...p, model: null }).kind).toBe("fixed_fallback");
     expect(
       electricitySchedule({

@@ -104,7 +104,7 @@ export function electricitySchedule(params: {
             : retry
               ? "publication_retry"
               : "adaptive_prediction",
-    kindInferred: params.trigger === "auto" && params.httpFailureStreak === 0 && !params.decisionAt
+    kindInferred: params.trigger === "auto" && !params.decisionAt
   };
 }
 
