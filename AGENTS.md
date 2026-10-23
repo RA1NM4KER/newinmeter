@@ -1,4 +1,4 @@
-# AGENT.md
+# AGENTS.md
 
 Operating guide for AI agents working in this repo. For product/architecture depth, read
 `README.md` first, then `MULTI_USER_SETUP.md` for the full hosted setup and migration order. If
