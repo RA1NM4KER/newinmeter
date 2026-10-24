@@ -32,6 +32,14 @@ const chargeTypeLabelMap: Record<EnergyRow["chargeKind"], string> = {
   refund: "Refund"
 };
 
+const chargeTypeClassMap: Record<EnergyRow["chargeKind"], string> = {
+  energy: "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+  water: "bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
+  fixed: "bg-canvas text-muted",
+  topup: "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200",
+  refund: "bg-purple-50 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200"
+};
+
 const SEARCH_DEBOUNCE_MS = 250;
 const pageSizeOptions: DropdownOption[] = [
   { label: "25 / page", value: "25" },
@@ -119,7 +127,9 @@ function DataRowCard({ onOpen, row }: { onOpen: () => void; row: EnergyRow }) {
           <PeriodLabel row={row} />
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded bg-canvas px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+          <span
+            className={`rounded px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] ${chargeTypeClassMap[row.chargeKind]}`}
+          >
             {chargeTypeLabelMap[row.chargeKind]}
           </span>
           <ChevronRight aria-hidden="true" className="h-4 w-4 text-muted/70" />
@@ -257,8 +267,10 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
         accessorFn: (row) => row.chargeKind,
         header: dataTableColumnLabel.type,
         cell: ({ row }) => (
-          <span className="rounded bg-canvas px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] text-muted">
-            {row.original.chargeKind}
+          <span
+            className={`rounded px-2 py-1 text-xs font-medium uppercase tracking-[0.12em] ${chargeTypeClassMap[row.original.chargeKind]}`}
+          >
+            {chargeTypeLabelMap[row.original.chargeKind]}
           </span>
         )
       },
