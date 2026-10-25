@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { triggerIconToneClass, triggerToneClass, type ControlTone } from "./control-tone";
@@ -60,7 +60,8 @@ export function SyncButton({
   const [position, setPosition] = useState<PopoverPosition>({ left: popoverMargin, width: popoverWidth });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Measure before paint so the first open never shows the placeholder position.
+  useLayoutEffect(() => {
     if (!isOpen || !containerRef.current) {
       return;
     }
