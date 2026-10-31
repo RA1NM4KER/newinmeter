@@ -47,7 +47,7 @@ export default function ActivitiesLoading({
         extraControls={
           <DropdownSelect
             ariaLabel="Activity tags"
-            className="w-28"
+            className="w-full sm:w-[8.5rem]"
             loading
             onChange={() => undefined}
             options={[{ label: "All tags", value: "all" }]}

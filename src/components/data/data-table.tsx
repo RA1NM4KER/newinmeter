@@ -360,13 +360,13 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
       options={chargeTypeOptions}
       onChange={(value) => onChargeTypeChange(value as ChargeTypeFilter)}
       loading={isChargeTypePending}
-      className="w-32"
+      className="w-full sm:w-32"
       tone="dark"
     />
   );
 
   const searchFilterControl = (
-    <div className="relative w-full sm:w-52">
+    <div className={`relative w-full sm:block sm:w-52 ${searchQuery ? "block" : "hidden"}`}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
       <input
         aria-label="Search rows"
@@ -452,11 +452,14 @@ export function DataTable({ isDemo = false }: { isDemo?: boolean }) {
         leftControls={<DataSyncAction isDemo={isDemo} lastSyncedAt={data?.sync.lastSyncedAt} loading={isLoading} />}
         extraControls={chargeTypeFilterControl}
         rightControls={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {searchFilterControl}
-            <DataExportAction iconOnly={false} />
+            <div className="w-full sm:w-auto">
+              <DataExportAction iconOnly={false} />
+            </div>
           </div>
         }
+        splitMobileRow
         fullBleed
       />
 

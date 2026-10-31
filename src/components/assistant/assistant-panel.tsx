@@ -38,7 +38,8 @@ export function AssistantPanel({ from, to, compact = false }: AssistantPanelProp
         colorFrom="rgba(0, 255, 155, 0)"
         colorTo="rgba(0, 255, 155, 0.95)"
         duration={8.5}
-        size={300}
+        // Keep the moving square small enough to avoid lighting the opposite edge.
+        size={compact ? 36 : 48}
       />
       <div
         className={`relative flex items-center ${compact ? "text-white/80" : "text-muted"} ${compact ? "gap-2 text-sm" : "gap-3 text-sm"}`}

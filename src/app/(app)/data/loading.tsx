@@ -51,13 +51,13 @@ export default function DataLoading() {
             options={chargeTypeOptions}
             onChange={(value) => onChargeTypeChange(value as typeof chargeType)}
             loading={isChargeTypePending}
-            className="w-32"
+            className="w-full sm:w-32"
             tone="dark"
           />
         }
         rightControls={
-          <div className="flex items-center gap-2">
-            <div className="relative w-full sm:w-52">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className={`relative w-full sm:block sm:w-52 ${searchQuery ? "block" : "hidden"}`}>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
               <input
                 aria-label="Search rows"
@@ -67,9 +67,12 @@ export default function DataLoading() {
                 disabled
               />
             </div>
-            <DataExportAction iconOnly={false} />
+            <div className="w-full sm:w-auto">
+              <DataExportAction iconOnly={false} />
+            </div>
           </div>
         }
+        splitMobileRow
         fullBleed
       />
 
