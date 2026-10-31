@@ -42,22 +42,23 @@ export const BorderBeam = ({
 
     // Safari 16 supports path(), but rect() motion paths require Safari 17.2.
     const updatePath = () => {
-      const width = element.clientWidth;
-      const height = element.clientHeight;
+      const inset = -borderWidth / 2;
+      const width = element.clientWidth + borderWidth;
+      const height = element.clientHeight + borderWidth;
       const radius = Math.min(
-        Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0,
+        Math.max(0, (Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0) - borderWidth / 2),
         width / 2,
         height / 2
       );
       setLegacyPath(
-        `path("M ${radius} 0 H ${width - radius} Q ${width} 0 ${width} ${radius} V ${height - radius} Q ${width} ${height} ${width - radius} ${height} H ${radius} Q 0 ${height} 0 ${height - radius} V ${radius} Q 0 0 ${radius} 0 Z")`
+        `path("M ${inset + radius} ${inset} h ${width - 2 * radius} a ${radius} ${radius} 0 0 1 ${radius} ${radius} v ${height - 2 * radius} a ${radius} ${radius} 0 0 1 ${-radius} ${radius} h ${2 * radius - width} a ${radius} ${radius} 0 0 1 ${-radius} ${-radius} v ${2 * radius - height} a ${radius} ${radius} 0 0 1 ${radius} ${-radius} Z")`
       );
     };
     updatePath();
     const observer = new ResizeObserver(updatePath);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [borderWidth]);
 
   return (
     <div
@@ -80,7 +81,11 @@ export const BorderBeam = ({
         style={
           {
             width: size,
-            background: `linear-gradient(to left, ${colorFrom}, ${colorTo}, transparent)`,
+            // A circular light keeps its shape and brightness while turning tight corners.
+            background: legacyPath
+              ? `radial-gradient(circle, ${colorTo} 0%, ${colorFrom} 70%, transparent 100%)`
+              : `linear-gradient(to left, ${colorFrom}, ${colorTo}, transparent)`,
+            offsetRotate: legacyPath ? "0deg" : "auto",
             offsetPath: legacyPath ?? `rect(0 auto auto 0 round ${size}px)`,
             "--color-from": colorFrom,
             "--color-to": colorTo,
